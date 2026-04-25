@@ -1,0 +1,636 @@
+{
+  "snapshot_metadata": {
+    "version": "PROJECT_ARCHITECTURE_SNAPSHOT_V1",
+    "generated_date": "2026-02-17",
+    "project_name": "ASCiENDE Training Hub",
+    "migration_context": "ISAK Anthropometry Manual Assessment Migration (Hub → Lab)",
+    "total_modules": 24,
+    "critical_dependencies": 18
+  },
+
+  "anthropometry_module": {
+    "module_name": "ISAK Level 2 Anthropometry & Kerr Body Composition",
+    "migration_priority": "CRITICAL",
+    "module_status": "Production-Ready",
+
+    "pages": [
+      {
+        "file_path": "src/pages/AnthropometryPage.tsx",
+        "lines": 1398,
+        "exports": ["default function AnthropometryPage()"],
+        "dependencies": [
+          "AuthContext",
+          "supabase client",
+          "useToast hook",
+          "useMembership hook",
+          "LanguageContext",
+          "anthropometry.types",
+          "kerrCalculations.ts",
+          "kerrBodyComposition.ts"
+        ],
+        "state_management": {
+          "viewMode": "enum: 'new' | 'history' | 'results' | 'comparison' | 'raw-data'",
+          "currentStep": "enum: measurement steps 1-5",
+          "measurements": "object: Current measurement data",
+          "savedMeasurements": "array: History from DB",
+          "selectedMeasurement": "object: Active record",
+          "results": "KerrResults object",
+          "currentKerrResultId": "uuid"
+        },
+        "database_queries": [
+          "SELECT * FROM anthropometry_measurements WHERE athlete_id = ?",
+          "INSERT INTO anthropometry_measurements (...42 variables...)",
+          "SELECT * FROM anthropometry_kerr_results WHERE measurement_id = ?",
+          "UPDATE anthropometry_measurements SET ...",
+          "DELETE FROM anthropometry_measurements WHERE id = ?"
+        ],
+        "edge_functions_called": [
+          "POST /calculate-kerr-results"
+        ],
+        "features": [
+          "Multi-step measurement input (5 steps)",
+          "Triple measurement protocol (m1, m2, m3)",
+          "Automatic median calculation",
+          "Measurement history with edit/delete",
+          "Raw data view with export",
+          "Results display with tabs",
+          "Comparative analysis",
+          "Population comparison (membership-gated)",
+          "PDF export",
+          "Method selection (manual/bioimpedance)"
+        ]
+      },
+      {
+        "file_path": "src/pages/AnthropometryDashboard.tsx",
+        "lines": 626,
+        "exports": ["default function AnthropometryDashboard()"],
+        "dependencies": [
+          "AuthContext",
+          "supabase client",
+          "LanguageContext",
+          "Kerr calculation components"
+        ],
+        "state_management": {
+          "activeTab": "enum: 'overview' | 'kerr-analysis' | 'kerr-presentation' | 'indices'",
+          "athletes": "array: All athlete data",
+          "selectedAthlete": "object: Current selection for detail view"
+        },
+        "database_queries": [
+          "SELECT * FROM anthropometry_measurements (all athletes)",
+          "SELECT * FROM anthropometry_kerr_results (all athletes)"
+        ],
+        "features": [
+          "Overview KPIs",
+          "Kerr analysis dashboard",
+          "Presentation-ready visualizations",
+          "Indices & proportionality analysis",
+          "Search/filter by name/sport/gender",
+          "Detail modals with history"
+        ]
+      }
+    ],
+
+    "components": [
+      {
+        "file_path": "src/components/anthropometry/StepByStepMeasurementInput.tsx",
+        "lines": 865,
+        "purpose": "Multi-step form for ISAK measurement input",
+        "accepts_props": {
+          "onSave": "callback function",
+          "initialData": "object: pre-filled data",
+          "athlete": "object: athlete profile",
+          "readOnly": "boolean"
+        },
+        "calculates": [
+          "Median of 3 measurements",
+          "Standard deviation",
+          "Error percentage"
+        ],
+        "outputs_data_structure": {
+          "variable_name_m1": "number (first measurement)",
+          "variable_name_m2": "number (second measurement)",
+          "variable_name_m3": "number (third measurement)",
+          "variable_name_median": "number (auto-calculated)",
+          "variable_name_stdev": "number (auto-calculated)",
+          "variable_name_error_pct": "number (auto-calculated)"
+        }
+      },
+      {
+        "file_path": "src/components/anthropometry/KerrPresentationDashboard.tsx",
+        "lines": 619,
+        "purpose": "Beautiful 5-component Kerr visualization",
+        "accepts_props": {
+          "kerrResults": "KerrResults object",
+          "previousResults": "KerrResults array (for comparison)",
+          "athlete": "object: athlete info"
+        },
+        "displays": [
+          "5 mass components (kg, %)",
+          "Z-scores for all components",
+          "Component indices",
+          "Goals calculator with adjusters",
+          "Anatomical body map",
+          "Time-series comparisons"
+        ]
+      },
+      {
+        "file_path": "src/components/anthropometry/KerrBodyCompositionDashboard.tsx",
+        "lines": 628,
+        "purpose": "Trainer/admin analysis dashboard",
+        "features": [
+          "Cross-athlete comparisons",
+          "Distribution analysis",
+          "Performance metrics",
+          "Trend visualization"
+        ]
+      },
+      {
+        "file_path": "src/components/anthropometry/ComparativeAssessment.tsx",
+        "lines": 1052,
+        "purpose": "Longitudinal analysis and change tracking",
+        "calculates": [
+          "Component deltas (kg, %, z-score)",
+          "Rate of change",
+          "Trend analysis",
+          "Projections"
+        ]
+      },
+      {
+        "file_path": "src/components/anthropometry/IndicesAndProportionality.tsx",
+        "lines": 360,
+        "purpose": "Derived indices calculation and display",
+        "calculates": [
+          "Cormic index",
+          "Leg length",
+          "Ponderal index",
+          "Harris-Benedict BMR",
+          "Kleiber BMR",
+          "Somatotype components",
+          "Ballast index"
+        ]
+      },
+      {
+        "file_path": "src/components/anthropometry/PopulationDataForm.tsx",
+        "lines": 606,
+        "purpose": "Admin tool for population reference data",
+        "features": [
+          "CSV upload/import",
+          "Population dataset management",
+          "Percentile calculations",
+          "Sport-specific populations"
+        ]
+      },
+      {
+        "file_path": "src/components/anthropometry/BioimpedanceInput.tsx",
+        "lines": 541,
+        "purpose": "Alternative measurement method (electronic)",
+        "inputs": [
+          "Body fat %",
+          "Muscle mass",
+          "Body water"
+        ]
+      },
+      {
+        "file_path": "src/components/anthropometry/AnatomicalBodyMap2D.tsx",
+        "lines": 512,
+        "purpose": "2D anatomical visualization",
+        "displays": [
+          "Measurement sites",
+          "Cross-sectional areas"
+        ]
+      },
+      {
+        "file_path": "src/components/anthropometry/MorphologicalBodyModel.tsx",
+        "lines": 555,
+        "purpose": "3D-like morphological visualization",
+        "displays": [
+          "Body segment proportions",
+          "Relative size representations"
+        ]
+      }
+    ],
+
+    "types_and_models": [
+      {
+        "file_path": "src/types/anthropometry.types.ts",
+        "lines": 856,
+        "key_interfaces": [
+          "AnthropometryVariable",
+          "AnthropometryData",
+          "IsAKMeasurement",
+          "ProportionalityIndices",
+          "ComprehensiveIndices",
+          "KerrResults"
+        ],
+        "constants": {
+          "ISAK_VARIABLES": "Record of 42 ISAK Level 2 standard variables with bilingual labels, units, categories, valid ranges",
+          "SKINFOLDS": "Array of 8 skinfold measurement sites",
+          "GIRTHS": "Array of 13 girth/perimeter measurement sites",
+          "LENGTHS": "Array of 8 length measurement sites",
+          "BREADTHS": "Array of 7 breadth/diameter measurement sites"
+        },
+        "utility_functions": [
+          "sanitizeInput(value: any): number",
+          "validateCriticalMeasurements(data: AnthropometryData): { valid: boolean; errors: string[] }",
+          "initializeAnthropometryData(): AnthropometryData",
+          "getVariablesByCategory(category: string): AnthropometryVariable[]",
+          "calculateSum6Skinfolds(data: AnthropometryData): number",
+          "calculateSumDiameters(data: AnthropometryData): number",
+          "calculateCorrectedArmGirth(armFlexed: number, tricepsSF: number): number",
+          "adaptAnthropometryDataToDatabase(data: AnthropometryData): Record<string, any>"
+        ]
+      }
+    ],
+
+    "calculation_utilities": [
+      {
+        "file_path": "src/utils/kerrCalculations.ts",
+        "lines": 415,
+        "purpose": "Core Kerr 5-component model calculations",
+        "key_functions": [
+          "calculateKerrResults(inputs: KerrInputs, athlete: AthleteProfile): KerrResults",
+          "calculateSkinMass(weight: number, height: number, age: number, sex: string): number",
+          "calculateAdiposeMass(sum6Skinfolds: number): number",
+          "calculateMuscleMass(correctedPerimeters: CorrectedPerimeters): number",
+          "calculateResidualMass(torsoMeasurements: object): number",
+          "calculateBoneMass(diameters: object, sittingHeight: number): number",
+          "calculateZScores(components: object, phantom: object): object",
+          "calculateBodyCompositionGoals(current: KerrResults, targets: object): GoalsOutput",
+          "calculateMedian(values: number[]): number"
+        ],
+        "phantom_reference_values": {
+          "description": "Ross & Wilson reference phantom used for Z-score calculations",
+          "adipose_mass_mean_kg": 116.41,
+          "adipose_mass_sd_kg": 34.79,
+          "muscle_mass_mean_kg": 207.21,
+          "muscle_mass_sd_kg": 13.74,
+          "residual_mass_mean_kg": 109.35,
+          "residual_mass_sd_kg": 7.08,
+          "bone_mass_mean_kg": 98.88,
+          "bone_mass_sd_kg": 5.33
+        },
+        "formulas_implemented": [
+          "Surface Area: kAS × Weight^0.425 × Height^0.725 / 10000",
+          "Skin Thickness: Surface Area × tSkin × 1.05",
+          "Adipose: 5.85 × sum6 + 25.6",
+          "Muscle: 5.4 × sumCorrectedPerimeters + 24.5",
+          "Residual: 1.24 × zScore + 6.1",
+          "Bone: 1.34 × zScore + 6.7",
+          "Z-score: (measured - phantom_mean) / phantom_sd",
+          "Indices: muscle/bone, adipose/muscle, ballast ratios"
+        ]
+      },
+      {
+        "file_path": "src/utils/kerrBodyComposition.ts",
+        "lines": 200,
+        "purpose": "Database integration wrapper for Kerr calculations",
+        "key_functions": [
+          "prepareKerrInputsFromMeasurements(measurement: DBMeasurement): KerrInputs",
+          "calculateKerrBodyComposition(measurement: DBMeasurement, athlete: AthleteProfile): KerrResults",
+          "mapDatabaseColumnsToKerrInputs(dbRecord: object): KerrInputs"
+        ]
+      },
+      {
+        "file_path": "src/utils/anthropometryPDFExport.ts",
+        "purpose": "PDF report generation",
+        "key_functions": [
+          "generateAnthropometryPDF(data: object, options: ExportOptions): PDF",
+          "exportWithComparisons(current: KerrResults, previous: KerrResults[]): PDF",
+          "exportWithSomatotype(kerr: KerrResults): PDF"
+        ],
+        "options": {
+          "language": "enum: 'EN' | 'ES' | 'BILINGUAL'",
+          "include_charts": "boolean",
+          "include_comparisons": "boolean",
+          "include_somatotype": "boolean",
+          "include_indices": "boolean"
+        }
+      }
+    ],
+
+    "database_schema": [
+      {
+        "table_name": "anthropometry_measurements",
+        "purpose": "Store raw ISAK Level 2 measurement data",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "constraints": "PRIMARY KEY, DEFAULT gen_random_uuid()"
+          },
+          {
+            "name": "athlete_id",
+            "type": "uuid",
+            "constraints": "FOREIGN KEY (profiles.id), NOT NULL"
+          },
+          {
+            "name": "measurement_date",
+            "type": "timestamptz",
+            "constraints": "NOT NULL"
+          },
+          {
+            "name": "measurement_method",
+            "type": "text",
+            "constraints": "CHECK (measurement_method IN ('manual', 'bioimpedance'))"
+          },
+          {
+            "name": "created_at",
+            "type": "timestamptz",
+            "default": "now()"
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamptz",
+            "default": "now()"
+          }
+        ],
+        "isak_variables": [
+          "body_mass_kg (m1, m2, m3, median, stdev, error_pct)",
+          "stature_cm (m1, m2, m3, median, stdev, error_pct)",
+          "sitting_height_cm (m1, m2, m3, median, stdev, error_pct)",
+          "arm_span_cm (m1, m2, m3, median, stdev, error_pct)",
+          "triceps_sf_mm (m1, m2, m3, median, stdev, error_pct)",
+          "subscapular_sf_mm (m1, m2, m3, median, stdev, error_pct)",
+          "biceps_sf_mm (m1, m2, m3, median, stdev, error_pct)",
+          "iliac_crest_sf_mm (m1, m2, m3, median, stdev, error_pct)",
+          "supraspinale_sf_mm (m1, m2, m3, median, stdev, error_pct)",
+          "abdominal_sf_mm (m1, m2, m3, median, stdev, error_pct)",
+          "front_thigh_sf_mm (m1, m2, m3, median, stdev, error_pct)",
+          "medial_calf_sf_mm (m1, m2, m3, median, stdev, error_pct)",
+          "head_girth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "neck_girth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "arm_relaxed_girth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "arm_flexed_girth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "forearm_girth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "wrist_girth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "chest_girth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "waist_girth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "gluteal_girth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "thigh_upper_girth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "thigh_mid_girth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "calf_max_girth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "ankle_min_girth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "acromiale_radiale_length_cm (m1, m2, m3, median, stdev, error_pct)",
+          "radiale_stylion_length_cm (m1, m2, m3, median, stdev, error_pct)",
+          "midstylion_dactylion_length_cm (m1, m2, m3, median, stdev, error_pct)",
+          "iliospinale_height_cm (m1, m2, m3, median, stdev, error_pct)",
+          "trochanterion_height_cm (m1, m2, m3, median, stdev, error_pct)",
+          "trochanterion_tibiale_length_cm (m1, m2, m3, median, stdev, error_pct)",
+          "tibiale_laterale_height_cm (m1, m2, m3, median, stdev, error_pct)",
+          "tibiale_mediale_sphyrion_length_cm (m1, m2, m3, median, stdev, error_pct)",
+          "biacromial_breadth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "biiliocristal_breadth_cm (m1, m2, m3, median, stdev, error_pct)",
+          "foot_length_cm (m1, m2, m3, median, stdev, error_pct)",
+          "transverse_chest_diameter_cm (m1, m2, m3, median, stdev, error_pct)",
+          "ap_chest_diameter_cm (m1, m2, m3, median, stdev, error_pct)",
+          "humerus_diameter_cm (m1, m2, m3, median, stdev, error_pct)",
+          "femur_diameter_cm (m1, m2, m3, median, stdev, error_pct)"
+        ],
+        "rls_policies": [
+          "Athletes can VIEW/INSERT/UPDATE own measurements",
+          "Trainers can VIEW/INSERT/UPDATE assigned athletes' measurements",
+          "Admins can VIEW/INSERT/UPDATE/DELETE all measurements"
+        ]
+      },
+      {
+        "table_name": "anthropometry_kerr_results",
+        "purpose": "Store calculated Kerr 5-component body composition results",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "constraints": "PRIMARY KEY"
+          },
+          {
+            "name": "measurement_id",
+            "type": "uuid",
+            "constraints": "FOREIGN KEY (anthropometry_measurements.id)"
+          },
+          {
+            "name": "athlete_id",
+            "type": "uuid",
+            "constraints": "FOREIGN KEY (profiles.id)"
+          },
+          {
+            "name": "calculation_date",
+            "type": "timestamptz",
+            "default": "now()"
+          }
+        ],
+        "component_columns": [
+          "skin_mass_kg",
+          "skin_mass_pct",
+          "skin_mass_z_score",
+          "adipose_mass_kg",
+          "adipose_mass_pct",
+          "adipose_mass_z_score",
+          "muscle_mass_kg",
+          "muscle_mass_pct",
+          "muscle_mass_z_score",
+          "residual_mass_kg",
+          "residual_mass_pct",
+          "residual_mass_z_score",
+          "bone_mass_kg",
+          "bone_mass_pct",
+          "bone_mass_z_score"
+        ],
+        "index_columns": [
+          "muscle_bone_ratio",
+          "adipose_muscle_ratio",
+          "ballast_index",
+          "bmi",
+          "surface_area_m2",
+          "somatotype_endomorphy",
+          "somatotype_mesomorphy",
+          "somatotype_ectomorphy"
+        ],
+        "rls_policies": [
+          "Same as anthropometry_measurements"
+        ]
+      },
+      {
+        "table_name": "anthropometry_indices",
+        "purpose": "Store derived proportionality and anthropometric indices",
+        "columns": [
+          "cormic_index",
+          "leg_length_index",
+          "ponderal_index",
+          "phv_age",
+          "maturity_classification",
+          "harris_benedict_bmr_kcal",
+          "kleiber_bmr_kcal"
+        ]
+      },
+      {
+        "table_name": "anthropometry_population_data",
+        "purpose": "Reference population for percentile calculations",
+        "rls_policies": [
+          "Admins only: FULL access",
+          "Athletes: READ access to public populations",
+          "Trainers: READ access to team sport populations"
+        ]
+      }
+    ],
+
+    "database_migrations_required": [
+      "20251005170309_add_anthropometry_tables.sql - Initial setup",
+      "20251217064605_add_complete_isak_level2_measurements.sql - 42 variables",
+      "20251217081000_extend_kerr_results_with_complete_calculations.sql - Kerr results",
+      "20251218064216_restructure_anthropometry_isak_standard.sql - Current schema",
+      "20251220155119_fix_anthropometry_kerr_rls_trainer_access.sql - RLS policies"
+    ],
+
+    "edge_functions": [
+      {
+        "function_name": "calculate-kerr-results",
+        "file_path": "supabase/functions/calculate-kerr-results/index.ts",
+        "trigger": "POST request from frontend",
+        "input": {
+          "measurement_id": "uuid",
+          "athlete_id": "uuid",
+          "measurements": "object: Raw ISAK data"
+        },
+        "process": [
+          "1. Validate inputs",
+          "2. Calculate surface area",
+          "3. Calculate adipose mass",
+          "4. Calculate muscle mass",
+          "5. Calculate residual mass",
+          "6. Calculate bone mass",
+          "7. Calculate all Z-scores",
+          "8. Calculate indices",
+          "9. INSERT results into anthropometry_kerr_results"
+        ],
+        "output": "KerrResults object",
+        "cors_enabled": true
+      }
+    ],
+
+    "localization": [
+      {
+        "file_path": "src/locales/en.json",
+        "keys_section": "anthropometry.*",
+        "items": [
+          "anthropometry.title",
+          "anthropometry.isakTracking",
+          "anthropometry.measurements.basicInfo",
+          "anthropometry.measurements.skinfolds",
+          "anthropometry.measurements.girths",
+          "anthropometry.measurements.lengths",
+          "anthropometry.measurements.breadths",
+          "anthropometry.kerr.title",
+          "anthropometry.kerr.skinMass",
+          "anthropometry.kerr.adiposeMass",
+          "anthropometry.kerr.muscleMass",
+          "anthropometry.kerr.residualMass",
+          "anthropometry.kerr.boneMass",
+          "anthropometry.indices.cormic",
+          "anthropometry.indices.ponderal"
+        ]
+      },
+      {
+        "file_path": "src/locales/es.json",
+        "keys_section": "anthropometry.*",
+        "mirror": "en.json structure"
+      }
+    ],
+
+    "routing_and_navigation": [
+      {
+        "route": "/anthropometry",
+        "triggers": "case 'anthropometry': in App.tsx",
+        "component": "AnthropometryPage",
+        "access_control": "Athletes (own), Trainers (team), Admins (all)"
+      },
+      {
+        "route": "/anthropometry-dashboard",
+        "triggers": "case 'anthropometry-dashboard': in App.tsx",
+        "component": "AnthropometryDashboard",
+        "access_control": "Trainers, Admins"
+      }
+    ],
+
+    "dependencies_graph": {
+      "external_dependencies": [
+        "@supabase/supabase-js (v2.57.4)",
+        "react (v18.3.1)",
+        "react-dom (v18.3.1)",
+        "lucide-react (v0.344.0) - Icons"
+      ],
+      "internal_context_dependencies": [
+        "AuthContext - User profile, role, DOB, sex",
+        "LanguageContext - i18n (EN/ES)",
+        "useToast hook - Notifications",
+        "useMembership hook - Premium feature access",
+        "ThemeContext - Dark mode"
+      ],
+      "module_cross_dependencies": [
+        "anthropometry.types.ts",
+        "kerrCalculations.ts",
+        "kerrBodyComposition.ts",
+        "anthropometryPDFExport.ts",
+        "calculate-kerr-results edge function"
+      ]
+    },
+
+    "error_handling_patterns": [
+      "Try-catch blocks in all async DB operations",
+      "Validation of critical measurements (body_mass, stature, age, sex)",
+      "Sanitized numeric inputs",
+      "Supabase RLS policy enforcement",
+      "User-friendly toast notifications for errors"
+    ],
+
+    "performance_considerations": [
+      "Lazy load components when not in use",
+      "Memoize expensive calculations",
+      "Index queries on athlete_id, measurement_date",
+      "Paginate measurement history lists",
+      "Cache population reference data"
+    ]
+  },
+
+  "migration_checklist": {
+    "before_migration": [
+      "✓ Read this snapshot completely",
+      "✓ Verify all 24 files present",
+      "✓ Check database migrations applied",
+      "✓ Confirm RLS policies in place",
+      "✓ Validate calculation formulas"
+    ],
+    "during_migration": [
+      "□ Copy all component files to Lab chat",
+      "□ Copy type definitions (anthropometry.types.ts)",
+      "□ Copy calculation utilities (kerrCalculations.ts, etc.)",
+      "□ Copy pages (AnthropometryPage.tsx, AnthropometryDashboard.tsx)",
+      "□ Apply database migrations",
+      "□ Deploy edge function (calculate-kerr-results)",
+      "□ Copy localization strings to en.json, es.json",
+      "□ Update routing in App.tsx",
+      "□ Connect contexts (AuthContext, LanguageContext, etc.)"
+    ],
+    "after_migration": [
+      "□ Test measurement input flow",
+      "□ Verify Kerr calculations match Hub results",
+      "□ Test RLS policies (athlete/trainer/admin access)",
+      "□ Verify PDF export functionality",
+      "□ Test comparative analysis",
+      "□ Confirm population comparison (if premium)",
+      "□ Test dark mode compatibility",
+      "□ Validate bilingual interface (EN/ES)"
+    ]
+  },
+
+  "critical_notes": [
+    "⚠ All 42 ISAK variables must be replicated exactly - they are scientifically standardized",
+    "⚠ Kerr phantom reference values are immutable - do not modify",
+    "⚠ Triple measurement protocol (m1, m2, m3 with median) is ISAK requirement",
+    "⚠ RLS policies MUST be applied - ensure trainer/athlete access control",
+    "⚠ Edge function calculate-kerr-results must be deployed before measurements saved",
+    "⚠ All formulas use specific constants (kAS, tSkin, multipliers) - verify exact values",
+    "⚠ Localization strings must maintain exact keys for i18n to work",
+    "⚠ Database migrations must apply in order - do not skip any",
+    "⚠ AuthContext dependency: Must have athlete_id, role, DOB, sex in profile",
+    "⚠ PDF export requires pdflib or similar - verify available in Lab"
+  ]
+}

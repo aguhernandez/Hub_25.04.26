@@ -1,0 +1,36 @@
+[
+  {
+    "id": "h001",
+    "name": "Sleep 8 hours",
+    "description": "Get adequate rest for recovery and performance",
+    "type": "checklist"
+  },
+  {
+    "id": "h002",
+    "name": "Drink 3L of water",
+    "description": "Stay hydrated throughout the day",
+    "type": "numeric",
+    "targetValue": 3,
+    "unit": "liters"
+  },
+  {
+    "id": "h003",
+    "name": "Stretch 10 minutes",
+    "description": "Daily mobility and flexibility work",
+    "type": "checklist"
+  },
+  {
+    "id": "h004",
+    "name": "Meditate",
+    "description": "Mental wellness and stress management",
+    "type": "checklist"
+  },
+  {
+    "id": "h005",
+    "name": "Walk 10,000 steps",
+    "description": "Daily movement goal",
+    "type": "numeric",
+    "targetValue": 10000,
+    "unit": "steps"
+  }
+]

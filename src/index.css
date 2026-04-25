@@ -1,0 +1,306 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Safe area insets for notched devices */
+    --sat: env(safe-area-inset-top);
+    --sar: env(safe-area-inset-right);
+    --sab: env(safe-area-inset-bottom);
+    --sal: env(safe-area-inset-left);
+  }
+
+  html {
+    /* Prevent text size adjustment on orientation change */
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* Force dark color scheme */
+    color-scheme: dark;
+    /* Prevent FOUC */
+    background: #0C0D0F;
+  }
+
+  body {
+    font-family: 'Jost', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    /* Native-app feel: no tap flash, no callout menus */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    /* Allow vertical scroll, clip horizontal */
+    overflow-x: clip;
+    overflow-y: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Krona One', sans-serif;
+  }
+
+  /* Interactive elements: fast, native-feeling touch */
+  button, a, [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+  }
+
+  /* Smooth momentum scrolling in scrollable areas */
+  [data-scroll], .overflow-y-auto, .overflow-y-scroll, .overflow-auto, .overflow-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Root container */
+  #root {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  /* Remove default focus ring on touch devices, keep for keyboard */
+  @media (hover: none) {
+    *:focus {
+      outline: none;
+    }
+  }
+
+  /* Input / textarea mobile improvements */
+  input, textarea, select {
+    font-size: 16px; /* Prevents iOS zoom on focus */
+    border-radius: 0; /* Prevents iOS default styling */
+    -webkit-appearance: none;
+    appearance: none;
+  }
+}
+
+@layer utilities {
+  .digest-article-content,
+  .digest-article-content p,
+  .digest-article-content li,
+  .digest-article-content span,
+  .digest-article-content div,
+  .digest-article-content ul,
+  .digest-article-content ol {
+    color: #1f2937 !important;
+  }
+  .digest-article-content h1,
+  .digest-article-content h2,
+  .digest-article-content h3,
+  .digest-article-content h4,
+  .digest-article-content h5,
+  .digest-article-content h6,
+  .digest-article-content strong,
+  .digest-article-content b {
+    color: #111827 !important;
+  }
+  .digest-article-content em,
+  .digest-article-content i {
+    color: #374151 !important;
+  }
+  .digest-article-content a {
+    color: #514163 !important;
+  }
+  .dark .digest-article-content,
+  .dark .digest-article-content p,
+  .dark .digest-article-content li,
+  .dark .digest-article-content span,
+  .dark .digest-article-content div,
+  .dark .digest-article-content ul,
+  .dark .digest-article-content ol {
+    color: #e5e7eb !important;
+  }
+  .dark .digest-article-content h1,
+  .dark .digest-article-content h2,
+  .dark .digest-article-content h3,
+  .dark .digest-article-content h4,
+  .dark .digest-article-content h5,
+  .dark .digest-article-content h6,
+  .dark .digest-article-content strong,
+  .dark .digest-article-content b {
+    color: #ffffff !important;
+  }
+  .dark .digest-article-content em,
+  .dark .digest-article-content i {
+    color: #e5e7eb !important;
+  }
+  .dark .digest-article-content a {
+    color: #fdda36 !important;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Safe area utilities */
+  .safe-area-top {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+
+  .safe-area-bottom {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  .safe-area-left {
+    padding-left: max(1rem, env(safe-area-inset-left));
+  }
+
+  .safe-area-right {
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  .safe-area-x {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  .safe-area-y {
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  @keyframes slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(100px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-slide-up {
+    animation: slide-up 0.4s ease-out;
+  }
+
+  @keyframes slide-in {
+    from {
+      opacity: 0;
+      transform: translateX(100px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+  }
+
+  /* Native-app-style active state for touchable items */
+  .touch-active {
+    transition: opacity 0.1s, transform 0.1s;
+  }
+  .touch-active:active {
+    opacity: 0.75;
+    transform: scale(0.97);
+  }
+
+  /* Full-bleed bottom safe-area padding for fixed bottom bars */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .pb-safe-4 {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .mb-safe {
+    margin-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Full-bleed top safe-area padding for fixed top bars */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pt-safe-4 {
+    padding-top: max(1rem, env(safe-area-inset-top));
+  }
+
+  /* Dynamic viewport height — handles browser chrome on mobile */
+  .h-dvh {
+    height: 100dvh;
+  }
+  .min-h-dvh {
+    min-height: 100dvh;
+  }
+
+  /* Prevent text selection (for app-like swipeable areas) */
+  .no-select {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* Fade-in for page transitions */
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in {
+    animation: fade-in 0.25s ease-out both;
+  }
+
+  /* Spin utility for loading */
+  @keyframes spin-slow {
+    to { transform: rotate(360deg); }
+  }
+  .animate-spin-slow {
+    animation: spin-slow 1.5s linear infinite;
+  }
+}
+
+/* Print Styles for PDF Export */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 2cm;
+  }
+
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  /* Hide navigation and UI elements */
+  nav,
+  button,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Show only the content */
+  .print-content {
+    display: block !important;
+  }
+
+  /* Ensure charts and graphics print correctly */
+  svg,
+  canvas {
+    max-width: 100%;
+    page-break-inside: avoid;
+  }
+
+  /* Add Asciende logo on print */
+  @top-center {
+    content: url('/logo_transp.png');
+    height: 60px;
+  }
+
+  /* Page breaks */
+  h1, h2, h3 {
+    page-break-after: avoid;
+  }
+
+  .page-break-before {
+    page-break-before: always;
+  }
+
+  .page-break-avoid {
+    page-break-inside: avoid;
+  }
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "532fc132-567b-4f1e-b79c-0d8cb98f2905",
+    "user_id": "52f841ac-4c4b-4911-9234-9b17dfdcfbf3",
+    "product": "cycling",
+    "plan": "free",
+    "status": "active",
+    "expires_at": null,
+    "created_at": "2026-01-12T11:26:01.298646+00:00",
+    "updated_at": "2026-01-12T11:26:01.298646+00:00"
+  },
+  {
+    "id": "74df82e7-3d28-4de8-bc17-fc632966a99b",
+    "user_id": "88d0135a-0022-4ebd-b7b6-1132535da06b",
+    "product": "cycling",
+    "plan": "free",
+    "status": "active",
+    "expires_at": null,
+    "created_at": "2026-01-12T11:26:01.298646+00:00",
+    "updated_at": "2026-01-12T11:26:01.298646+00:00"
+  },
+  {
+    "id": "427906fe-93d4-489b-bee0-865b92d696da",
+    "user_id": "3c098888-9776-4e01-bf2d-ad28ac4a84c0",
+    "product": "cycling",
+    "plan": "free",
+    "status": "active",
+    "expires_at": null,
+    "created_at": "2026-01-12T11:26:01.298646+00:00",
+    "updated_at": "2026-01-12T11:26:01.298646+00:00"
+  }
+]

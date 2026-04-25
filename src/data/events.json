@@ -1,0 +1,42 @@
+[
+  {
+    "id": "e001",
+    "title": "Live Webinar: Beach Volley Fundamentals",
+    "description": "Join our expert coach for a comprehensive session on beach volleyball techniques and strategies.",
+    "date": "2025-10-15T18:00:00Z",
+    "durationMinutes": 90,
+    "platform": "Zoom",
+    "link": "https://zoom.us/j/example123",
+    "maxParticipants": 50
+  },
+  {
+    "id": "e002",
+    "title": "Recovery Strategies for Cyclists",
+    "description": "Learn evidence-based recovery methods to optimize your training adaptations.",
+    "date": "2025-10-20T17:00:00Z",
+    "durationMinutes": 60,
+    "platform": "Zoom",
+    "link": "https://zoom.us/j/example456",
+    "maxParticipants": 100
+  },
+  {
+    "id": "e003",
+    "title": "Nutrition for Endurance Athletes",
+    "description": "Master your fueling strategy for long-distance events and training.",
+    "date": "2025-10-25T19:00:00Z",
+    "durationMinutes": 75,
+    "platform": "Zoom",
+    "link": "https://zoom.us/j/example789",
+    "maxParticipants": 75
+  },
+  {
+    "id": "e004",
+    "title": "Strength Training for Runners",
+    "description": "Build resilience and prevent injuries with targeted strength work.",
+    "date": "2025-11-01T18:30:00Z",
+    "durationMinutes": 60,
+    "platform": "Zoom",
+    "link": "https://zoom.us/j/example012",
+    "maxParticipants": 60
+  }
+]

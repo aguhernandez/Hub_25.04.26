@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!-- Primary -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="description" content="Asciende - The Athletes' Support Platform. Controla tu entrenamiento, nutrición, hábitos y rendimiento con guía experta." />
+    <meta name="keywords" content="deporte, rendimiento deportivo, entrenamiento atlético, nutrición, volleyball, ciclismo, plataforma fitness" />
+    <meta name="robots" content="index, follow" />
+    <meta name="application-name" content="Asciende" />
+    <link rel="canonical" href="https://asciende.app/" />
+
+    <!-- Theme -->
+    <meta name="theme-color" content="#0C0D0F" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#0C0D0F" media="(prefers-color-scheme: light)" />
+    <meta name="color-scheme" content="dark" />
+
+    <!-- iOS / Safari PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Asciende" />
+
+    <!-- Android / Chrome -->
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Windows tiles -->
+    <meta name="msapplication-TileColor" content="#fdda36" />
+    <meta name="msapplication-TileImage" content="/icon-192.png" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
+    <meta name="msapplication-tap-highlight" content="no" />
+
+    <!-- Icons -->
+    <link rel="icon" type="image/png" href="/Asciendefavicon.png" />
+    <link rel="shortcut icon" type="image/png" href="/Asciendefavicon.png" />
+    <link rel="apple-touch-icon" href="/Asciendefavicon.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/Asciendefavicon.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/Asciendefavicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/Asciendefavicon.png" />
+
+    <!-- Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://asciende.app/" />
+    <meta property="og:title" content="Asciende - The Athletes' Support Platform" />
+    <meta property="og:description" content="Plataforma profesional para atletas. Entrena, nutre y rinde al máximo con guía experta." />
+    <meta property="og:image" content="/icon-512.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:locale" content="es_ES" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Asciende - The Athletes' Support Platform" />
+    <meta name="twitter:description" content="Plataforma profesional para atletas." />
+    <meta name="twitter:image" content="/icon-512.png" />
+
+    <!-- Instant loading background while JS boots -->
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      html { background: #0C0D0F; color-scheme: dark; }
+      body {
+        margin: 0;
+        padding: 0;
+        background: #0C0D0F;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        overscroll-behavior: none;
+      }
+      #root {
+        min-height: 100vh;
+        min-height: 100dvh;
+      }
+      /* Prevent flash of unstyled content */
+      #root:empty::before {
+        content: '';
+        display: block;
+        width: 100vw;
+        height: 100dvh;
+        background: #0C0D0F;
+      }
+    </style>
+
+    <!-- Force SW update on public routes so stale caches don't intercept them -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistration().then(function(reg) {
+          if (reg && reg.waiting) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+        });
+      }
+    </script>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Krona+One&family=Jost:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+    <title>Asciende - The Athletes' Support Platform</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

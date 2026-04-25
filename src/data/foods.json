@@ -1,0 +1,98 @@
+[
+  {
+    "id": "f001",
+    "name": "Chicken breast",
+    "brand": null,
+    "servingSize": 100,
+    "servingUnit": "g",
+    "calories": 165,
+    "protein": 31,
+    "carbs": 0,
+    "fat": 3.6,
+    "fiber": 0
+  },
+  {
+    "id": "f002",
+    "name": "Brown rice",
+    "brand": null,
+    "servingSize": 100,
+    "servingUnit": "g",
+    "calories": 111,
+    "protein": 2.6,
+    "carbs": 23,
+    "fat": 0.9,
+    "fiber": 1.8
+  },
+  {
+    "id": "f003",
+    "name": "Banana",
+    "brand": null,
+    "servingSize": 118,
+    "servingUnit": "g",
+    "calories": 89,
+    "protein": 1.1,
+    "carbs": 23,
+    "fat": 0.3,
+    "fiber": 2.6
+  },
+  {
+    "id": "f004",
+    "name": "Salmon",
+    "brand": null,
+    "servingSize": 100,
+    "servingUnit": "g",
+    "calories": 208,
+    "protein": 20,
+    "carbs": 0,
+    "fat": 13,
+    "fiber": 0
+  },
+  {
+    "id": "f005",
+    "name": "Eggs",
+    "brand": null,
+    "servingSize": 50,
+    "servingUnit": "g",
+    "calories": 78,
+    "protein": 6.3,
+    "carbs": 0.6,
+    "fat": 5.3,
+    "fiber": 0
+  },
+  {
+    "id": "f006",
+    "name": "Oats",
+    "brand": null,
+    "servingSize": 40,
+    "servingUnit": "g",
+    "calories": 152,
+    "protein": 5.3,
+    "carbs": 27,
+    "fat": 2.8,
+    "fiber": 4
+  },
+  {
+    "id": "f007",
+    "name": "Greek yogurt",
+    "brand": null,
+    "servingSize": 170,
+    "servingUnit": "g",
+    "calories": 100,
+    "protein": 17,
+    "carbs": 6,
+    "fat": 0.7,
+    "fiber": 0
+  },
+  {
+    "id": "f008",
+    "name": "Sweet potato",
+    "brand": null,
+    "servingSize": 130,
+    "servingUnit": "g",
+    "calories": 112,
+    "protein": 2,
+    "carbs": 26,
+    "fat": 0.1,
+    "fiber": 3.9
+  }
+]

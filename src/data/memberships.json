@@ -1,0 +1,51 @@
+[
+  {
+    "id": "m001",
+    "name": "Asciende Inicia",
+    "slug": "inicia",
+    "description": "Comienza tu camino con Asciende",
+    "priceMonthly": 0,
+    "priceAnnual": null,
+    "features": [
+      "Acceso básico a la plataforma",
+      "Seguimiento de hábitos",
+      "Registro de entrenamientos",
+      "Comunidad Asciende"
+    ]
+  },
+  {
+    "id": "m002",
+    "name": "Asciende Intermediate",
+    "slug": "intermediate",
+    "description": "Para atletas que quieren ir más lejos",
+    "priceMonthly": 19.99,
+    "priceAnnual": 199.99,
+    "features": [
+      "Todo lo de Asciende Inicia",
+      "Planes de entrenamiento",
+      "Seguimiento nutricional",
+      "Diario alimentario con IA",
+      "Seguimiento de rendimiento",
+      "Acceso al Digest",
+      "Seguimiento antropométrico",
+      "Soporte prioritario"
+    ]
+  },
+  {
+    "id": "m003",
+    "name": "Asciende Pro",
+    "slug": "pro",
+    "description": "El paquete completo para rendimiento élite",
+    "priceMonthly": 49.99,
+    "priceAnnual": 499.99,
+    "features": [
+      "Todo lo de Asciende Intermediate",
+      "Sesiones 1:1 con entrenador",
+      "Programas de entrenamiento personalizados",
+      "Analítica avanzada",
+      "Integración con Intervals.icu",
+      "Consultas de video ilimitadas",
+      "Oportunidades de colaboración con marcas"
+    ]
+  }
+]

@@ -1,0 +1,499 @@
+{
+  "timestamp": "2026-02-14T16:40:03.798Z",
+  "tables": {
+    "profiles": {
+      "records": 0,
+      "file": "profiles.json"
+    },
+    "training_logs": {
+      "records": 0,
+      "file": "training_logs.json"
+    },
+    "workouts": {
+      "records": 0,
+      "file": "workouts.json"
+    },
+    "workout_exercises": {
+      "records": 0,
+      "file": "workout_exercises.json"
+    },
+    "exercises": {
+      "records": 0,
+      "file": "exercises.json"
+    },
+    "training_programs": {
+      "records": 2,
+      "file": "training_programs.json"
+    },
+    "athlete_workouts": {
+      "records": 0,
+      "file": "athlete_workouts.json"
+    },
+    "user_memberships": {
+      "records": 0,
+      "file": "user_memberships.json"
+    },
+    "memberships": {
+      "records": 3,
+      "file": "memberships.json"
+    },
+    "anthropometry_records": {
+      "records": 0,
+      "file": "anthropometry_records.json"
+    },
+    "anthropometry_measurements": {
+      "records": 0,
+      "file": "anthropometry_measurements.json"
+    },
+    "anthropometry_results": {
+      "records": 0,
+      "file": "anthropometry_results.json"
+    },
+    "anthropometry_kerr_results": {
+      "records": 0,
+      "file": "anthropometry_kerr_results.json"
+    },
+    "meal_plans": {
+      "records": 0,
+      "file": "meal_plans.json"
+    },
+    "meal_plan_items": {
+      "records": 0,
+      "file": "meal_plan_items.json"
+    },
+    "food_diary_entries": {
+      "records": 0,
+      "file": "food_diary_entries.json"
+    },
+    "habits": {
+      "records": 0,
+      "file": "habits.json"
+    },
+    "habit_logs": {
+      "records": 0,
+      "file": "habit_logs.json"
+    },
+    "notifications": {
+      "records": 0,
+      "file": "notifications.json"
+    },
+    "invoices": {
+      "records": 0,
+      "file": "invoices.json"
+    },
+    "invoice_items": {
+      "records": 0,
+      "file": "invoice_items.json"
+    },
+    "stripe_products": {
+      "records": 0,
+      "file": "stripe_products.json"
+    },
+    "payments": {
+      "records": 0,
+      "file": "payments.json"
+    },
+    "events": {
+      "records": 0,
+      "file": "events.json"
+    },
+    "event_registrations": {
+      "records": 0,
+      "file": "event_registrations.json"
+    },
+    "teams": {
+      "records": 0,
+      "file": "teams.json"
+    },
+    "team_members": {
+      "records": 0,
+      "file": "team_members.json"
+    },
+    "chat_conversations": {
+      "records": 0,
+      "file": "chat_conversations.json"
+    },
+    "chat_messages": {
+      "records": 0,
+      "file": "chat_messages.json"
+    },
+    "performance_digests": {
+      "records": 0,
+      "file": "performance_digests.json"
+    },
+    "digest_articles": {
+      "records": 0,
+      "file": "digest_articles.json"
+    },
+    "annual_training_plans": {
+      "records": 0,
+      "file": "annual_training_plans.json"
+    },
+    "atp_macrocycles": {
+      "records": 0,
+      "file": "atp_macrocycles.json"
+    },
+    "atp_events": {
+      "records": 0,
+      "file": "atp_events.json"
+    },
+    "courses": {
+      "records": 0,
+      "file": "courses.json"
+    },
+    "nutrition_anamnesis": {
+      "records": 0,
+      "file": "nutrition_anamnesis.json"
+    },
+    "nutrition_targets": {
+      "records": 0,
+      "file": "nutrition_targets.json"
+    },
+    "api_configurations": {
+      "records": 0,
+      "file": "api_configurations.json"
+    },
+    "athlete_support_projects": {
+      "records": 0,
+      "file": "athlete_support_projects.json"
+    },
+    "brand_partners": {
+      "records": 0,
+      "file": "brand_partners.json"
+    },
+    "brand_projects": {
+      "records": 0,
+      "file": "brand_projects.json"
+    },
+    "bookings": {
+      "records": 0,
+      "file": "bookings.json"
+    },
+    "training_templates": {
+      "records": 0,
+      "file": "training_templates.json"
+    },
+    "extra_training_logs": {
+      "records": 0,
+      "file": "extra_training_logs.json"
+    },
+    "bioimpedance_measurements": {
+      "records": 0,
+      "file": "bioimpedance_measurements.json"
+    },
+    "athlete_preferences": {
+      "records": 0,
+      "file": "athlete_preferences.json"
+    },
+    "athlete_messages": {
+      "records": 0,
+      "file": "athlete_messages.json"
+    },
+    "admin_messages": {
+      "records": 0,
+      "file": "admin_messages.json"
+    },
+    "admin_communications_log": {
+      "records": 0,
+      "file": "admin_communications_log.json"
+    },
+    "ai_usage_metrics": {
+      "records": 0,
+      "file": "ai_usage_metrics.json"
+    },
+    "performance_exercise_logs": {
+      "records": 0,
+      "file": "performance_exercise_logs.json"
+    },
+    "performance_sessions": {
+      "records": 0,
+      "file": "performance_sessions.json"
+    },
+    "performance_insights": {
+      "records": 0,
+      "file": "performance_insights.json"
+    },
+    "performance_baselines": {
+      "records": 0,
+      "file": "performance_baselines.json"
+    },
+    "strength_estimates": {
+      "records": 0,
+      "file": "strength_estimates.json"
+    },
+    "food_substitutions": {
+      "records": 0,
+      "file": "food_substitutions.json"
+    },
+    "foods": {
+      "records": 27,
+      "file": "foods.json"
+    },
+    "food_database": {
+      "records": 0,
+      "file": "food_database.json"
+    },
+    "shopping_lists": {
+      "records": 0,
+      "file": "shopping_lists.json"
+    },
+    "shopping_list_items": {
+      "records": 0,
+      "file": "shopping_list_items.json"
+    },
+    "meal_templates": {
+      "records": 0,
+      "file": "meal_templates.json"
+    },
+    "meal_template_items": {
+      "records": 0,
+      "file": "meal_template_items.json"
+    },
+    "menu_templates": {
+      "records": 0,
+      "file": "menu_templates.json"
+    },
+    "menu_template_meals": {
+      "records": 0,
+      "file": "menu_template_meals.json"
+    },
+    "menu_template_items": {
+      "records": 0,
+      "file": "menu_template_items.json"
+    },
+    "menu_assignments": {
+      "records": 0,
+      "file": "menu_assignments.json"
+    },
+    "weekly_menus": {
+      "records": 0,
+      "file": "weekly_menus.json"
+    },
+    "meal_adherence": {
+      "records": 0,
+      "file": "meal_adherence.json"
+    },
+    "meal_logs": {
+      "records": 0,
+      "file": "meal_logs.json"
+    },
+    "meal_logs_v2": {
+      "records": 0,
+      "file": "meal_logs_v2.json"
+    },
+    "program_products": {
+      "records": 0,
+      "file": "program_products.json"
+    },
+    "program_purchases": {
+      "records": 0,
+      "file": "program_purchases.json"
+    },
+    "program_weeks": {
+      "records": 0,
+      "file": "program_weeks.json"
+    },
+    "program_days": {
+      "records": 0,
+      "file": "program_days.json"
+    },
+    "program_day_workouts": {
+      "records": 0,
+      "file": "program_day_workouts.json"
+    },
+    "training_metrics_config": {
+      "records": 0,
+      "file": "training_metrics_config.json"
+    },
+    "training_set_lines": {
+      "records": 0,
+      "file": "training_set_lines.json"
+    },
+    "trainer_about": {
+      "records": 0,
+      "file": "trainer_about.json"
+    },
+    "professional_availability": {
+      "records": 0,
+      "file": "professional_availability.json"
+    },
+    "contact_submissions": {
+      "records": 0,
+      "file": "contact_submissions.json"
+    },
+    "newsletter_subscriptions": {
+      "records": 0,
+      "file": "newsletter_subscriptions.json"
+    },
+    "brand_communications": {
+      "records": 0,
+      "file": "brand_communications.json"
+    },
+    "brand_offers": {
+      "records": 0,
+      "file": "brand_offers.json"
+    },
+    "brand_resource_offers": {
+      "records": 0,
+      "file": "brand_resource_offers.json"
+    },
+    "brand_project_follows": {
+      "records": 0,
+      "file": "brand_project_follows.json"
+    },
+    "sponsorship_messages": {
+      "records": 0,
+      "file": "sponsorship_messages.json"
+    },
+    "chat_attachments": {
+      "records": 0,
+      "file": "chat_attachments.json"
+    },
+    "coach_technique_notes": {
+      "records": 0,
+      "file": "coach_technique_notes.json"
+    },
+    "training_comments": {
+      "records": 0,
+      "file": "training_comments.json"
+    },
+    "comment_reactions": {
+      "records": 0,
+      "file": "comment_reactions.json"
+    },
+    "project_proposals": {
+      "records": 0,
+      "file": "project_proposals.json"
+    },
+    "project_transparency_updates": {
+      "records": 0,
+      "file": "project_transparency_updates.json"
+    },
+    "notification_preferences": {
+      "records": 0,
+      "file": "notification_preferences.json"
+    },
+    "notification_queue": {
+      "records": 0,
+      "file": "notification_queue.json"
+    },
+    "notification_logs": {
+      "records": 0,
+      "file": "notification_logs.json"
+    },
+    "one_rm_update_notifications": {
+      "records": 0,
+      "file": "one_rm_update_notifications.json"
+    },
+    "profile_update_notifications": {
+      "records": 0,
+      "file": "profile_update_notifications.json"
+    },
+    "stripe_membership_mappings": {
+      "records": 0,
+      "file": "stripe_membership_mappings.json"
+    },
+    "stripe_webhook_events": {
+      "records": 0,
+      "file": "stripe_webhook_events.json"
+    },
+    "stripe_webhook_logs": {
+      "records": 0,
+      "file": "stripe_webhook_logs.json"
+    },
+    "measurement_history": {
+      "records": 0,
+      "file": "measurement_history.json"
+    },
+    "membership_subscriptions": {
+      "records": 0,
+      "file": "membership_subscriptions.json"
+    },
+    "membership_access": {
+      "records": 0,
+      "file": "membership_access.json"
+    },
+    "user_programs": {
+      "records": 0,
+      "file": "user_programs.json"
+    },
+    "athlete_programs": {
+      "records": 0,
+      "file": "athlete_programs.json"
+    },
+    "team_digest_content": {
+      "records": 0,
+      "file": "team_digest_content.json"
+    },
+    "weekly_performance_digests": {
+      "records": 0,
+      "file": "weekly_performance_digests.json"
+    },
+    "digest_article_reads": {
+      "records": 0,
+      "file": "digest_article_reads.json"
+    },
+    "digest_article_conversions": {
+      "records": 0,
+      "file": "digest_article_conversions.json"
+    },
+    "tp_connections": {
+      "records": 0,
+      "file": "tp_connections.json"
+    },
+    "atp_weekly_loads": {
+      "records": 0,
+      "file": "atp_weekly_loads.json"
+    },
+    "atp_weekly_aggregates": {
+      "records": 0,
+      "file": "atp_weekly_aggregates.json"
+    },
+    "atp_compliance_alerts": {
+      "records": 0,
+      "file": "atp_compliance_alerts.json"
+    },
+    "adherence_summary": {
+      "records": 0,
+      "file": "adherence_summary.json"
+    },
+    "anthropometry_population_data": {
+      "records": 0,
+      "file": "anthropometry_population_data.json"
+    },
+    "anthropometry_indices": {
+      "records": 0,
+      "file": "anthropometry_indices.json"
+    },
+    "kerr_body_composition": {
+      "records": 0,
+      "file": "kerr_body_composition.json"
+    },
+    "food_categories": {
+      "records": 0,
+      "file": "food_categories.json"
+    },
+    "habit_templates": {
+      "records": 0,
+      "file": "habit_templates.json"
+    },
+    "user_habits": {
+      "records": 0,
+      "file": "user_habits.json"
+    },
+    "habit_skills": {
+      "records": 0,
+      "file": "habit_skills.json"
+    },
+    "strava_connections": {
+      "records": 0,
+      "file": "strava_connections.json"
+    },
+    "user_subscriptions": {
+      "records": 3,
+      "file": "user_subscriptions.json"
+    }
+  },
+  "totalRecords": 35,
+  "status": "completed"
+}

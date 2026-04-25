@@ -1,0 +1,5 @@
+{
+  "VITE_SUPABASE_URL": "YOUR_SUPABASE_URL",
+  "VITE_SUPABASE_ANON_KEY": "YOUR_SUPABASE_ANON_KEY",
+  "note": "Replace these with your actual Supabase credentials"
+}
