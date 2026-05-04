@@ -340,7 +340,7 @@ async function handleSubscriptionActive(supabase: any, event: StripeEvent) {
   const metadata = subscription.metadata;
 
   if (metadata?.type === 'membership_subscription' || metadata?.membership_id) {
-    // Update membership access with subscription details
+    // Membership stays active — end_date is informational only, does not expire membership
     const { error } = await supabase
       .from('membership_access')
       .update({
@@ -361,26 +361,54 @@ async function handleSubscriptionCanceled(supabase: any, event: StripeEvent) {
   console.log('❌ Processing subscription cancellation');
   const subscription = event.data.object;
 
-  // Check if it's a membership subscription
-  if (subscription.metadata?.membership_id) {
-    const { error } = await supabase
-      .from('membership_access')
-      .update({
-        status: 'canceled',
-        end_date: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('stripe_subscription_id', subscription.id || subscription.subscription);
+  // For membership subscriptions: cancel the paid tier and revert user to Inicia (free)
+  if (subscription.metadata?.membership_id || subscription.metadata?.type === 'membership_subscription') {
+    const stripeSubId = subscription.id || subscription.subscription;
 
-    if (error) {
-      console.error('❌ Error canceling membership:', error);
+    // Find the user this subscription belongs to
+    const { data: accessRow } = await supabase
+      .from('membership_access')
+      .select('user_id')
+      .eq('stripe_subscription_id', stripeSubId)
+      .maybeSingle();
+
+    if (accessRow?.user_id) {
+      // Cancel the paid membership record
+      await supabase
+        .from('membership_access')
+        .update({
+          status: 'canceled',
+          end_date: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('stripe_subscription_id', stripeSubId);
+
+      // Revert user to Inicia free tier
+      const { data: iniciaData } = await supabase
+        .from('memberships')
+        .select('id')
+        .eq('slug', 'inicia')
+        .maybeSingle();
+
+      if (iniciaData?.id) {
+        await supabase.from('membership_access').insert({
+          user_id: accessRow.user_id,
+          membership_id: iniciaData.id,
+          status: 'active',
+          start_date: new Date().toISOString(),
+          end_date: null,
+          source: 'manual',
+          notes: 'Reverted to Inicia after Stripe subscription canceled',
+        });
+        console.log('✅ User reverted to Inicia after cancellation:', accessRow.user_id);
+      }
     } else {
-      console.log('✅ Membership canceled for subscription:', subscription.id);
+      console.log('⚠️ No membership_access found for subscription:', stripeSubId);
     }
     return;
   }
 
-  // Handle other subscriptions (existing code)
+  // Non-membership subscriptions (programs, etc.)
   const { error } = await supabase
     .from('user_purchases')
     .update({

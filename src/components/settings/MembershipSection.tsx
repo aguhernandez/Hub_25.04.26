@@ -169,38 +169,56 @@ export default function MembershipSection() {
             </button>
           )}
 
-          {/* Cancel membership button */}
-          {isActive && isPaid && !isInicia && (
+          {/* Downgrade to Inicia button — only shown when on a paid plan */}
+          {isActive && !isInicia && (
             <button
               onClick={async () => {
                 if (confirm(language === 'es'
-                  ? '¿Estás seguro de que quieres cancelar tu membresía? Se desactivará al final del periodo de facturación actual.'
-                  : 'Are you sure you want to cancel your membership? It will be deactivated at the end of the current billing period.')) {
+                  ? '¿Querés volver al plan Inicia (gratuito)? Tu membresía actual se cancelará y pasarás al plan gratuito inmediatamente.'
+                  : 'Do you want to go back to the Inicia (free) plan? Your current membership will be canceled and you will be moved to the free plan immediately.')) {
                   try {
-                    const { error } = await supabase
+                    // Cancel current membership
+                    await supabase
                       .from('membership_access')
-                      .update({ status: 'canceled' })
+                      .update({ status: 'canceled', end_date: new Date().toISOString() })
                       .eq('id', membership.id);
 
-                    if (error) throw error;
+                    // Get Inicia membership id
+                    const { data: iniciaData } = await supabase
+                      .from('memberships')
+                      .select('id')
+                      .eq('slug', 'inicia')
+                      .maybeSingle();
+
+                    if (iniciaData?.id) {
+                      await supabase.from('membership_access').insert({
+                        user_id: profile?.id,
+                        membership_id: iniciaData.id,
+                        status: 'active',
+                        start_date: new Date().toISOString(),
+                        end_date: null,
+                        source: 'manual',
+                        notes: 'User chose to return to Inicia free plan',
+                      });
+                    }
 
                     alert(language === 'es'
-                      ? 'Membresía cancelada. Seguirás teniendo acceso hasta el final del periodo.'
-                      : 'Membership canceled. You will still have access until the end of the period.');
+                      ? 'Has vuelto al plan Inicia. Tu acceso gratuito está activo.'
+                      : 'You have returned to the Inicia plan. Your free access is now active.');
 
                     window.location.reload();
                   } catch (err: any) {
-                    console.error('Error canceling membership:', err);
+                    console.error('Error downgrading membership:', err);
                     alert(language === 'es' ? `Error: ${err.message}` : `Error: ${err.message}`);
                   }
                 }
               }}
-              className="w-full flex items-center justify-between px-4 py-3 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg transition-colors group"
+              className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-lg transition-colors group border border-gray-200 dark:border-gray-600"
             >
               <div className="flex items-center gap-3">
                 <XCircle className="w-5 h-5" />
-                <span className="font-medium">
-                  {language === 'es' ? 'Cancelar membresía' : 'Cancel membership'}
+                <span className="font-medium text-sm">
+                  {language === 'es' ? 'Volver al plan Inicia (gratis)' : 'Go back to Inicia (free)'}
                 </span>
               </div>
             </button>

@@ -85,25 +85,7 @@ export default function ChangeMembershipModal({
 
     setProcessing(true);
     try {
-      if (currentMembership) {
-        const { error: deactivateError } = await supabase
-          .from('membership_access')
-          .update({
-            status: 'expired',
-            end_date: new Date().toISOString()
-          })
-          .eq('id', currentMembership.id);
-
-        if (deactivateError) throw deactivateError;
-      }
-
-      const endDate = new Date();
-      if (billingCycle === 'monthly') {
-        endDate.setMonth(endDate.getMonth() + 1);
-      } else {
-        endDate.setFullYear(endDate.getFullYear() + 1);
-      }
-
+      // The ensure_single_active_membership trigger will automatically expire the current one
       const { error: insertError } = await supabase
         .from('membership_access')
         .insert({
@@ -111,7 +93,7 @@ export default function ChangeMembershipModal({
           membership_id: selectedMembershipId,
           status: 'active',
           start_date: new Date().toISOString(),
-          end_date: endDate.toISOString(),
+          end_date: null, // No expiry — user stays at this level until they choose otherwise
           assigned_by: (await supabase.auth.getUser()).data.user?.id,
           source: 'manual',
           notes: `Manually assigned by admin/trainer on ${new Date().toLocaleDateString()}`
@@ -130,32 +112,53 @@ export default function ChangeMembershipModal({
     }
   };
 
-  const handleRemoveMembership = async () => {
-    if (!currentMembership) return;
+  const handleRevertToInicia = async () => {
+    const iniciaId = memberships.find(m => m.slug === 'inicia')?.id;
+    if (!iniciaId) return;
+
+    const isAlreadyInicia = currentMembership?.membership?.slug === 'inicia';
+    if (isAlreadyInicia) {
+      alert(language === 'es' ? 'El usuario ya está en el plan Inicia' : 'User is already on the Inicia plan');
+      return;
+    }
 
     const confirmMessage = language === 'es'
-      ? `¿Eliminar la membresía actual de ${userName}?`
-      : `Remove ${userName}'s current membership?`;
+      ? `¿Volver la membresía de ${userName} a Asciende Inicia (gratis)?`
+      : `Revert ${userName}'s membership to Asciende Inicia (free)?`;
 
     if (!confirm(confirmMessage)) return;
 
     setProcessing(true);
     try {
+      // Cancel current membership
+      if (currentMembership) {
+        await supabase
+          .from('membership_access')
+          .update({ status: 'canceled', end_date: new Date().toISOString() })
+          .eq('id', currentMembership.id);
+      }
+
+      // Insert Inicia with no end_date
       const { error } = await supabase
         .from('membership_access')
-        .update({
-          status: 'canceled',
-          end_date: new Date().toISOString()
-        })
-        .eq('id', currentMembership.id);
+        .insert({
+          user_id: userId,
+          membership_id: iniciaId,
+          status: 'active',
+          start_date: new Date().toISOString(),
+          end_date: null,
+          assigned_by: (await supabase.auth.getUser()).data.user?.id,
+          source: 'manual',
+          notes: `Reverted to Inicia by admin/trainer on ${new Date().toLocaleDateString()}`
+        });
 
       if (error) throw error;
 
-      alert(language === 'es' ? 'Membresía removida exitosamente' : 'Membership removed successfully');
+      alert(language === 'es' ? 'Membresía revertida a Inicia exitosamente' : 'Membership reverted to Inicia successfully');
       onSuccess?.();
       onClose();
     } catch (err: any) {
-      console.error('Error removing membership:', err);
+      console.error('Error reverting membership:', err);
       alert(language === 'es' ? `Error: ${err.message}` : `Error: ${err.message}`);
     } finally {
       setProcessing(false);
@@ -239,13 +242,13 @@ export default function ChangeMembershipModal({
                 </span>
               )}
             </p>
-            {currentMembership && (
+            {currentMembership?.membership?.slug !== 'inicia' && (
               <button
-                onClick={handleRemoveMembership}
+                onClick={handleRevertToInicia}
                 disabled={processing}
-                className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                className="mt-3 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
               >
-                {language === 'es' ? 'Eliminar Membresía' : 'Remove Membership'}
+                {language === 'es' ? 'Volver a Inicia (gratis)' : 'Revert to Inicia (free)'}
               </button>
             )}
           </div>
