@@ -69,6 +69,7 @@ export default function AdminUsersPage() {
         .select(`
           user_id,
           start_date,
+          end_date,
           membership:memberships (
             name,
             name_es,
@@ -77,6 +78,7 @@ export default function AdminUsersPage() {
           )
         `)
         .eq('status', 'active')
+        .or('end_date.is.null,end_date.gte.' + new Date().toISOString())
         .order('start_date', { ascending: false });
 
       // Group memberships by user_id and get the most recent one

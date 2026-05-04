@@ -147,6 +147,7 @@ export default function MyAthletesPage() {
         .select(`
           user_id,
           start_date,
+          end_date,
           membership:memberships (
             name,
             name_es,
@@ -156,6 +157,7 @@ export default function MyAthletesPage() {
         `)
         .in('user_id', athleteIds)
         .eq('status', 'active')
+        .or('end_date.is.null,end_date.gte.' + new Date().toISOString())
         .order('start_date', { ascending: false });
 
       // Group memberships by user_id and get the most recent one

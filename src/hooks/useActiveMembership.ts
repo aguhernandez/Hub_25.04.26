@@ -7,6 +7,7 @@ interface ActiveMembership {
   status: string;
   start_date: string;
   end_date: string | null;
+  source?: string;
   membership: {
     id: string;
     name: string;
@@ -32,23 +33,28 @@ export function useActiveMembership(userId?: string) {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('user_memberships')
+        .from('membership_access')
         .select(`
           id,
           membership_id,
           status,
-          current_period_start,
-          current_period_end,
+          start_date,
+          end_date,
+          source,
           membership:memberships (
             id,
             name,
+            name_es,
+            name_en,
+            slug,
             price_monthly,
             price_annual
           )
         `)
         .eq('user_id', userId)
         .eq('status', 'active')
-        .order('current_period_start', { ascending: false });
+        .or('end_date.is.null,end_date.gte.' + new Date().toISOString())
+        .order('start_date', { ascending: false });
 
       if (error) {
         console.error('Error loading membership:', error);
