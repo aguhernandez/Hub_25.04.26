@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
-import { Target, AlertCircle, Activity, Save, Plus, Trash2, Edit2 } from 'lucide-react';
+import { Target, AlertCircle, Activity, Save, Plus, Trash2, CreditCard as Edit2, MoreVertical } from 'lucide-react';
 import Toast from '../components/Toast';
+import ProfileOptionsModal from '../components/ProfileOptionsModal';
 import { useToast } from '../hooks/useToast';
 
 interface ProfileDetails {
@@ -43,6 +44,7 @@ export default function AthleteProfilePage() {
   const [noteCategory, setNoteCategory] = useState<'mobility' | 'timing' | 'force' | 'coordination' | 'other'>('mobility');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showOptionsModal, setShowOptionsModal] = useState(false);
 
   const isTrainer = profile?.role === 'trainer' || profile?.role === 'admin';
   const isAthlete = profile?.role === 'athlete';
@@ -205,19 +207,38 @@ export default function AthleteProfilePage() {
           onClose={hideToast}
         />
       )}
+      <ProfileOptionsModal
+        isOpen={showOptionsModal}
+        onClose={() => setShowOptionsModal(false)}
+        athleteId={profile?.id || ''}
+        athleteName={profile?.full_name || ''}
+        assignedTrainerId={profile?.assigned_trainer_id}
+        currentUserId={profile?.id || ''}
+        currentUserRole={profile?.role || ''}
+        currentUserEmail={profile?.email}
+      />
       <div className="space-y-6">
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#fdda36] to-[#ffd51a] rounded-xl p-6">
-        <h1 className="text-3xl font-bold text-[#514163] mb-2 flex items-center gap-2">
-          <Target className="w-8 h-8" />
-          {language === 'es' ? 'Mi Perfil Atlético' : 'My Athletic Profile'}
-        </h1>
-        <p className="text-[#514163]/80">
-          {language === 'es'
-            ? 'Mantén actualizada tu información para un mejor seguimiento'
-            : 'Keep your information updated for better tracking'}
-        </p>
-      </div>
+        <div className="bg-gradient-to-r from-[#fdda36] to-[#ffd51a] rounded-xl p-6 flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-[#514163] mb-2 flex items-center gap-2">
+              <Target className="w-8 h-8" />
+              {language === 'es' ? 'Mi Perfil Atlético' : 'My Athletic Profile'}
+            </h1>
+            <p className="text-[#514163]/80">
+              {language === 'es'
+                ? 'Mantén actualizada tu información para un mejor seguimiento'
+                : 'Keep your information updated for better tracking'}
+            </p>
+          </div>
+          <button
+            onClick={() => setShowOptionsModal(true)}
+            className="p-2 text-[#514163] hover:bg-white/30 rounded-lg transition-colors"
+            title={language === 'es' ? 'Opciones' : 'Options'}
+          >
+            <MoreVertical className="w-6 h-6" />
+          </button>
+        </div>
 
       {/* Health Status Section */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
