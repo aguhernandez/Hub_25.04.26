@@ -168,7 +168,7 @@ export default function AdminUsersPage() {
       actions: { es: 'Acciones', en: 'Actions' },
       membership: { es: 'Membresía', en: 'Membership' },
       changeMembership: { es: 'Cambiar Membresía', en: 'Change Membership' },
-      noMembership: { es: 'Sin membresía', en: 'No membership' }
+      noMembership: { es: 'Asciende Inicia', en: 'Asciende Inicia' }
     };
     return translations[key]?.[language] || key;
   };

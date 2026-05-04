@@ -627,8 +627,8 @@ export default function MyAthletesPage() {
                     {(language === 'es' ? athlete.membership.name_es : athlete.membership.name_en) || athlete.membership.name}
                   </span>
                 ) : (
-                  <span className="text-sm text-gray-400 dark:text-gray-500">
-                    {language === 'es' ? 'Sin membresía' : 'No membership'}
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Asciende Inicia
                   </span>
                 )}
               </div>

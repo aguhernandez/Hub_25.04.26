@@ -198,7 +198,7 @@ export default function ChangeMembershipModal({
 
   const currentMembershipName = currentMembership?.membership
     ? (language === 'es' ? currentMembership.membership.name_es : currentMembership.membership.name_en) || currentMembership.membership.name
-    : language === 'es' ? 'Sin Membresía' : 'No Membership';
+    : 'Asciende Inicia';
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

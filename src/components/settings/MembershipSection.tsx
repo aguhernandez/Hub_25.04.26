@@ -75,11 +75,14 @@ export default function MembershipSection() {
 
   const membershipName = membership?.membership
     ? (language === 'es' ? membership.membership.name_es : membership.membership.name_en) || membership.membership.name
-    : language === 'es' ? 'Sin Membresía' : 'No Membership';
+    : language === 'es' ? 'Asciende Inicia' : 'Asciende Inicia';
 
-  const membershipSlug = membership?.membership?.slug || 'none';
+  const membershipSlug = membership?.membership?.slug || 'inicia';
   const MembershipIcon = getMembershipIcon(membershipSlug);
   const colors = getMembershipColor(membershipSlug);
+  const isInicia = !membership?.membership || membershipSlug === 'inicia';
+  const isPaid = membership?.source === 'stripe';
+  const isActive = membership?.status === 'active';
 
   return (
     <div className="space-y-6">
@@ -97,9 +100,11 @@ export default function MembershipSection() {
               {language === 'es' ? 'Tu Membresía Actual' : 'Your Current Membership'}
             </h2>
             <p className="text-white/80">
-              {membership?.status === 'active'
-                ? language === 'es' ? '✅ Activa' : '✅ Active'
-                : language === 'es' ? '⏸ Inactiva' : '⏸ Inactive'}
+              {isActive
+                ? isInicia
+                  ? language === 'es' ? 'Plan gratuito' : 'Free plan'
+                  : language === 'es' ? '✅ Activa' : '✅ Active'
+                : language === 'es' ? '✅ Activa' : '✅ Active'}
             </p>
           </div>
           <div className={`w-16 h-16 bg-white/20 backdrop-blur rounded-full flex items-center justify-center`}>
@@ -126,8 +131,8 @@ export default function MembershipSection() {
               {language === 'es' ? 'Precio Mensual' : 'Monthly Price'}
             </p>
             <p className="text-lg font-bold">
-              {membership?.membership
-                ? `$${membership.membership.price_monthly}`
+              {membership?.membership && !isInicia
+                ? `$${membership.membership.price_monthly}/mo`
                 : language === 'es' ? 'Gratis' : 'Free'}
             </p>
           </div>
@@ -149,7 +154,7 @@ export default function MembershipSection() {
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="space-y-3">
           {/* View all plans button */}
-          {(!membership || membership.membership.slug === 'start' || membership.status !== 'active') && (
+          {(isInicia || !isActive) && (
             <button
               onClick={() => navigate('/memberships')}
               className="w-full flex items-center justify-between px-4 py-3 bg-[#fdda36] hover:bg-[#ffd51a] text-[#514163] rounded-lg transition-colors group font-medium"
@@ -165,7 +170,7 @@ export default function MembershipSection() {
           )}
 
           {/* Cancel membership button */}
-          {membership?.status === 'active' && membership.source === 'stripe' && (
+          {isActive && isPaid && !isInicia && (
             <button
               onClick={async () => {
                 if (confirm(language === 'es'
