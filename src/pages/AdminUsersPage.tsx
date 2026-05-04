@@ -4,6 +4,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import AdminLayout from '../components/AdminLayout';
 import ChangeMembershipModal from '../components/ChangeMembershipModal';
+import ProfileOptionsModal from '../components/ProfileOptionsModal';
 import {
   Users,
   Search,
@@ -43,6 +44,8 @@ export default function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showMembershipModal, setShowMembershipModal] = useState(false);
+  const [showProfileOptionsModal, setShowProfileOptionsModal] = useState(false);
+  const [selectedUserForOptions, setSelectedUserForOptions] = useState<User | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -321,13 +324,25 @@ export default function AdminUsersPage() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <button
-                          onClick={() => handleChangeMembership(user)}
-                          className="inline-flex items-center gap-1 px-3 py-1 bg-[#fdda36] text-[#514163] rounded-lg hover:bg-[#ffd51a] transition-colors font-medium"
-                        >
-                          <Crown className="w-4 h-4" />
-                          {language === 'es' ? 'Cambiar' : 'Change'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleChangeMembership(user)}
+                            className="inline-flex items-center gap-1 px-3 py-1 bg-[#fdda36] text-[#514163] rounded-lg hover:bg-[#ffd51a] transition-colors font-medium"
+                          >
+                            <Crown className="w-4 h-4" />
+                            {language === 'es' ? 'Cambiar' : 'Change'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedUserForOptions(user);
+                              setShowProfileOptionsModal(true);
+                            }}
+                            className="inline-flex items-center justify-center p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                            title={language === 'es' ? 'Opciones' : 'Options'}
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -349,6 +364,23 @@ export default function AdminUsersPage() {
             userEmail={selectedUser.email}
             userName={selectedUser.full_name || selectedUser.email}
             onSuccess={loadUsers}
+          />
+        )}
+
+        {/* Profile Options Modal */}
+        {selectedUserForOptions && profile && (
+          <ProfileOptionsModal
+            isOpen={showProfileOptionsModal}
+            onClose={() => {
+              setShowProfileOptionsModal(false);
+              setSelectedUserForOptions(null);
+            }}
+            athleteId={selectedUserForOptions.id}
+            athleteName={selectedUserForOptions.full_name || ''}
+            assignedTrainerId={selectedUserForOptions.role === 'athlete' ? undefined : selectedUserForOptions.id}
+            currentUserId={profile.id || ''}
+            currentUserRole={profile.role || ''}
+            currentUserEmail={profile.email}
           />
         )}
       </div>
