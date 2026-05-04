@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
-import { Users, User, UserPlus, MessageSquare, Dumbbell, Search, X, Calendar, Apple, CheckCircle, TrendingUp, ChevronDown, ChevronUp, Crown } from 'lucide-react';
+import { Users, User, UserPlus, MessageSquare, Dumbbell, Search, X, Calendar, Apple, CheckCircle, TrendingUp, ChevronDown, ChevronUp, Crown, MoreVertical } from 'lucide-react';
 import { useAthlete } from '../contexts/AthleteContext';
 import ChangeMembershipModal from '../components/ChangeMembershipModal';
+import ProfileOptionsModal from '../components/ProfileOptionsModal';
 
 interface Athlete {
   id: string;
@@ -47,6 +48,8 @@ export default function MyAthletesPage() {
   const [creating, setCreating] = useState(false);
   const [selectedAthlete, setSelectedAthleteForMembership] = useState<Athlete | null>(null);
   const [showMembershipModal, setShowMembershipModal] = useState(false);
+  const [showProfileOptionsModal, setShowProfileOptionsModal] = useState(false);
+  const [selectedAthleteForOptions, setSelectedAthleteForOptions] = useState<Athlete | null>(null);
 
   const navigate = (page: string) => {
     window.dispatchEvent(new CustomEvent('navigate', { detail: page }));
@@ -404,26 +407,38 @@ export default function MyAthletesPage() {
                     key={athlete.id}
                     className="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 p-4 space-y-3"
                   >
-                    <div className="flex items-start gap-3">
-                      {athlete.avatar_url ? (
-                        <img
-                          src={athlete.avatar_url}
-                          alt={athlete.full_name}
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-[#fdda36] flex items-center justify-center text-[#514163] font-bold">
-                          {athlete.full_name?.charAt(0) || '?'}
+                    <div className="flex items-start gap-3 justify-between">
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        {athlete.avatar_url ? (
+                          <img
+                            src={athlete.avatar_url}
+                            alt={athlete.full_name}
+                            className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-full bg-[#fdda36] flex items-center justify-center text-[#514163] font-bold flex-shrink-0">
+                            {athlete.full_name?.charAt(0) || '?'}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-gray-900 dark:text-white truncate text-sm">
+                            {athlete.full_name}
+                          </h3>
+                          <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                            {athlete.email}
+                          </p>
                         </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-gray-900 dark:text-white truncate text-sm">
-                          {athlete.full_name}
-                        </h3>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                          {athlete.email}
-                        </p>
                       </div>
+                      <button
+                        onClick={() => {
+                          setSelectedAthleteForOptions(athlete);
+                          setShowProfileOptionsModal(true);
+                        }}
+                        className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 rounded transition-colors flex-shrink-0"
+                        title={language === 'es' ? 'Opciones' : 'Options'}
+                      >
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
                     </div>
 
                     {athlete.sport && (
@@ -536,31 +551,43 @@ export default function MyAthletesPage() {
               key={athlete.id}
               className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 space-y-4"
             >
-              <div className="flex items-start gap-3">
-                {athlete.avatar_url ? (
-                  <img
-                    src={athlete.avatar_url}
-                    alt={athlete.full_name}
-                    className="w-16 h-16 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-[#fdda36] flex items-center justify-center text-[#514163] font-bold text-xl">
-                    {athlete.full_name?.charAt(0) || '?'}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-                    {athlete.full_name}
-                  </h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
-                    {athlete.email}
-                  </p>
-                  {athlete.country && (
-                    <p className="text-sm text-gray-500 dark:text-gray-500">
-                      {athlete.country}
-                    </p>
+              <div className="flex items-start gap-3 justify-between">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  {athlete.avatar_url ? (
+                    <img
+                      src={athlete.avatar_url}
+                      alt={athlete.full_name}
+                      className="w-16 h-16 rounded-full object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-[#fdda36] flex items-center justify-center text-[#514163] font-bold text-xl flex-shrink-0">
+                      {athlete.full_name?.charAt(0) || '?'}
+                    </div>
                   )}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                      {athlete.full_name}
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                      {athlete.email}
+                    </p>
+                    {athlete.country && (
+                      <p className="text-sm text-gray-500 dark:text-gray-500">
+                        {athlete.country}
+                      </p>
+                    )}
+                  </div>
                 </div>
+                <button
+                  onClick={() => {
+                    setSelectedAthleteForOptions(athlete);
+                    setShowProfileOptionsModal(true);
+                  }}
+                  className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors flex-shrink-0"
+                  title={language === 'es' ? 'Opciones' : 'Options'}
+                >
+                  <MoreVertical className="w-5 h-5" />
+                </button>
               </div>
 
               {athlete.sport && (
@@ -929,6 +956,23 @@ export default function MyAthletesPage() {
           userEmail={selectedAthlete.email}
           userName={selectedAthlete.full_name || selectedAthlete.email}
           onSuccess={loadAthletes}
+        />
+      )}
+
+      {/* Profile Options Modal */}
+      {selectedAthleteForOptions && (
+        <ProfileOptionsModal
+          isOpen={showProfileOptionsModal}
+          onClose={() => {
+            setShowProfileOptionsModal(false);
+            setSelectedAthleteForOptions(null);
+          }}
+          athleteId={selectedAthleteForOptions.id}
+          athleteName={selectedAthleteForOptions.full_name || ''}
+          assignedTrainerId={user?.id}
+          currentUserId={user?.id || ''}
+          currentUserRole={profile?.role || ''}
+          currentUserEmail={profile?.email}
         />
       )}
     </div>
