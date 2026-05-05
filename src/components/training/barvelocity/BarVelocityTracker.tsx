@@ -22,6 +22,7 @@ import BarCalibration from './BarCalibration';
 import BarVelocityResultsPanel from './BarVelocityResultsPanel';
 import BarVelocityHistory from './BarVelocityHistory';
 import LVProfilePanel from './LVProfilePanel';
+import VBTLoadPrescriptionPanel from './VBTLoadPrescriptionPanel';
 import {
   BarRep,
   CalibrationData,
@@ -30,6 +31,7 @@ import {
 } from './BarVelocityTypes';
 import { analyzeBarVideo, analyzeBarStream } from './BarVideoAnalyzer';
 import { requestCameraPermission } from '../../../utils/cameraPermission';
+import { LV1RMEstimate } from './LVProfile';
 
 type AppTab = 'session' | 'history';
 type SessionStep = 'setup' | 'calibration' | 'recording' | 'analyzing' | 'results';
@@ -66,6 +68,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [lvEstimate, setLvEstimate] = useState<LV1RMEstimate | null>(null);
 
   const txt = {
     title: 'Bar Velocity Tracker',
@@ -389,6 +392,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
     setError('');
     setIsRecording(false);
     setLiveVelocity(0);
+    setLvEstimate(null);
     stopCamera();
   };
 
@@ -617,12 +621,22 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                 )}
 
                 {captureMode === 'live' && (
-                  <LVProfilePanel
-                    currentReps={reps}
-                    loadKg={loadKg ? parseFloat(loadKg) : 0}
-                    exerciseName={exerciseName}
-                    isLive
-                  />
+                  <>
+                    <LVProfilePanel
+                      currentReps={reps}
+                      loadKg={loadKg ? parseFloat(loadKg) : 0}
+                      exerciseName={exerciseName}
+                      isLive
+                      onEstimateChange={setLvEstimate}
+                    />
+                    <VBTLoadPrescriptionPanel
+                      currentReps={reps}
+                      loadKg={loadKg ? parseFloat(loadKg) : 0}
+                      estimate={lvEstimate}
+                      onLoadChange={(kg) => setLoadKg(String(kg))}
+                      isLive
+                    />
+                  </>
                 )}
               </div>
             )}
@@ -662,12 +676,22 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                     />
 
                     {loadKg && parseFloat(loadKg) > 0 && (
-                      <LVProfilePanel
-                        currentReps={reps}
-                        loadKg={parseFloat(loadKg)}
-                        exerciseName={exerciseName}
-                        isLive={false}
-                      />
+                      <>
+                        <LVProfilePanel
+                          currentReps={reps}
+                          loadKg={parseFloat(loadKg)}
+                          exerciseName={exerciseName}
+                          isLive={false}
+                          onEstimateChange={setLvEstimate}
+                        />
+                        <VBTLoadPrescriptionPanel
+                          currentReps={reps}
+                          loadKg={parseFloat(loadKg)}
+                          estimate={lvEstimate}
+                          onLoadChange={(kg) => setLoadKg(String(kg))}
+                          isLive={false}
+                        />
+                      </>
                     )}
 
                     <div>

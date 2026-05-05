@@ -37,6 +37,8 @@ interface LVProfilePanelProps {
   exerciseName: string;
   /** If true, panel is in real-time mode (live tracking) */
   isLive?: boolean;
+  /** Called whenever the estimate updates — lets parent access it */
+  onEstimateChange?: (est: LV1RMEstimate | null) => void;
 }
 
 interface StoredLVPoint {
@@ -51,6 +53,7 @@ export default function LVProfilePanel({
   loadKg,
   exerciseName,
   isLive = false,
+  onEstimateChange,
 }: LVProfilePanelProps) {
   const { isDark } = useTheme();
   const { language } = useLanguage();
@@ -136,6 +139,11 @@ export default function LVProfilePanel({
         };
       })()
     : est;
+
+  // ── Propagate estimate to parent
+  useEffect(() => {
+    onEstimateChange?.(estWithOverride);
+  }, [estWithOverride, onEstimateChange]);
 
   // ── Latest rep (for live feedback)
   const latestRep = isLive && currentReps.length > 0
@@ -437,3 +445,6 @@ export default function LVProfilePanel({
     </div>
   );
 }
+
+
+export default LVProfilePanel
