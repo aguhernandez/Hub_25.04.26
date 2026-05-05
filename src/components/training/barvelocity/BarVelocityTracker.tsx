@@ -17,6 +17,9 @@ import {
   Play,
   Square,
   AlertCircle,
+  Keyboard,
+  Zap,
+  Trash2,
 } from 'lucide-react';
 import BarCalibration from './BarCalibration';
 import BarVelocityResultsPanel from './BarVelocityResultsPanel';
@@ -34,8 +37,8 @@ import { requestCameraPermission } from '../../../utils/cameraPermission';
 import { LV1RMEstimate } from './LVProfile';
 
 type AppTab = 'session' | 'history';
-type SessionStep = 'setup' | 'calibration' | 'recording' | 'analyzing' | 'results';
-type CaptureMode = 'video' | 'live';
+type SessionStep = 'setup' | 'calibration' | 'recording' | 'analyzing' | 'manual' | 'results';
+type CaptureMode = 'video' | 'live' | 'manual';
 
 interface BarVelocityTrackerProps {
   onClose: () => void;
@@ -63,6 +66,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
   const [actualFps, setActualFps] = useState(30);
   const [isRecording, setIsRecording] = useState(false);
   const [liveVelocity, setLiveVelocity] = useState(0);
+  const [manualVelocityInput, setManualVelocityInput] = useState('');
 
   const [reps, setReps] = useState<BarRep[]>([]);
   const [saving, setSaving] = useState(false);
@@ -126,6 +130,17 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
     saving: language === 'es' ? 'Guardando...' : 'Saving...',
     saveError: language === 'es' ? 'Error al guardar. Intenta de nuevo.' : 'Error saving. Please try again.',
     cameraError: language === 'es' ? 'No se pudo acceder a la camara.' : 'Could not access camera.',
+    manual: language === 'es' ? 'Manual' : 'Manual',
+    manualDesc: language === 'es' ? 'Ingresar velocidades' : 'Enter velocities',
+    manualTitle: language === 'es' ? 'Ingreso manual de velocidades' : 'Manual velocity input',
+    manualPlaceholder: language === 'es' ? 'ej: 0.75' : 'e.g. 0.75',
+    addRep: language === 'es' ? 'Agregar rep' : 'Add rep',
+    finishSet: language === 'es' ? 'Finalizar serie' : 'Finish set',
+    repAdded: language === 'es' ? 'Rep agregada' : 'Rep added',
+    manualHint: language === 'es'
+      ? 'Ingresa la velocidad media concentrica de cada repeticion en m/s. Puedes obtenerla de un encoder lineal u otro dispositivo VBT.'
+      : 'Enter the mean concentric velocity for each rep in m/s. You can get this from a linear encoder or other VBT device.',
+    toCalibrationCamera: language === 'es' ? 'Continuar a calibracion' : 'Continue to calibration',
   };
 
   const startCamera = useCallback(async () => {
@@ -384,6 +399,29 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
     }
   };
 
+  const addManualRep = () => {
+    const v = parseFloat(manualVelocityInput);
+    if (isNaN(v) || v <= 0 || v > 5) return;
+    const mass = loadKg ? parseFloat(loadKg) : undefined;
+    const power = mass && mass > 0 ? mass * 9.81 * v : undefined;
+    const sampleVelocities = [v * 0.8, v, v * 1.1, v * 1.15, v * 1.0, v * 0.9, v * 0.7];
+    const newRep: BarRep = {
+      repNumber: reps.length + 1,
+      meanConcentricVelocityMs: v,
+      peakVelocityMs: v * 1.15,
+      meanEccentricVelocityMs: v * 0.6,
+      concentricDurationMs: 600,
+      eccentricDurationMs: 900,
+      displacementMm: 400,
+      estimatedPowerW: power,
+      velocitySamples: sampleVelocities.map((vel, i) => ({ timeMs: i * 100, velocityMs: vel, positionPx: i * 50 })),
+      timestampsMs: [0, 100, 200, 300, 400, 500, 600],
+      isValid: true,
+    };
+    setReps(prev => [...prev, newRep]);
+    setManualVelocityInput('');
+  };
+
   const resetSession = () => {
     setStep('setup');
     setReps([]);
@@ -393,6 +431,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
     setIsRecording(false);
     setLiveVelocity(0);
     setLvEstimate(null);
+    setManualVelocityInput('');
     stopCamera();
   };
 
@@ -470,59 +509,186 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
 
                 <div>
                   <label className={`block text-xs mb-2 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>{txt.captureMode}</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       onClick={() => setCaptureMode('video')}
-                      className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-colors ${
+                      className={`flex flex-col items-center gap-2 p-3 rounded-2xl border transition-colors ${
                         captureMode === 'video'
                           ? 'bg-primary/15 border-primary/40 text-primary'
                           : isDark ? 'bg-gray-800/50 border-gray-700/30 text-gray-400 hover:border-gray-600' : 'bg-gray-50 border-gray-300 text-gray-600 hover:border-gray-400'
                       }`}
                     >
-                      <Video className="w-6 h-6" />
+                      <Video className="w-5 h-5" />
                       <div className="text-center">
-                        <div className="text-sm font-medium">{txt.recordAnalyze}</div>
+                        <div className="text-xs font-medium">{txt.recordAnalyze}</div>
                         <div className="text-xs opacity-70">{txt.videoPost}</div>
                       </div>
                     </button>
                     <button
                       onClick={() => setCaptureMode('live')}
-                      className={`flex flex-col items-center gap-2 p-4 rounded-2xl border transition-colors ${
+                      className={`flex flex-col items-center gap-2 p-3 rounded-2xl border transition-colors ${
                         captureMode === 'live'
                           ? 'bg-green-500/15 border-green-500/40 text-green-400'
                           : isDark ? 'bg-gray-800/50 border-gray-700/30 text-gray-400 hover:border-gray-600' : 'bg-gray-50 border-gray-300 text-gray-600 hover:border-gray-400'
                       }`}
                     >
-                      <Camera className="w-6 h-6" />
+                      <Camera className="w-5 h-5" />
                       <div className="text-center">
-                        <div className="text-sm font-medium">{txt.realTime}</div>
+                        <div className="text-xs font-medium">{txt.realTime}</div>
                         <div className="text-xs opacity-70">{txt.instantFeedback}</div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setCaptureMode('manual')}
+                      className={`flex flex-col items-center gap-2 p-3 rounded-2xl border transition-colors ${
+                        captureMode === 'manual'
+                          ? 'bg-blue-500/15 border-blue-500/40 text-blue-400'
+                          : isDark ? 'bg-gray-800/50 border-gray-700/30 text-gray-400 hover:border-gray-600' : 'bg-gray-50 border-gray-300 text-gray-600 hover:border-gray-400'
+                      }`}
+                    >
+                      <Keyboard className="w-5 h-5" />
+                      <div className="text-center">
+                        <div className="text-xs font-medium">{txt.manual}</div>
+                        <div className="text-xs opacity-70">{txt.manualDesc}</div>
                       </div>
                     </button>
                   </div>
                 </div>
 
-                <div className={`border rounded-2xl p-3 text-xs space-y-1 ${isDark ? 'bg-gray-800/40 border-gray-700/30 text-gray-400' : 'bg-gray-50 border-gray-300 text-gray-700'}`}>
-                  <p className={`font-medium ${isDark ? 'text-gray-300' : 'text-gray-800'}`}>{txt.prepTitle}</p>
-                  <ul className={`list-disc list-inside space-y-0.5 ${isDark ? 'text-gray-400/80' : 'text-gray-700/80'}`}>
-                    {txt.prepItems.map((item, i) => (
-                      <li key={i}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
+                {captureMode !== 'manual' && (
+                  <div className={`border rounded-2xl p-3 text-xs space-y-1 ${isDark ? 'bg-gray-800/40 border-gray-700/30 text-gray-400' : 'bg-gray-50 border-gray-300 text-gray-700'}`}>
+                    <p className={`font-medium ${isDark ? 'text-gray-300' : 'text-gray-800'}`}>{txt.prepTitle}</p>
+                    <ul className={`list-disc list-inside space-y-0.5 ${isDark ? 'text-gray-400/80' : 'text-gray-700/80'}`}>
+                      {txt.prepItems.map((item, i) => (
+                        <li key={i}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {captureMode === 'manual' && (
+                  <div className={`border rounded-2xl p-3 text-xs ${isDark ? 'bg-blue-900/20 border-blue-700/30 text-blue-300' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+                    <p className="font-medium mb-1">{txt.manualTitle}</p>
+                    <p className="opacity-80">{txt.manualHint}</p>
+                  </div>
+                )}
 
                 <button
-                  onClick={() => setStep('calibration')}
-                  className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-gray-900 font-semibold py-3 rounded-xl transition-colors"
+                  onClick={() => captureMode === 'manual' ? setStep('manual') : setStep('calibration')}
+                  className={`w-full flex items-center justify-center gap-2 font-semibold py-3 rounded-xl transition-colors ${
+                    captureMode === 'manual'
+                      ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                      : 'bg-primary hover:bg-primary/90 text-gray-900'
+                  }`}
                 >
-                  <Camera className="w-4 h-4" />
-                  {txt.toCalibration}
+                  {captureMode === 'manual' ? <Keyboard className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
+                  {captureMode === 'manual' ? txt.manualTitle : txt.toCalibrationCamera}
                 </button>
               </>
             )}
 
             {step === 'calibration' && (
               <BarCalibration videoRef={videoRef} onCalibrated={handleCalibrated} />
+            )}
+
+            {step === 'manual' && (
+              <div className="space-y-4">
+                <div className={`rounded-2xl p-4 border ${isDark ? 'bg-gray-800/50 border-gray-700/40' : 'bg-gray-50 border-gray-200'}`}>
+                  <h3 className={`text-xs font-semibold uppercase tracking-wide flex items-center gap-2 mb-3 ${isDark ? 'text-gray-300' : 'text-gray-800'}`}>
+                    <Keyboard className="w-3.5 h-3.5" />
+                    {txt.manualTitle}
+                  </h3>
+                  <p className={`text-xs mb-4 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{txt.manualHint}</p>
+
+                  <div className="flex gap-2 mb-4">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        value={manualVelocityInput}
+                        onChange={(e) => setManualVelocityInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && addManualRep()}
+                        placeholder={txt.manualPlaceholder}
+                        min="0.01"
+                        max="5"
+                        step="0.01"
+                        className={`w-full rounded-xl px-3 py-3 text-sm focus:outline-none focus:border-blue-500/50 border pr-12 ${isDark ? 'bg-gray-700/60 border-gray-600/50 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'}`}
+                      />
+                      <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>m/s</span>
+                    </div>
+                    <button
+                      onClick={addManualRep}
+                      disabled={!manualVelocityInput || isNaN(parseFloat(manualVelocityInput)) || parseFloat(manualVelocityInput) <= 0}
+                      className="flex items-center justify-center gap-1.5 px-4 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold rounded-xl transition-all active:scale-95 text-sm whitespace-nowrap"
+                    >
+                      <Zap className="w-4 h-4" />
+                      {txt.addRep}
+                    </button>
+                  </div>
+
+                  {reps.length > 0 && (
+                    <div className="space-y-2">
+                      {reps.map((rep) => (
+                        <div key={rep.repNumber} className={`flex items-center justify-between px-3 py-2 rounded-xl border ${isDark ? 'bg-gray-700/40 border-gray-600/30' : 'bg-white border-gray-200'}`}>
+                          <div className="flex items-center gap-2">
+                            <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${isDark ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700'}`}>
+                              {rep.repNumber}
+                            </span>
+                            <span className={`text-sm font-semibold ${
+                              rep.meanConcentricVelocityMs >= 0.8 ? 'text-green-400' :
+                              rep.meanConcentricVelocityMs >= 0.5 ? 'text-primary' :
+                              rep.meanConcentricVelocityMs >= 0.35 ? 'text-yellow-400' : 'text-red-400'
+                            }`}>
+                              {rep.meanConcentricVelocityMs.toFixed(2)} m/s
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {rep.estimatedPowerW && (
+                              <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                {rep.estimatedPowerW.toFixed(0)} W
+                              </span>
+                            )}
+                            <button
+                              onClick={() => setReps(prev => prev.filter(r => r.repNumber !== rep.repNumber).map((r, i) => ({ ...r, repNumber: i + 1 })))}
+                              className={`p-1 rounded-lg transition-colors ${isDark ? 'text-gray-600 hover:text-red-400' : 'text-gray-400 hover:text-red-500'}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {reps.length > 0 && (
+                  <LVProfilePanel
+                    currentReps={reps}
+                    loadKg={loadKg ? parseFloat(loadKg) : 0}
+                    exerciseName={exerciseName}
+                    isLive
+                    onEstimateChange={setLvEstimate}
+                  />
+                )}
+
+                {reps.length > 0 && (
+                  <VBTLoadPrescriptionPanel
+                    currentReps={reps}
+                    loadKg={loadKg ? parseFloat(loadKg) : 0}
+                    estimate={lvEstimate}
+                    onLoadChange={(kg) => setLoadKg(String(kg))}
+                    isLive
+                  />
+                )}
+
+                <button
+                  onClick={() => setStep('results')}
+                  disabled={reps.length === 0}
+                  className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 disabled:bg-gray-700 disabled:text-gray-500 text-gray-900 font-semibold py-3 rounded-xl transition-colors"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  {txt.finishSet} ({reps.length} reps)
+                </button>
+              </div>
             )}
 
             {step === 'recording' && (
