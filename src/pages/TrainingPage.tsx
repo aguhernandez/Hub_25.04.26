@@ -2401,7 +2401,7 @@ export default function TrainingPage() {
               <button
                 onClick={() => {
                   setShowFAB(false);
-                  window.dispatchEvent(new CustomEvent('navigate', { detail: 'annual-planner' }));
+                  window.dispatchEvent(new CustomEvent('navigate', { detail: 'atp' }));
                 }}
                 className="w-12 h-12 rounded-full bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-[#514163] dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all hover:scale-110"
               >
@@ -2468,12 +2468,12 @@ export default function TrainingPage() {
           onClick={() => setShowFAB(prev => !prev)}
           className={`w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 ${
             showFAB
-              ? 'bg-gray-700 dark:bg-gray-600 rotate-45 scale-110'
-              : 'bg-[#514163] hover:bg-[#3d3050] hover:scale-110'
+              ? 'bg-[#514163] rotate-45 scale-110'
+              : 'bg-[#fdda36] hover:bg-[#ffd51a] hover:scale-110'
           }`}
           aria-label={language === 'es' ? 'Acciones de entrenamiento' : 'Training actions'}
         >
-          <Plus className="w-7 h-7 text-white" strokeWidth={2.5} />
+          <Plus className={`w-7 h-7 ${showFAB ? 'text-white' : 'text-[#514163]'}`} strokeWidth={2.5} />
         </button>
       </div>
 
