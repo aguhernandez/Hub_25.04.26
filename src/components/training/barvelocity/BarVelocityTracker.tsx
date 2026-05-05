@@ -21,6 +21,7 @@ import {
 import BarCalibration from './BarCalibration';
 import BarVelocityResultsPanel from './BarVelocityResultsPanel';
 import BarVelocityHistory from './BarVelocityHistory';
+import LVProfilePanel from './LVProfilePanel';
 import {
   BarRep,
   CalibrationData,
@@ -615,20 +616,13 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                   </div>
                 )}
 
-                {reps.length > 0 && captureMode === 'live' && (
-                  <div className="bg-gray-800/50 rounded-2xl p-3 border border-gray-700/30">
-                    <div className="text-xs text-gray-400 mb-2">{txt.liveProgress}</div>
-                    <div className="flex items-end gap-1.5 h-12">
-                      {reps.map((r, idx) => (
-                        <div key={idx} className="flex-1 flex items-end">
-                          <div
-                            className="w-full rounded-t bg-primary"
-                            style={{ height: `${(r.meanConcentricVelocityMs / 2) * 100}%`, minHeight: 4 }}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                {captureMode === 'live' && (
+                  <LVProfilePanel
+                    currentReps={reps}
+                    loadKg={loadKg ? parseFloat(loadKg) : 0}
+                    exerciseName={exerciseName}
+                    isLive
+                  />
                 )}
               </div>
             )}
@@ -666,6 +660,15 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                       loadKg={loadKg ? parseFloat(loadKg) : undefined}
                       exerciseName={exerciseName || undefined}
                     />
+
+                    {loadKg && parseFloat(loadKg) > 0 && (
+                      <LVProfilePanel
+                        currentReps={reps}
+                        loadKg={parseFloat(loadKg)}
+                        exerciseName={exerciseName}
+                        isLive={false}
+                      />
+                    )}
 
                     <div>
                       <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>{txt.notes}</label>
