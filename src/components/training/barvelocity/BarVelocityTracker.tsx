@@ -598,6 +598,34 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                     <Keyboard className="w-3.5 h-3.5" />
                     {txt.manualTitle}
                   </h3>
+
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div>
+                      <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{txt.exercise}</label>
+                      <input
+                        type="text"
+                        value={exerciseName}
+                        onChange={(e) => setExerciseName(e.target.value)}
+                        placeholder={txt.exercisePlaceholder}
+                        className={`w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary/50 border ${isDark ? 'bg-gray-700/60 border-gray-600/50 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'}`}
+                      />
+                    </div>
+                    <div>
+                      <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{txt.load}</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={loadKg}
+                          onChange={(e) => setLoadKg(e.target.value)}
+                          placeholder={txt.loadPlaceholder}
+                          min="0"
+                          className={`w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary/50 border pr-9 ${isDark ? 'bg-gray-700/60 border-gray-600/50 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'}`}
+                        />
+                        <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>kg</span>
+                      </div>
+                    </div>
+                  </div>
+
                   <p className={`text-xs mb-4 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{txt.manualHint}</p>
 
                   <div className="flex gap-2 mb-4">
