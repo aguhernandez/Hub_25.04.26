@@ -241,20 +241,25 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
     if (!videoTrack || videoTrack.readyState !== 'live') return;
 
     chunksRef.current = [];
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9'
-      : 'video/webm';
+    const candidates = [
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm',
+      'video/mp4;codecs=avc1',
+      'video/mp4',
+    ];
+    const mimeType = candidates.find(t => MediaRecorder.isTypeSupported(t)) ?? '';
 
     try {
-      // CRITICAL FIX: Verify MediaRecorder creation doesn't crash on iOS
-      const recorder = new MediaRecorder(stream, { mimeType });
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const actualMimeType = recorder.mimeType || mimeType;
       mediaRecorderRef.current = recorder;
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
       recorder.onstop = async () => {
         setStep('analyzing');
-        const blob = new Blob(chunksRef.current, { type: mimeType });
+        const blob = new Blob(chunksRef.current, { type: actualMimeType || 'video/mp4' });
         const detected = await analyzeBarVideo(
           blob,
           calibration!,

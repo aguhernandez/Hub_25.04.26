@@ -194,19 +194,23 @@ export async function analyzeBarVideo(
     video.src = url;
     video.muted = true;
 
-    video.onloadedmetadata = () => {
+    const runAnalysis = () => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d')!;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
 
       const scaleY = canvas.height / ((video as any).clientHeight || canvas.height);
 
-      const searchMinY = Math.floor(0);
-      const searchMaxY = Math.floor(canvas.height);
+      const searchMinY = 0;
+      const searchMaxY = canvas.height;
 
       const frameInterval = 1 / fps;
-      const totalFrames = Math.floor(video.duration * fps);
+      // iOS reports duration=Infinity for MediaRecorder blobs; cap at 30s
+      const safeDuration = isFinite(video.duration) && video.duration > 0
+        ? video.duration
+        : 15;
+      const totalFrames = Math.max(1, Math.floor(safeDuration * fps));
 
       const positions: number[] = [];
       const timestamps: number[] = [];
@@ -244,6 +248,21 @@ export async function analyzeBarVideo(
       };
 
       processFrame();
+    };
+
+    video.onloadedmetadata = () => {
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        runAnalysis();
+      } else {
+        video.oncanplay = () => runAnalysis();
+      }
+    };
+
+    // Safari fallback: sometimes skips onloadedmetadata for blob URLs
+    video.oncanplaythrough = () => {
+      if (video.videoWidth > 0 && !video.onseeked) {
+        runAnalysis();
+      }
     };
 
     video.onerror = () => {

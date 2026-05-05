@@ -186,15 +186,19 @@ export default function CMJVideoCapture({ onJumpDetected, onError, isActive }: C
       video.src = url;
       video.muted = true;
 
-      video.onloadedmetadata = () => {
+      const runAnalysis = () => {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d')!;
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
 
         const frameInterval = 1 / fps;
-        const totalFrames = Math.floor(video.duration / frameInterval);
-        const bottomStrip = Math.floor(canvas.height * 0.15);
+        // iOS can report duration=Infinity for MediaRecorder blobs; cap at 30s
+        const safeDuration = isFinite(video.duration) && video.duration > 0
+          ? video.duration
+          : 10;
+        const totalFrames = Math.max(1, Math.floor(safeDuration / frameInterval));
+        const bottomStrip = Math.max(1, Math.floor(canvas.height * 0.15));
         const brightnessSamples: number[] = [];
         let currentFrame = 0;
 
@@ -224,6 +228,22 @@ export default function CMJVideoCapture({ onJumpDetected, onError, isActive }: C
         sampleFrame();
       };
 
+      video.onloadedmetadata = () => {
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          runAnalysis();
+        } else {
+          // Dimensions not ready yet — wait for canplay
+          video.oncanplay = () => runAnalysis();
+        }
+      };
+
+      // Safari sometimes skips onloadedmetadata for blob URLs — fallback
+      video.oncanplaythrough = () => {
+        if (video.videoWidth > 0 && !video.onseeked) {
+          runAnalysis();
+        }
+      };
+
       video.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
     });
   }, []);
@@ -242,16 +262,26 @@ export default function CMJVideoCapture({ onJumpDetected, onError, isActive }: C
       return;
     }
 
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9'
-      : MediaRecorder.isTypeSupported('video/webm')
-      ? 'video/webm'
-      : '';
+    const getSupportedMimeType = (): string => {
+      const candidates = [
+        'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8',
+        'video/webm',
+        'video/mp4;codecs=avc1',
+        'video/mp4',
+      ];
+      for (const t of candidates) {
+        if (MediaRecorder.isTypeSupported(t)) return t;
+      }
+      return '';
+    };
+    const mimeType = getSupportedMimeType();
 
     try {
       chunksRef.current = [];
-      // CRITICAL FIX: Verify MediaRecorder creation doesn't crash on iOS
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      // Track the actual mimeType used by the recorder (browser may override)
+      const actualMimeType = recorder.mimeType || mimeType;
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = (e) => {
@@ -260,7 +290,7 @@ export default function CMJVideoCapture({ onJumpDetected, onError, isActive }: C
 
       recorder.onstop = async () => {
         setAnalysisStatus(txt.analyzing);
-        const blob = new Blob(chunksRef.current, { type: mimeType || 'video/webm' });
+        const blob = new Blob(chunksRef.current, { type: actualMimeType || 'video/mp4' });
         const usedFps = actualFps > 0 ? actualFps : 30;
         const analysis = await analyzeVideoForJump(blob, usedFps);
 
