@@ -2369,7 +2369,7 @@ export default function TrainingPage() {
       )}
 
       {/* FAB — Floating Action Button */}
-      {showFAB && (
+      {!showCMJAssessment && !showBarVelocity && showFAB && (
         <div
           className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
           onClick={() => setShowFAB(false)}
@@ -2377,6 +2377,7 @@ export default function TrainingPage() {
       )}
 
       {/* FAB options */}
+      {!showCMJAssessment && !showBarVelocity && (
       <div className="fixed bottom-20 right-4 z-50 flex flex-col items-end gap-3">
         {showFAB && (
           <>
@@ -2463,6 +2464,7 @@ export default function TrainingPage() {
           <Plus className={`w-7 h-7 ${showFAB ? 'text-white' : 'text-[#514163]'}`} strokeWidth={2.5} />
         </button>
       </div>
+      )}
 
       <style>{`
         @keyframes fade-in-up {
