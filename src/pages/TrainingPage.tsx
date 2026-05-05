@@ -2230,6 +2230,7 @@ export default function TrainingPage() {
         isOpen={showAIGenerator}
         onClose={() => setShowAIGenerator(false)}
         selectedDate={formatDateLocal(selectedDate)}
+        isFreeTier={!canAccessAIWorkouts}
         onWorkoutSaved={() => {
           loadWorkouts();
           success(language === 'es' ? 'Entrenamiento generado y guardado' : 'Workout generated and saved');

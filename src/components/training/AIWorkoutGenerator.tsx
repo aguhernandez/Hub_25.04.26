@@ -40,6 +40,7 @@ interface AIWorkoutGeneratorProps {
   onClose: () => void;
   selectedDate: string;
   onWorkoutSaved: () => void;
+  isFreeTier?: boolean;
 }
 
 const MUSCLE_FOCUS_OPTIONS = [
@@ -339,6 +340,7 @@ export default function AIWorkoutGenerator({
   onClose,
   selectedDate,
   onWorkoutSaved,
+  isFreeTier = false,
 }: AIWorkoutGeneratorProps) {
   const { language } = useLanguage();
   const { profile } = useAuth();
@@ -346,7 +348,7 @@ export default function AIWorkoutGenerator({
   const [muscleFocus, setMuscleFocus] = useState<string[]>([]);
   const [sessionType, setSessionType] = useState('hypertrophy');
   const [durationMinutes, setDurationMinutes] = useState(60);
-  const [blockWeeks, setBlockWeeks] = useState<number>(1);
+  const [blockWeeks, setBlockWeeks] = useState<number>(isFreeTier ? 1 : 1);
   const [sessionsPerWeek, setSessionsPerWeek] = useState(3);
   const [startDate, setStartDate] = useState<string>(selectedDate);
 
@@ -703,21 +705,39 @@ export default function AIWorkoutGenerator({
                     : 'AI adjusts periodization based on block phase'}
                 </p>
                 <div className="flex gap-2">
-                  {BLOCK_WEEKS_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setBlockWeeks(opt.value)}
-                      className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-                        blockWeeks === opt.value
-                          ? 'bg-[#514163] text-white shadow-md'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      {language === 'es' ? opt.labelEs : opt.labelEn}
-                    </button>
-                  ))}
+                  {BLOCK_WEEKS_OPTIONS.map(opt => {
+                    const isLocked = isFreeTier && opt.value !== 0 && opt.value !== 1;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => !isLocked && setBlockWeeks(opt.value)}
+                        disabled={isLocked}
+                        title={isLocked ? (language === 'es' ? 'Disponible desde plan Intermedio' : 'Available from Intermediate plan') : undefined}
+                        className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all relative ${
+                          isLocked
+                            ? 'bg-gray-100 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed border-2 border-dashed border-gray-200 dark:border-gray-700'
+                            : blockWeeks === opt.value
+                            ? 'bg-[#514163] text-white shadow-md'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        {language === 'es' ? opt.labelEs : opt.labelEn}
+                        {isLocked && (
+                          <span className="absolute -top-1.5 -right-1.5 bg-[#fdda36] text-[#514163] text-[8px] font-bold px-1 py-0.5 rounded-full leading-none">PRO</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
+                {isFreeTier && (
+                  <p className="mt-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
+                    {language === 'es'
+                      ? 'Plan Inicia: 1 programa por mes, máximo 7 días. Actualizá a Intermedio para bloques de 2 o 4 semanas.'
+                      : 'Inicia plan: 1 program per month, 7 days max. Upgrade to Intermediate for 2 or 4-week blocks.'}
+                  </p>
+                )}
                 {totalSessions > 1 && startDate && (
                   <div className="mt-2 flex items-center gap-2 text-xs text-[#514163] dark:text-[#fdda36] font-medium bg-[#514163]/5 dark:bg-[#fdda36]/10 rounded-lg px-3 py-2">
                     <Calendar className="w-3.5 h-3.5 flex-shrink-0" />
