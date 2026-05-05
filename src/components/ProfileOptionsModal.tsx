@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { X, CreditCard as Edit, Lock, Trash2, AlertCircle } from 'lucide-react';
 import Toast from './Toast';
@@ -26,6 +27,7 @@ export default function ProfileOptionsModal({
   currentUserEmail,
 }: ProfileOptionsModalProps) {
   const { language } = useLanguage();
+  const { user: authUser } = useAuth();
   const [activeSection, setActiveSection] = useState<'main' | 'password' | 'delete'>('main');
   const [isDeleting, setIsDeleting] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
@@ -42,13 +44,28 @@ export default function ProfileOptionsModal({
     currentUserId === assignedTrainerId ||
     currentUserEmail === defaultTrainerEmail;
 
+  const isAdmin = currentUserRole === 'admin';
+  const isChangingOwnPassword = currentUserId === athleteId;
+
   const handleChangePassword = async () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      setToast({
-        message: language === 'es' ? 'Por favor completa todos los campos' : 'Please fill all fields',
-        type: 'error',
-      });
-      return;
+    if (isAdmin && !isChangingOwnPassword) {
+      // Admin changing someone else's password - only needs new password
+      if (!newPassword || !confirmPassword) {
+        setToast({
+          message: language === 'es' ? 'Por favor completa todos los campos' : 'Please fill all fields',
+          type: 'error',
+        });
+        return;
+      }
+    } else {
+      // User changing own password - needs current password
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        setToast({
+          message: language === 'es' ? 'Por favor completa todos los campos' : 'Please fill all fields',
+          type: 'error',
+        });
+        return;
+      }
     }
 
     if (newPassword !== confirmPassword) {
@@ -69,16 +86,54 @@ export default function ProfileOptionsModal({
 
     setIsChangingPassword(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
+      if (isAdmin && !isChangingOwnPassword) {
+        // Use admin edge function to reset someone else's password
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const session = await supabase.auth.getSession();
+        const token = session.data?.session?.access_token;
 
-      if (error) throw error;
+        if (!token) {
+          throw new Error('No authentication token');
+        }
 
-      setToast({
-        message: language === 'es' ? 'Contraseña actualizada exitosamente' : 'Password updated successfully',
-        type: 'success',
-      });
+        const response = await fetch(
+          `${supabaseUrl}/functions/v1/admin-reset-password`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              userId: athleteId,
+              newPassword,
+            }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to reset password');
+        }
+
+        setToast({
+          message: language === 'es' ? 'Contraseña actualizada exitosamente' : 'Password updated successfully',
+          type: 'success',
+        });
+      } else {
+        // User changing own password - use standard auth method
+        const { error } = await supabase.auth.updateUser({
+          password: newPassword,
+        });
+
+        if (error) throw error;
+
+        setToast({
+          message: language === 'es' ? 'Contraseña actualizada exitosamente' : 'Password updated successfully',
+          type: 'success',
+        });
+      }
 
       setCurrentPassword('');
       setNewPassword('');
@@ -217,18 +272,31 @@ export default function ProfileOptionsModal({
                 ← {language === 'es' ? 'Volver' : 'Back'}
               </button>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                  {language === 'es' ? 'Contraseña Actual' : 'Current Password'}
-                </label>
-                <input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder={language === 'es' ? 'Ingresa tu contraseña actual' : 'Enter current password'}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500"
-                />
-              </div>
+              {isAdmin && !isChangingOwnPassword && (
+                <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <AlertCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-blue-800 dark:text-blue-300">
+                    {language === 'es'
+                      ? 'Como administrador, puedes cambiar esta contraseña sin necesidad de la contraseña actual.'
+                      : 'As an admin, you can change this password without entering the current password.'}
+                  </p>
+                </div>
+              )}
+
+              {!isAdmin || isChangingOwnPassword ? (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                    {language === 'es' ? 'Contraseña Actual' : 'Current Password'}
+                  </label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder={language === 'es' ? 'Ingresa tu contraseña actual' : 'Enter current password'}
+                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
+              ) : null}
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
