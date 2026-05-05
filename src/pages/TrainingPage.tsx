@@ -118,6 +118,7 @@ export default function TrainingPage() {
   const [showMonthlyDayModal, setShowMonthlyDayModal] = useState(false);
   const [showAddMenuForDate, setShowAddMenuForDate] = useState<string | null>(null);
   const [showQuickActionMenu, setShowQuickActionMenu] = useState(false);
+  const [showFAB, setShowFAB] = useState(false);
   const [showAssessmentMenu, setShowAssessmentMenu] = useState(false);
   const [showStrengthEstimator, setShowStrengthEstimator] = useState(false);
   const [estimatorExerciseId, setEstimatorExerciseId] = useState<string>('');
@@ -2379,6 +2380,112 @@ export default function TrainingPage() {
           }}
         />
       )}
+
+      {/* FAB — Floating Action Button */}
+      {showFAB && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowFAB(false)}
+        />
+      )}
+
+      {/* FAB options */}
+      <div className="fixed bottom-20 right-4 z-50 flex flex-col items-end gap-3">
+        {showFAB && (
+          <>
+            {/* ATP */}
+            <div className="flex items-center gap-3 animate-fade-in-up" style={{ animationDelay: '0ms' }}>
+              <span className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-sm font-semibold px-4 py-2 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 whitespace-nowrap">
+                {language === 'es' ? 'Plan Anual (ATP)' : 'Annual Training Plan'}
+              </span>
+              <button
+                onClick={() => {
+                  setShowFAB(false);
+                  window.dispatchEvent(new CustomEvent('navigate', { detail: 'annual-planner' }));
+                }}
+                className="w-12 h-12 rounded-full bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-[#514163] dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all hover:scale-110"
+              >
+                <Calendar className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Add Extra Training */}
+            <div className="flex items-center gap-3 animate-fade-in-up" style={{ animationDelay: '60ms' }}>
+              <span className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-sm font-semibold px-4 py-2 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 whitespace-nowrap">
+                {language === 'es' ? 'Agregar Entrenamiento' : 'Add Extra Training'}
+              </span>
+              <button
+                onClick={() => {
+                  setShowFAB(false);
+                  setShowExtraTrainingModal(true);
+                }}
+                className="w-12 h-12 rounded-full bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-[#514163] dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all hover:scale-110"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Record GPS — highlighted */}
+            <div className="flex items-center gap-3 animate-fade-in-up" style={{ animationDelay: '120ms' }}>
+              <span className="relative bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-sm font-bold px-4 py-2 rounded-full shadow-lg border-2 border-[#fdda36] whitespace-nowrap">
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#fdda36] animate-ping" />
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#fdda36]" />
+                {language === 'es' ? 'Grabar GPS' : 'Record GPS'}
+              </span>
+              <button
+                onClick={() => {
+                  setShowFAB(false);
+                  window.dispatchEvent(new CustomEvent('openActivityRecorder', { detail: {} }));
+                }}
+                className="w-12 h-12 rounded-full bg-[#fdda36] shadow-lg flex items-center justify-center text-[#514163] hover:bg-[#ffd51a] transition-all hover:scale-110"
+              >
+                <Activity className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* GYM Workout — highlighted */}
+            <div className="flex items-center gap-3 animate-fade-in-up" style={{ animationDelay: '180ms' }}>
+              <span className="relative bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-sm font-bold px-4 py-2 rounded-full shadow-lg border-2 border-[#fdda36] whitespace-nowrap">
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#fdda36] animate-ping" />
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#fdda36]" />
+                {language === 'es' ? 'GYM Workout' : 'GYM Workout'}
+              </span>
+              <button
+                onClick={() => {
+                  setShowFAB(false);
+                  window.dispatchEvent(new CustomEvent('navigate', { detail: 'workout-builder' }));
+                }}
+                className="w-12 h-12 rounded-full bg-[#fdda36] shadow-lg flex items-center justify-center text-[#514163] hover:bg-[#ffd51a] transition-all hover:scale-110"
+              >
+                <Dumbbell className="w-5 h-5" />
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Main FAB button */}
+        <button
+          onClick={() => setShowFAB(prev => !prev)}
+          className={`w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-300 ${
+            showFAB
+              ? 'bg-gray-700 dark:bg-gray-600 rotate-45 scale-110'
+              : 'bg-[#514163] hover:bg-[#3d3050] hover:scale-110'
+          }`}
+          aria-label={language === 'es' ? 'Acciones de entrenamiento' : 'Training actions'}
+        >
+          <Plus className="w-7 h-7 text-white" strokeWidth={2.5} />
+        </button>
+      </div>
+
+      <style>{`
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(12px) scale(0.95); }
+          to   { opacity: 1; transform: translateY(0)    scale(1); }
+        }
+        .animate-fade-in-up {
+          animation: fade-in-up 0.2s ease-out both;
+        }
+      `}</style>
     </>
   );
 }
