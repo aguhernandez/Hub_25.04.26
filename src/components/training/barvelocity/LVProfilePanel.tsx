@@ -445,5 +445,3 @@ export default function LVProfilePanel({
     </div>
   );
 }
-
-export default LVProfilePanel
