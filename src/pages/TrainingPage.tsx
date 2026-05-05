@@ -124,6 +124,7 @@ export default function TrainingPage() {
   const [estimatorExerciseId, setEstimatorExerciseId] = useState<string>('');
   const [estimatorExerciseName, setEstimatorExerciseName] = useState<string>('');
   const [showAIGenerator, setShowAIGenerator] = useState(false);
+  const [showAIUpgradeModal, setShowAIUpgradeModal] = useState(false);
   const [showWellnessCheckin, setShowWellnessCheckin] = useState(false);
   const [todayWellnessScore, setTodayWellnessScore] = useState<number | null>(null);
   const [wellnessChecked, setWellnessChecked] = useState(false);
@@ -1348,178 +1349,10 @@ export default function TrainingPage() {
         </p>
       </div>
 
-      {/* QUICK ACTIONS */}
+      {/* QUICK ACTIONS — Wellness · Assessment · Plan con IA · Coaching */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {/* 1. Workout */}
-        <div className="relative">
-          <button
-            onClick={() => setShowQuickActionMenu(!showQuickActionMenu)}
-            className={`w-full group relative overflow-hidden rounded-xl shadow-lg border-2 transition-all p-6 text-left ${
-              showQuickActionMenu
-                ? 'bg-[#514163] border-[#514163]'
-                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-[#514163] dark:hover:border-[#514163]'
-            }`}
-          >
-            <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br rounded-bl-full ${
-              showQuickActionMenu ? 'from-white/10 to-transparent' : 'from-[#514163]/10 to-transparent dark:from-[#514163]/20'
-            }`} />
-            <div className="relative">
-              <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform ${
-                showQuickActionMenu
-                  ? 'bg-white/20'
-                  : 'bg-gradient-to-br from-[#514163] to-[#3a2f4a] dark:from-[#514163]/30 dark:to-[#3a2f4a]/20'
-              }`}>
-                <Dumbbell className={`w-6 h-6 ${showQuickActionMenu ? 'text-[#fdda36]' : 'text-white dark:text-[#fdda36]'}`} />
-              </div>
-              <h3 className={`font-bold text-lg mb-1 ${showQuickActionMenu ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
-                {language === 'es' ? 'Workout' : 'Workout'}
-              </h3>
-              <p className={`text-sm ${showQuickActionMenu ? 'text-white/70' : 'text-gray-600 dark:text-gray-400'}`}>
-                {language === 'es' ? 'Planifica o registra' : 'Plan or record'}
-              </p>
-            </div>
-          </button>
 
-          {showQuickActionMenu && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setShowQuickActionMenu(false)}
-              />
-              <div className="absolute left-0 right-0 top-full mt-2 z-20">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 p-4">
-                  <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 px-1">
-                    {language === 'es' ? 'Selecciona una opción' : 'Choose an option'}
-                  </p>
-                  <div className="grid grid-cols-3 gap-3">
-                    <button
-                      onClick={() => {
-                        setShowQuickActionMenu(false);
-                        sessionStorage.setItem('workout_scheduled_date', formatDateLocal(selectedDate));
-                        window.dispatchEvent(new CustomEvent('navigate', { detail: 'workout-builder' }));
-                      }}
-                      className="group flex flex-col items-center gap-2 p-4 rounded-xl bg-[#514163]/10 dark:bg-[#514163]/20 hover:bg-[#514163] transition-all border border-[#514163]/20 hover:border-[#514163]"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-[#514163] group-hover:bg-white/20 flex items-center justify-center transition-colors">
-                        <Dumbbell className="w-5 h-5 text-white group-hover:text-[#fdda36]" />
-                      </div>
-                      <span className="text-xs font-semibold text-center text-[#514163] dark:text-gray-200 group-hover:text-white leading-tight">
-                        {language === 'es' ? 'Plan Gym' : 'Plan Gym'}
-                      </span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setShowQuickActionMenu(false);
-                        if (typeof window !== 'undefined') {
-                          window.dispatchEvent(new CustomEvent('openActivityRecorder', { detail: {} }));
-                        }
-                      }}
-                      className="group flex flex-col items-center gap-2 p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-500 transition-all border border-blue-200 dark:border-blue-800 hover:border-blue-500"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-blue-500 group-hover:bg-white/20 flex items-center justify-center transition-colors">
-                        <Play className="w-5 h-5 text-white" />
-                      </div>
-                      <span className="text-xs font-semibold text-center text-blue-600 dark:text-blue-300 group-hover:text-white leading-tight">
-                        {language === 'es' ? 'Grabar GPS' : 'Record GPS'}
-                      </span>
-                    </button>
-
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Assessment */}
-        <div className="relative">
-          <button
-            onClick={() => setShowAssessmentMenu(!showAssessmentMenu)}
-            className={`w-full group relative overflow-hidden rounded-xl shadow-lg border-2 transition-all p-6 text-left ${
-              showAssessmentMenu
-                ? 'bg-cyan-600 border-cyan-600'
-                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-cyan-500 dark:hover:border-cyan-500'
-            }`}
-          >
-            <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br rounded-bl-full ${
-              showAssessmentMenu ? 'from-white/10 to-transparent' : 'from-cyan-500/10 to-transparent dark:from-cyan-400/10'
-            }`} />
-            <div className="relative">
-              <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform ${
-                showAssessmentMenu
-                  ? 'bg-white/20'
-                  : 'bg-gradient-to-br from-cyan-500 to-cyan-600 dark:from-cyan-900/40 dark:to-cyan-800/30'
-              }`}>
-                <Zap className={`w-6 h-6 ${showAssessmentMenu ? 'text-white' : 'text-white dark:text-cyan-400'}`} />
-              </div>
-              <h3 className={`font-bold text-lg mb-1 ${showAssessmentMenu ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
-                {language === 'es' ? 'Assessment' : 'Assessment'}
-              </h3>
-              <p className={`text-sm ${showAssessmentMenu ? 'text-white/70' : 'text-gray-600 dark:text-gray-400'}`}>
-                {language === 'es' ? 'Mide tu rendimiento' : 'Measure performance'}
-              </p>
-            </div>
-          </button>
-
-          {showAssessmentMenu && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setShowAssessmentMenu(false)}
-              />
-              <div className="absolute left-0 right-0 top-full mt-2 z-20">
-                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 p-4">
-                  <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 px-1">
-                    {language === 'es' ? 'Selecciona una evaluación' : 'Choose an assessment'}
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={() => {
-                        setShowAssessmentMenu(false);
-                        setShowCMJAssessment(true);
-                      }}
-                      className="group flex flex-col items-center gap-2 p-4 rounded-xl bg-cyan-50 dark:bg-cyan-900/20 hover:bg-cyan-500 transition-all border border-cyan-200 dark:border-cyan-800 hover:border-cyan-500"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-cyan-500 group-hover:bg-white/20 flex items-center justify-center transition-colors">
-                        <Zap className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="text-center">
-                        <span className="block text-xs font-semibold text-cyan-600 dark:text-cyan-300 group-hover:text-white leading-tight">
-                          Jump Assessment
-                        </span>
-                        <span className="block text-xs text-cyan-500/70 dark:text-cyan-400/60 group-hover:text-white/70 leading-tight mt-0.5">
-                          CMJ · altura · potencia
-                        </span>
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setShowAssessmentMenu(false);
-                        setShowBarVelocity(true);
-                      }}
-                      className="group flex flex-col items-center gap-2 p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-600 transition-all border border-blue-200 dark:border-blue-800 hover:border-blue-600"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-blue-600 group-hover:bg-white/20 flex items-center justify-center transition-colors">
-                        <BarChart2 className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="text-center">
-                        <span className="block text-xs font-semibold text-blue-600 dark:text-blue-300 group-hover:text-white leading-tight">
-                          Bar Velocity
-                        </span>
-                        <span className="block text-xs text-blue-500/70 dark:text-blue-400/60 group-hover:text-white/70 leading-tight mt-0.5">
-                          VBT · velocidad · zonas
-                        </span>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
+        {/* 1. Wellness */}
         <button
           onClick={() => setShowWellnessCheckin(true)}
           className={`group relative overflow-hidden rounded-xl shadow-lg border-2 transition-all p-6 text-left ${
@@ -1564,10 +1397,104 @@ export default function TrainingPage() {
           </div>
         </button>
 
+        {/* 2. Assessment */}
+        <div className="relative">
+          <button
+            onClick={() => setShowAssessmentMenu(!showAssessmentMenu)}
+            className={`w-full group relative overflow-hidden rounded-xl shadow-lg border-2 transition-all p-6 text-left ${
+              showAssessmentMenu
+                ? 'bg-cyan-600 border-cyan-600'
+                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-cyan-500 dark:hover:border-cyan-500'
+            }`}
+          >
+            <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br rounded-bl-full ${
+              showAssessmentMenu ? 'from-white/10 to-transparent' : 'from-cyan-500/10 to-transparent dark:from-cyan-400/10'
+            }`} />
+            <div className="relative">
+              <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform ${
+                showAssessmentMenu
+                  ? 'bg-white/20'
+                  : 'bg-gradient-to-br from-cyan-500 to-cyan-600 dark:from-cyan-900/40 dark:to-cyan-800/30'
+              }`}>
+                <Zap className={`w-6 h-6 ${showAssessmentMenu ? 'text-white' : 'text-white dark:text-cyan-400'}`} />
+              </div>
+              <h3 className={`font-bold text-lg mb-1 ${showAssessmentMenu ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
+                {language === 'es' ? 'Assessment' : 'Assessment'}
+              </h3>
+              <p className={`text-sm ${showAssessmentMenu ? 'text-white/70' : 'text-gray-600 dark:text-gray-400'}`}>
+                {language === 'es' ? 'Mide tu rendimiento' : 'Measure performance'}
+              </p>
+            </div>
+          </button>
+
+          {showAssessmentMenu && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowAssessmentMenu(false)} />
+              <div className="absolute left-0 right-0 top-full mt-2 z-20">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 p-4">
+                  <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 px-1">
+                    {language === 'es' ? 'Selecciona una evaluación' : 'Choose an assessment'}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => { setShowAssessmentMenu(false); setShowCMJAssessment(true); }}
+                      className="group flex flex-col items-center gap-2 p-4 rounded-xl bg-cyan-50 dark:bg-cyan-900/20 hover:bg-cyan-500 transition-all border border-cyan-200 dark:border-cyan-800 hover:border-cyan-500"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-cyan-500 group-hover:bg-white/20 flex items-center justify-center transition-colors">
+                        <Zap className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="text-center">
+                        <span className="block text-xs font-semibold text-cyan-600 dark:text-cyan-300 group-hover:text-white leading-tight">Jump Assessment</span>
+                        <span className="block text-xs text-cyan-500/70 dark:text-cyan-400/60 group-hover:text-white/70 leading-tight mt-0.5">CMJ · altura · potencia</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => { setShowAssessmentMenu(false); setShowBarVelocity(true); }}
+                      className="group flex flex-col items-center gap-2 p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-600 transition-all border border-blue-200 dark:border-blue-800 hover:border-blue-600"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-blue-600 group-hover:bg-white/20 flex items-center justify-center transition-colors">
+                        <BarChart2 className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="text-center">
+                        <span className="block text-xs font-semibold text-blue-600 dark:text-blue-300 group-hover:text-white leading-tight">Bar Velocity</span>
+                        <span className="block text-xs text-blue-500/70 dark:text-blue-400/60 group-hover:text-white/70 leading-tight mt-0.5">VBT · velocidad · zonas</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* 3. Plan con IA — visible para todos, paywall para Inicia */}
+        <button
+          onClick={() => canAccessAIWorkouts ? setShowAIGenerator(true) : setShowAIUpgradeModal(true)}
+          className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-[#514163]/30 dark:border-[#514163]/50 hover:border-[#514163] dark:hover:border-[#514163] hover:shadow-xl hover:scale-[1.02] transition-all p-6 text-left"
+        >
+          <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-[#514163]/10 to-transparent dark:from-[#514163]/20 rounded-bl-full" />
+          {!canAccessAIWorkouts && (
+            <div className="absolute top-3 right-3 bg-[#fdda36] text-[#514163] text-[10px] font-bold px-2 py-0.5 rounded-full leading-tight uppercase tracking-wide">
+              {language === 'es' ? 'Upgrade' : 'Upgrade'}
+            </div>
+          )}
+          <div className="relative">
+            <div className="w-12 h-12 bg-gradient-to-br from-[#514163] to-[#3a2f4a] rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-md">
+              <Sparkles className="w-6 h-6 text-[#fdda36]" />
+            </div>
+            <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
+              {language === 'es' ? 'Planificar con IA' : 'Plan with AI'}
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {language === 'es' ? 'Personalizado para ti' : 'Personalized for you'}
+            </p>
+          </div>
+        </button>
+
         {/* 4. Coaching 1:1 */}
         <button
           onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'services' }))}
-          className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-[#ffd700] dark:border-[#ffd700] hover:border-[#ffed4e] dark:hover:border-[#ffed4e] hover:shadow-xl hover:scale-105 transition-all p-6 text-left"
+          className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-[#ffd700] dark:border-[#ffd700] hover:border-[#ffed4e] dark:hover:border-[#ffed4e] hover:shadow-xl hover:scale-[1.02] transition-all p-6 text-left"
         >
           <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-[#fdda36]/20 to-transparent dark:from-[#fdda36]/30 rounded-bl-full" />
           <div className="relative">
@@ -1582,27 +1509,86 @@ export default function TrainingPage() {
             </p>
           </div>
         </button>
+      </div>
 
-        {canAccessAIWorkouts && (
-          <button
-            onClick={() => setShowAIGenerator(true)}
-            className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-[#514163]/30 dark:border-[#514163]/50 hover:border-[#514163] dark:hover:border-[#514163] hover:shadow-xl hover:scale-105 transition-all p-6 text-left"
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-[#514163]/10 to-transparent dark:from-[#514163]/20 rounded-bl-full" />
-            <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-br from-[#514163] to-[#3a2f4a] rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-md">
-                <Sparkles className="w-6 h-6 text-[#fdda36]" />
+      {/* AI Upgrade Modal — inline, no dependency extra */}
+      {showAIUpgradeModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            {/* Header */}
+            <div className="relative bg-gradient-to-br from-[#514163] to-[#3a2f4a] p-6 pb-8">
+              <button
+                onClick={() => setShowAIUpgradeModal(false)}
+                className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-14 h-14 bg-[#fdda36]/20 rounded-2xl flex items-center justify-center mb-4">
+                <Sparkles className="w-7 h-7 text-[#fdda36]" />
               </div>
-              <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
-                {language === 'es' ? 'Generar con IA' : 'Generate with AI'}
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {language === 'es' ? 'Personalizado para ti' : 'Personalized for you'}
+              <h2 className="text-xl font-bold text-white mb-1">
+                {language === 'es' ? 'Planificar con IA' : 'Plan with AI'}
+              </h2>
+              <p className="text-white/70 text-sm">
+                {language === 'es'
+                  ? 'Necesitás al menos el plan Intermedio para acceder a esta función completa.'
+                  : 'You need at least the Intermediate plan to access the full feature.'}
               </p>
             </div>
-          </button>
-        )}
-      </div>
+
+            {/* Free tier info */}
+            <div className="px-6 py-5">
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 mb-5">
+                <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-3">
+                  {language === 'es' ? 'Disponible en plan Inicia' : 'Available on Inicia plan'}
+                </p>
+                <ul className="space-y-2">
+                  {[
+                    language === 'es' ? '1 programa generado por IA al mes' : '1 AI-generated program per month',
+                    language === 'es' ? 'Duración de 7 días' : '7-day duration',
+                    language === 'es' ? 'Editable manualmente después' : 'Manually editable afterwards',
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-2 text-sm text-emerald-800 dark:text-emerald-300">
+                      <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                        <CheckCircle2 className="w-3 h-3 text-white" />
+                      </div>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <p className="text-xs text-center text-gray-500 dark:text-gray-400 mb-4">
+                {language === 'es'
+                  ? 'Con Intermedio o Pro: planes ilimitados, mayor duración y ajuste por rendimiento real.'
+                  : 'With Intermediate or Pro: unlimited plans, longer durations, and real performance adjustments.'}
+              </p>
+
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    setShowAIUpgradeModal(false);
+                    setShowAIGenerator(true);
+                  }}
+                  className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition-colors text-sm"
+                >
+                  {language === 'es' ? 'Usar versión gratuita (7 días)' : 'Use free version (7 days)'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAIUpgradeModal(false);
+                    window.dispatchEvent(new CustomEvent('navigate', { detail: 'memberships-marketplace' }));
+                  }}
+                  className="w-full py-3 rounded-xl bg-[#514163] hover:bg-[#3a2f4a] text-white font-semibold transition-colors text-sm flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4 text-[#fdda36]" />
+                  {language === 'es' ? 'Ver plan Intermedio' : 'See Intermediate plan'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2 flex-wrap">
