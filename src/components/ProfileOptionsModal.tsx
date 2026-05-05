@@ -35,6 +35,12 @@ export default function ProfileOptionsModal({
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    full_name: '',
+    phone: '',
+    country: '',
+  });
 
   const defaultTrainerEmail = 'agu@asciende.pro';
 
@@ -46,6 +52,69 @@ export default function ProfileOptionsModal({
 
   const isAdmin = currentUserRole === 'admin';
   const isChangingOwnPassword = currentUserId === athleteId;
+
+  // Load profile data when modal opens or athlete changes
+  const loadProfileData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name, phone, country')
+        .eq('id', athleteId)
+        .single();
+
+      if (error) throw error;
+
+      setEditFormData({
+        full_name: data?.full_name || '',
+        phone: data?.phone || '',
+        country: data?.country || '',
+      });
+    } catch (err: any) {
+      console.error('Error loading profile:', err);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!editFormData.full_name?.trim()) {
+      setToast({
+        message: language === 'es' ? 'El nombre es requerido' : 'Name is required',
+        type: 'error',
+      });
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: editFormData.full_name,
+          phone: editFormData.phone,
+          country: editFormData.country,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', athleteId);
+
+      if (error) throw error;
+
+      setToast({
+        message: language === 'es' ? 'Perfil actualizado exitosamente' : 'Profile updated successfully',
+        type: 'success',
+      });
+
+      setTimeout(() => {
+        setActiveSection('main');
+      }, 1500);
+    } catch (err: any) {
+      console.error('Error updating profile:', err);
+      setToast({
+        message: language === 'es' ? `Error: ${err.message}` : `Error: ${err.message}`,
+        type: 'error',
+      });
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   const handleChangePassword = async () => {
     if (isAdmin && !isChangingOwnPassword) {
@@ -212,7 +281,10 @@ export default function ProfileOptionsModal({
           {activeSection === 'main' && (
             <div className="p-4 space-y-2">
               <button
-                onClick={() => setActiveSection('main')}
+                onClick={() => {
+                  setActiveSection('edit');
+                  loadProfileData();
+                }}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg transition-colors"
               >
                 <Edit className="w-5 h-5 text-blue-500" />
@@ -259,6 +331,71 @@ export default function ProfileOptionsModal({
                   </div>
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Edit Profile Section */}
+          {activeSection === 'edit' && (
+            <div className="p-6 space-y-4">
+              <button
+                onClick={() => setActiveSection('main')}
+                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 mb-2"
+              >
+                ← {language === 'es' ? 'Volver' : 'Back'}
+              </button>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  {language === 'es' ? 'Nombre Completo' : 'Full Name'}
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.full_name}
+                  onChange={(e) => setEditFormData({ ...editFormData, full_name: e.target.value })}
+                  placeholder={language === 'es' ? 'Ingresa el nombre completo' : 'Enter full name'}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  {language === 'es' ? 'Teléfono' : 'Phone'}
+                </label>
+                <input
+                  type="tel"
+                  value={editFormData.phone}
+                  onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                  placeholder={language === 'es' ? 'Ingresa el teléfono' : 'Enter phone number'}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  {language === 'es' ? 'País' : 'Country'}
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.country}
+                  onChange={(e) => setEditFormData({ ...editFormData, country: e.target.value })}
+                  placeholder={language === 'es' ? 'Ingresa el país' : 'Enter country'}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <button
+                onClick={handleSaveProfile}
+                disabled={isSavingProfile}
+                className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium disabled:opacity-50"
+              >
+                {isSavingProfile
+                  ? language === 'es'
+                    ? 'Guardando...'
+                    : 'Saving...'
+                  : language === 'es'
+                  ? 'Guardar Cambios'
+                  : 'Save Changes'}
+              </button>
             </div>
           )}
 
