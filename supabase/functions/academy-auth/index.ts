@@ -6,27 +6,13 @@ interface LoginRequest {
   password: string;
 }
 
-function getCorsHeaders(origin: string | null) {
-  const allowedOrigins = [
-    'https://academy.asciende.pro',
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-  ];
-
-  const isAllowed = allowedOrigins.includes(origin || '') || (origin?.includes('.asciende.pro') ?? false);
-
-  return {
-    'Access-Control-Allow-Origin': isAllowed ? (origin || '*') : 'https://academy.asciende.pro',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Credentials': 'true',
-  };
-}
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
+};
 
 Deno.serve(async (req: Request) => {
-  const origin = req.headers.get('origin');
-  const corsHeaders = getCorsHeaders(origin);
-
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 200,
