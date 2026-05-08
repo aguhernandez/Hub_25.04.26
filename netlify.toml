@@ -1,0 +1,19 @@
+[build]
+  publish = "dist"
+
+[[headers]]
+  for = "/functions/v1/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, Authorization, X-Client-Info, Apikey"
+
+[[redirects]]
+  from = "/functions/v1/*"
+  to = "https://ngkcbygyoobqhlmlnuvl.supabase.co/functions/v1/:splat"
+  status = 200
+  force = true
+  [redirects.headers]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, Authorization, X-Client-Info, Apikey"
