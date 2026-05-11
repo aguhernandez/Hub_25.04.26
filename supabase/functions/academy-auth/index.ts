@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import * as jose from 'npm:jose@5.2.0';
+import { crypto } from 'jsr:@std/crypto';
 
 interface LoginRequest {
   email: string;
@@ -108,9 +109,49 @@ Deno.serve(async (req: Request) => {
       .setExpirationTime(expiresAt)
       .sign(secret);
 
+    // Get active biological passport
+    let passportToken: string | null = null;
+    const { data: activePassport } = await supabase
+      .from('biological_passports')
+      .select('id')
+      .eq('athlete_id', userId)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (activePassport) {
+      // Generate a secure random token for passport access
+      const passportTokenRaw = crypto.getRandomValues(new Uint8Array(32));
+      const passportTokenHex = Array.from(passportTokenRaw)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+
+      // Hash the token before storing
+      const encoder = new TextEncoder();
+      const data = encoder.encode(passportTokenHex);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const tokenHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      // Store token hash in database
+      const { error: tokenError } = await supabase
+        .from('biological_passport_tokens')
+        .insert({
+          athlete_id: userId,
+          biological_passport_id: activePassport.id,
+          token_hash: tokenHash,
+          is_active: true,
+          expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days
+        });
+
+      if (!tokenError) {
+        passportToken = passportTokenHex;
+      }
+    }
+
     return new Response(
       JSON.stringify({
         token: token,
+        passport_token: passportToken,
         user: {
           id: userId,
           email: authData.user.email,
