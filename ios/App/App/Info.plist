@@ -47,6 +47,12 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Asciende needs access to your camera for exercise video analysis and form assessment</string>
 	<key>NSPhotoLibraryUsageDescription</key>
