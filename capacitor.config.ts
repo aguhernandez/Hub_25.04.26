@@ -17,6 +17,10 @@ const config: CapacitorConfig = {
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],
     },
+    Geolocation: {
+      // Request the highest accuracy available on Android
+      highAccuracy: true,
+    },
   },
 };
 
