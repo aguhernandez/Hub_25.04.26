@@ -52,9 +52,13 @@ export class StravaClient {
   private static STRAVA_CLIENT_ID = import.meta.env.VITE_STRAVA_CLIENT_ID;
   private static REDIRECT_URI = `${window.location.origin}/settings?strava=callback`;
 
+  static isConfigured(): boolean {
+    return !!this.STRAVA_CLIENT_ID;
+  }
+
   static getAuthorizationUrl(scope: string = 'read,activity:read_all'): string {
     if (!this.STRAVA_CLIENT_ID) {
-      throw new Error('VITE_STRAVA_CLIENT_ID not configured. Please add it to your .env file and restart the dev server.');
+      throw new Error('STRAVA_NOT_CONFIGURED');
     }
 
     const params = new URLSearchParams({
