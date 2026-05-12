@@ -498,6 +498,42 @@ export async function releaseWakeLock(): Promise<void> {
   destroySilentAudioContext();
 }
 
+// ── iOS BACKGROUND LOCATION PLUGIN ───────────────────────────────────────────
+// Activates BackgroundLocationPlugin.swift so GPS keeps running with screen off.
+
+async function isIOSNative(): Promise<boolean> {
+  try {
+    const { Capacitor } = await import('@capacitor/core');
+    return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
+  } catch {
+    return false;
+  }
+}
+
+export async function startIOSBackgroundLocation(): Promise<void> {
+  if (!(await isIOSNative())) return;
+  try {
+    const { Plugins } = await import('@capacitor/core');
+    const plugin = (Plugins as any).BackgroundLocation;
+    if (plugin?.startBackgroundLocation) {
+      await plugin.startBackgroundLocation();
+    }
+  } catch {
+    // Plugin not registered yet — GPS works in foreground only
+  }
+}
+
+export async function stopIOSBackgroundLocation(): Promise<void> {
+  if (!(await isIOSNative())) return;
+  try {
+    const { Plugins } = await import('@capacitor/core');
+    const plugin = (Plugins as any).BackgroundLocation;
+    if (plugin?.stopBackgroundLocation) {
+      await plugin.stopBackgroundLocation();
+    }
+  } catch {}
+}
+
 // ── GPS BACKGROUND RECONNECT ──────────────────────────────────────────────────
 
 type GPSReconnectCallback = (watchId: number) => void;

@@ -10,24 +10,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
-    // Called once Capacitor's bridge is fully ready and all plugins are loaded.
-    // This is the correct place to patch the Geolocation plugin's CLLocationManager.
-    func application(_ application: UIApplication,
-                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?,
-                     bridge: CAPBridgeProtocol) -> Bool {
-        BackgroundLocationPlugin.shared.configure(bridge: bridge)
-        return true
-    }
+    func applicationWillResignActive(_ application: UIApplication) {}
 
-    func applicationWillResignActive(_ application: UIApplication) {
-        // Moving from active to inactive — ongoing GPS recording continues via
-        // allowsBackgroundLocationUpdates = true set in BackgroundLocationPlugin.
-    }
-
-    func applicationDidEnterBackground(_ application: UIApplication) {
-        // GPS keeps running in the background. The blue indicator bar is shown
-        // to the user thanks to showsBackgroundLocationIndicator = true.
-    }
+    func applicationDidEnterBackground(_ application: UIApplication) {}
 
     func applicationWillEnterForeground(_ application: UIApplication) {}
 

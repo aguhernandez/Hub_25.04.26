@@ -21,6 +21,8 @@ import {
   persistSessionPoint,
   loadPersistedSession,
   clearPersistedSession,
+  startIOSBackgroundLocation,
+  stopIOSBackgroundLocation,
 } from '../../utils/gpsRecording';
 import { useLanguage } from '../../contexts/LanguageContext';
 import ActivityShareCard from './ActivityShareCard';
@@ -354,6 +356,8 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
 
       // Acquire Wake Lock to keep screen/GPS alive
       acquireWakeLock().then(() => setWakeLockActive(true)).catch(() => {});
+      // On iOS native: activate background GPS (allowsBackgroundLocationUpdates, etc.)
+      startIOSBackgroundLocation().catch(() => {});
 
       setPhase('recording');
       setIsRequestingPermission(false);
@@ -400,6 +404,7 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     unregisterGPSBackgroundReconnect();
     releaseWakeLock().then(() => setWakeLockActive(false)).catch(() => {});
+    stopIOSBackgroundLocation().catch(() => {});
     cleanupMap();
     setPhase('details');
   };
@@ -409,6 +414,7 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
     unregisterGPSBackgroundReconnect();
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     releaseWakeLock().then(() => setWakeLockActive(false)).catch(() => {});
+    stopIOSBackgroundLocation().catch(() => {});
     clearPersistedSession();
     cleanupMap();
     setGpsPoints([]); setDistanceKm(0); setElevationGainM(0); setDurationSeconds(0);

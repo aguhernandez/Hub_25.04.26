@@ -5,80 +5,110 @@ import Capacitor
 /**
  * BackgroundLocationPlugin
  *
- * Configures the CLLocationManager used by the Capacitor Geolocation plugin
- * to keep GPS running while the app is in the background (screen off / bolsillo).
+ * Capacitor plugin nativo que extiende el soporte de GPS en background para iOS.
  *
- * This is required because the stock @capacitor/geolocation plugin does NOT set:
- *   - allowsBackgroundLocationUpdates   → keeps GPS alive when app is backgrounded
- *   - pausesLocationUpdatesAutomatically → prevents iOS from auto-pausing GPS
- *   - showsBackgroundLocationIndicator  → shows the blue bar so user knows GPS is on
+ * El plugin oficial @capacitor/geolocation NO configura las propiedades necesarias
+ * para GPS en segundo plano. Este plugin expone un método JS "startBackgroundLocation"
+ * que crea y mantiene su propio CLLocationManager con las tres propiedades requeridas:
  *
- * Called from AppDelegate after Capacitor finishes loading.
+ *   allowsBackgroundLocationUpdates   = true  → GPS activo con pantalla apagada
+ *   pausesLocationUpdatesAutomatically = false → iOS no pausa el GPS por su cuenta
+ *   showsBackgroundLocationIndicator   = true  → barra azul visible para el usuario
+ *
+ * Requisitos en Info.plist (ya añadidos):
+ *   - NSLocationAlwaysAndWhenInUseUsageDescription
+ *   - NSLocationAlwaysUsageDescription
+ *   - UIBackgroundModes → location
+ *
+ * Uso desde JS/TS:
+ *   import { Plugins } from '@capacitor/core';
+ *   await Plugins.BackgroundLocation.startBackgroundLocation();
+ *   await Plugins.BackgroundLocation.stopBackgroundLocation();
  */
-@objc public class BackgroundLocationPlugin: NSObject {
+@objc(BackgroundLocationPlugin)
+public class BackgroundLocationPlugin: CAPPlugin, CAPBridgedPlugin, CLLocationManagerDelegate {
 
-    @objc public static let shared = BackgroundLocationPlugin()
+    public let identifier = "BackgroundLocationPlugin"
+    public let jsName = "BackgroundLocation"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "startBackgroundLocation", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopBackgroundLocation",  returnType: CAPPluginReturnPromise),
+    ]
 
-    private override init() {
-        super.init()
-    }
+    private var locationManager: CLLocationManager?
+    private var activeCall: CAPPluginCall?
 
-    /**
-     * Patches the CLLocationManager that Capacitor's Geolocation plugin
-     * creates internally. Must be called after the bridge is ready.
-     *
-     * Also registers for app lifecycle notifications so we can
-     * request Always authorization when recording starts.
-     */
-    @objc public func configure(bridge: CAPBridgeProtocol) {
+    // Called by the JS side when an activity recording session starts.
+    @objc func startBackgroundLocation(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
-            guard let geoPlugin = bridge.plugin(withName: "Geolocation") else {
-                // Plugin not yet loaded — retry once after a short delay
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    self.configure(bridge: bridge)
-                }
+            let mgr = CLLocationManager()
+            mgr.delegate = self
+
+            // The three properties Gemini/Apple docs require for background GPS:
+            mgr.allowsBackgroundLocationUpdates    = true
+            mgr.pausesLocationUpdatesAutomatically = false
+            mgr.showsBackgroundLocationIndicator   = true
+
+            // Sport-level accuracy and minimum movement threshold
+            mgr.desiredAccuracy = kCLLocationAccuracyBest
+            mgr.distanceFilter  = 5.0
+
+            self.locationManager = mgr
+            self.activeCall = call
+
+            let status = mgr.authorizationStatus
+            if status == .notDetermined {
+                mgr.requestAlwaysAuthorization()
+            } else if status == .authorizedWhenInUse {
+                // Upgrade to Always so background GPS is fully reliable
+                mgr.requestAlwaysAuthorization()
+                mgr.startUpdatingLocation()
+            } else if status == .authorizedAlways {
+                mgr.startUpdatingLocation()
+            } else {
+                call.reject("Location permission denied")
+                self.locationManager = nil
+                self.activeCall = nil
                 return
             }
 
-            // Access the locationManager property via reflection (it's @objc public var)
-            if let locationManager = geoPlugin.value(forKey: "locationManager") as? CLLocationManager {
-                self.applyBackgroundSettings(locationManager)
-            }
+            call.resolve(["status": "started"])
         }
     }
 
-    /**
-     * Applies the three background GPS settings to a CLLocationManager.
-     * Safe to call multiple times (idempotent).
-     */
-    @objc public func applyBackgroundSettings(_ locationManager: CLLocationManager) {
-        // Keeps GPS running when the screen turns off / app goes to background
-        locationManager.allowsBackgroundLocationUpdates = true
-
-        // Prevents iOS from pausing GPS automatically when it thinks you stopped
-        locationManager.pausesLocationUpdatesAutomatically = false
-
-        // Shows the blue location indicator bar so the user knows GPS is active
-        locationManager.showsBackgroundLocationIndicator = true
-
-        // Best accuracy for sport / activity recording
-        locationManager.desiredAccuracy = kCLLocationAccuracyBest
-
-        // Report every 5 metres of movement
-        locationManager.distanceFilter = 5.0
+    @objc func stopBackgroundLocation(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            self.locationManager?.stopUpdatingLocation()
+            self.locationManager?.delegate = nil
+            self.locationManager = nil
+            self.activeCall = nil
+            call.resolve(["status": "stopped"])
+        }
     }
 
-    /**
-     * Call this when the user explicitly starts an activity recording session.
-     * Requests "Always" authorization if we only have "WhenInUse" — needed for
-     * reliable background GPS on iOS 14+.
-     */
-    @objc public func requestAlwaysAuthorization() {
-        let manager = CLLocationManager()
+    // After the user responds to the authorization dialog, start if granted.
+    public func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
-
-        if status == .authorizedWhenInUse {
-            manager.requestAlwaysAuthorization()
+        if status == .authorizedAlways || status == .authorizedWhenInUse {
+            manager.startUpdatingLocation()
         }
+    }
+
+    // Forward location updates as JS events so the web layer can consume them.
+    public func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else { return }
+        notifyListeners("backgroundLocationUpdate", data: [
+            "latitude":  location.coordinate.latitude,
+            "longitude": location.coordinate.longitude,
+            "altitude":  location.altitude,
+            "accuracy":  location.horizontalAccuracy,
+            "speed":     location.speed,
+            "heading":   location.course,
+            "timestamp": location.timestamp.timeIntervalSince1970 * 1000,
+        ])
+    }
+
+    public func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        notifyListeners("backgroundLocationError", data: ["message": error.localizedDescription])
     }
 }
