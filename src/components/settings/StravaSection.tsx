@@ -58,8 +58,8 @@ function HowItWorks({ t }: { t: (key: string) => string }) {
               <step.icon className="w-5 h-5 text-[#fdda36]" />
             </div>
 
-            <h4 className="font-heading text-xs text-white leading-tight mb-1.5">{step.title}</h4>
-            <p className="font-body text-xs text-neutral-400 leading-relaxed">{step.description}</p>
+            <h4 className="font-heading text-xs text-[#514163] leading-tight mb-1.5 font-semibold">{step.title}</h4>
+            <p className="font-body text-xs text-[#514163]/70 leading-relaxed">{step.description}</p>
 
             {step.link && (
               <a
@@ -163,8 +163,8 @@ function SyncSummary({ result, t }: { result: SyncResult; t: (key: string) => st
     <div className="flex items-center gap-4 pt-3 border-t border-[#514163]/30 mt-3 flex-wrap">
       {stats.map((s) => (
         <div key={s.label}>
-          <span className="font-heading text-xl text-white">{s.value}</span>
-          <span className="font-body text-xs text-neutral-400 ml-1">{s.label}</span>
+          <span className="font-heading text-xl text-[#514163] font-bold">{s.value}</span>
+          <span className="font-body text-xs text-[#514163]/60 ml-1">{s.label}</span>
         </div>
       ))}
       {result.rate_limit_hit && (
@@ -279,7 +279,7 @@ export function StravaSection() {
             style={{ background: 'rgba(81,65,99,0.5)', boxShadow: '0 0 16px rgba(81,65,99,0.5)' }}>
             <Activity className="w-5 h-5 text-[#fdda36]" />
           </div>
-          <h2 className="font-heading text-base text-white">{t('strava.title')}</h2>
+          <h2 className="font-heading text-base text-[#514163] font-semibold">{t('strava.title')}</h2>
         </div>
         <div className="flex items-center justify-center py-10">
           <RefreshCw className="w-6 h-6 text-[#514163] animate-spin" />
@@ -300,8 +300,8 @@ export function StravaSection() {
           <Activity className="w-5 h-5 text-[#fdda36]" />
         </div>
         <div>
-          <h2 className="font-heading text-base text-white leading-tight">{t('strava.title')}</h2>
-          <p className="font-body text-xs text-neutral-400">
+          <h2 className="font-heading text-base text-[#514163] font-semibold leading-tight">{t('strava.title')}</h2>
+          <p className="font-body text-xs text-[#514163]/60">
             {t('strava.subtitle')}
           </p>
         </div>
@@ -326,7 +326,7 @@ export function StravaSection() {
           {/* Divider label */}
           <div className="flex items-center gap-3">
             <div className="h-px flex-1 bg-[#514163]/30" />
-            <span className="font-body text-xs text-neutral-500 uppercase tracking-widest">{t('strava.howItWorks')}</span>
+            <span className="font-body text-xs text-[#514163] font-semibold uppercase tracking-widest">{t('strava.howItWorks')}</span>
             <div className="h-px flex-1 bg-[#514163]/30" />
           </div>
 
@@ -350,7 +350,7 @@ export function StravaSection() {
               )}
               {connecting ? t('strava.redirectingToStrava') : t('strava.connectButton')}
             </button>
-            <p className="font-body text-xs text-neutral-500 mt-2.5">
+            <p className="font-body text-xs text-[#514163]/70 mt-2.5">
               {t('strava.noPasswordShared')}
             </p>
           </div>
@@ -378,13 +378,13 @@ export function StravaSection() {
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                     <span className="font-body text-xs text-emerald-400 font-semibold">{t('strava.connected')}</span>
                   </div>
-                  <h3 className="font-heading text-sm text-white leading-tight">
+                  <h3 className="font-heading text-sm text-[#514163] font-semibold leading-tight">
                     {connection.athlete_firstname || connection.athlete_lastname
                       ? `${connection.athlete_firstname ?? ''} ${connection.athlete_lastname ?? ''}`.trim()
                       : `Athlete #${connection.athlete_id}`}
                   </h3>
                   {connection.last_sync_at && (
-                    <p className="font-body text-xs text-neutral-500 mt-0.5">
+                    <p className="font-body text-xs text-[#514163]/60 mt-0.5">
                       {t('strava.lastSynced')} {new Date(connection.last_sync_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </p>
                   )}
@@ -394,7 +394,7 @@ export function StravaSection() {
               <button
                 onClick={handleDisconnect}
                 disabled={disconnecting}
-                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#514163]/50 text-xs font-body text-neutral-400 hover:border-red-500/40 hover:text-red-400 transition-colors disabled:opacity-50"
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#514163]/50 text-xs font-body text-[#514163] hover:border-red-500/40 hover:text-red-400 transition-colors disabled:opacity-50"
               >
                 <Unlink className="w-3.5 h-3.5" />
                 {disconnecting ? t('strava.disconnecting') : t('strava.disconnect')}
@@ -416,7 +416,7 @@ export function StravaSection() {
             {connection.granted_scopes && connection.granted_scopes.length > 0 && (
               <div className="flex flex-wrap gap-1.5 pt-1 border-t border-[#514163]/20">
                 {connection.granted_scopes.map((s) => (
-                  <span key={s} className="px-2 py-0.5 text-xs font-mono rounded bg-[#514163]/20 text-neutral-400 border border-[#514163]/30">
+                  <span key={s} className="px-2 py-0.5 text-xs font-mono rounded bg-[#514163]/20 text-[#514163] border border-[#514163]/30 font-semibold">
                     {s}
                   </span>
                 ))}
@@ -431,8 +431,8 @@ export function StravaSection() {
           <div className="rounded-xl border border-[#514163]/40 p-4">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="font-heading text-xs text-white">{t('strava.syncActivities')}</p>
-                <p className="font-body text-xs text-neutral-400 mt-0.5">
+                <p className="font-heading text-xs text-[#514163] font-semibold">{t('strava.syncActivities')}</p>
+                <p className="font-body text-xs text-[#514163]/60 mt-0.5">
                   {t('strava.syncDesc')}
                 </p>
               </div>
@@ -458,8 +458,8 @@ export function StravaSection() {
             <div className="flex items-start gap-3 p-3.5 rounded-xl border border-[#514163]/40">
               <AlertTriangle className="w-4 h-4 text-[#fdda36] mt-0.5 shrink-0" />
               <div>
-                <p className="font-body text-xs text-neutral-300 font-semibold">{t('strava.limitedPermissions')}</p>
-                <p className="font-body text-xs text-neutral-400 mt-0.5">
+                <p className="font-body text-xs text-[#514163] font-semibold">{t('strava.limitedPermissions')}</p>
+                <p className="font-body text-xs text-[#514163]/70 mt-0.5">
                   {t('strava.reconnectFullAccess')}
                 </p>
                 <button
