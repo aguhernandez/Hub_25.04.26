@@ -4,6 +4,7 @@ import {
   ExternalLink, Heart, Zap, CheckCircle, ArrowRight,
 } from 'lucide-react';
 import { StravaClient, StravaConnection, SyncResult } from '../../utils/stravaClient';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -15,29 +16,26 @@ function StepDivider() {
   );
 }
 
-function HowItWorks() {
+function HowItWorks({ t }: { t: (key: string) => string }) {
   const steps = [
     {
       number: '01',
-      title: 'Connect your Strava account',
-      description:
-        'Press "Connect to Strava" below to open the Strava authorization page in your browser.',
+      title: t('strava.step1Title'),
+      description: t('strava.step1Desc'),
       icon: Link2,
     },
     {
       number: '02',
-      title: 'Authorize activity access',
-      description:
-        'Approve activity permissions so Asciende can import your training data, metrics, and GPS routes.',
+      title: t('strava.step2Title'),
+      description: t('strava.step2Desc'),
       icon: Activity,
     },
     {
       number: '03',
-      title: 'Enable Heart Rate data',
-      description:
-        'Strava may block heart rate by default. Enable Health Data permissions inside Strava Settings to unlock complete physiological analysis.',
+      title: t('strava.step3Title'),
+      description: t('strava.step3Desc'),
       icon: Heart,
-      link: { href: 'https://www.strava.com/settings/consent', label: 'Open Strava Permissions' },
+      link: { href: 'https://www.strava.com/settings/consent', label: t('strava.openStravaPermissions') },
     },
   ];
 
@@ -45,7 +43,7 @@ function HowItWorks() {
     <div className="space-y-3 sm:space-y-0 sm:grid sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:gap-0 sm:items-start">
       {steps.map((step, i) => (
         <React.Fragment key={step.number}>
-          <div className="group relative rounded-xl border border-[#514163]/40 bg-[#0C0D0F]/60 p-4 hover:border-[#fdda36]/40 transition-colors duration-200">
+          <div className="group relative rounded-xl border border-[#514163]/40 p-4 hover:border-[#fdda36]/40 transition-colors duration-200">
             {/* Number badge */}
             <div className="absolute -top-3 left-4">
               <span className="font-heading text-xs text-[#fdda36] bg-[#0C0D0F] px-2 border border-[#fdda36]/30 rounded">
@@ -55,7 +53,7 @@ function HowItWorks() {
 
             {/* Icon with glow */}
             <div className="relative w-10 h-10 rounded-lg mb-3 flex items-center justify-center"
-              style={{ background: 'rgba(81,65,99,0.4)', boxShadow: '0 0 16px rgba(81,65,99,0.5)' }}
+              style={{ background: 'rgba(81,65,99,0.3)', boxShadow: '0 0 16px rgba(81,65,99,0.5)' }}
             >
               <step.icon className="w-5 h-5 text-[#fdda36]" />
             </div>
@@ -83,16 +81,16 @@ function HowItWorks() {
   );
 }
 
-function HeartRateWarning() {
+function HeartRateWarning({ t }: { t: (key: string) => string }) {
   return (
     <div className="flex items-start gap-3 p-4 rounded-xl border border-amber-500/30 bg-amber-500/5">
       <AlertTriangle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
       <div>
         <p className="font-body text-sm font-semibold text-amber-300">
-          Heart rate data is currently disabled in Strava permissions.
+          {t('strava.hrDataDisabled')}
         </p>
         <p className="font-body text-xs text-neutral-400 mt-1">
-          You can still sync activities, but physiological analysis will be limited.
+          {t('strava.hrLimited')}
         </p>
         <a
           href="https://www.strava.com/settings/consent"
@@ -100,7 +98,7 @@ function HeartRateWarning() {
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 mt-2 text-xs font-medium text-amber-400 hover:opacity-80 transition-opacity"
         >
-          Enable heart rate in Strava
+          {t('strava.enableHeartRate')}
           <ExternalLink className="w-3 h-3" />
         </a>
       </div>
@@ -154,15 +152,15 @@ function DataBadge({ icon: Icon, label, active }: { icon: React.ElementType; lab
   );
 }
 
-function SyncSummary({ result }: { result: SyncResult }) {
+function SyncSummary({ result, t }: { result: SyncResult; t: (key: string) => string }) {
   const stats = [
-    { value: result.synced ?? 0, label: 'activities' },
-    ...(result.streams_fetched ? [{ value: result.streams_fetched, label: 'streams' }] : []),
-    ...(result.deleted ? [{ value: result.deleted, label: 'removed' }] : []),
+    { value: result.synced ?? 0, label: t('strava.activitiesSynced') },
+    ...(result.streams_fetched ? [{ value: result.streams_fetched, label: t('strava.streamsFetched') }] : []),
+    ...(result.deleted ? [{ value: result.deleted, label: t('strava.removed') }] : []),
   ];
 
   return (
-    <div className="flex items-center gap-4 pt-3 border-t border-[#514163]/30 mt-3">
+    <div className="flex items-center gap-4 pt-3 border-t border-[#514163]/30 mt-3 flex-wrap">
       {stats.map((s) => (
         <div key={s.label}>
           <span className="font-heading text-xl text-white">{s.value}</span>
@@ -171,7 +169,7 @@ function SyncSummary({ result }: { result: SyncResult }) {
       ))}
       {result.rate_limit_hit && (
         <p className="text-xs font-body text-amber-400 ml-auto">
-          Rate limit hit — remaining streams queued
+          {t('strava.rateLimitHit')}
         </p>
       )}
     </div>
@@ -181,6 +179,7 @@ function SyncSummary({ result }: { result: SyncResult }) {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function StravaSection() {
+  const { t } = useLanguage();
   const [connection, setConnection] = useState<StravaConnection | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -211,7 +210,7 @@ export function StravaSection() {
       setLoading(true);
       const result = await StravaClient.exchangeToken(code, scope);
       if (result.success) {
-        setMessage({ type: 'success', text: 'Strava connected successfully.' });
+        setMessage({ type: 'success', text: t('strava.connectedSuccessfully') });
         await loadConnection();
         window.history.replaceState({}, '', '/settings');
         setTimeout(() => handleSync(), 800);
@@ -237,7 +236,7 @@ export function StravaSection() {
   };
 
   const handleDisconnect = async () => {
-    if (!confirm('Disconnect your Strava account? Your synced activities will remain.')) return;
+    if (!confirm(t('strava.confirmDisconnect'))) return;
     setDisconnecting(true);
     const result = await StravaClient.disconnect();
     if (result.success) {
@@ -274,13 +273,13 @@ export function StravaSection() {
   // ─── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="rounded-2xl border border-[#514163]/40 bg-[#0C0D0F]/80 p-6">
+      <div className="rounded-2xl border border-[#514163]/40 p-6">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-9 h-9 rounded-lg flex items-center justify-center"
             style={{ background: 'rgba(81,65,99,0.5)', boxShadow: '0 0 16px rgba(81,65,99,0.5)' }}>
             <Activity className="w-5 h-5 text-[#fdda36]" />
           </div>
-          <h2 className="font-heading text-base text-white">Strava</h2>
+          <h2 className="font-heading text-base text-white">{t('strava.title')}</h2>
         </div>
         <div className="flex items-center justify-center py-10">
           <RefreshCw className="w-6 h-6 text-[#514163] animate-spin" />
@@ -290,7 +289,7 @@ export function StravaSection() {
   }
 
   return (
-    <div className="rounded-2xl border border-[#514163]/40 bg-[#0C0D0F]/80 p-6 space-y-6">
+    <div className="rounded-2xl border border-[#514163]/40 p-6 space-y-6">
 
       {/* Header */}
       <div className="flex items-center gap-3">
@@ -301,9 +300,9 @@ export function StravaSection() {
           <Activity className="w-5 h-5 text-[#fdda36]" />
         </div>
         <div>
-          <h2 className="font-heading text-base text-white leading-tight">Strava</h2>
+          <h2 className="font-heading text-base text-white leading-tight">{t('strava.title')}</h2>
           <p className="font-body text-xs text-neutral-400">
-            Import your training data, GPS routes, power, and heart rate.
+            {t('strava.subtitle')}
           </p>
         </div>
       </div>
@@ -327,11 +326,11 @@ export function StravaSection() {
           {/* Divider label */}
           <div className="flex items-center gap-3">
             <div className="h-px flex-1 bg-[#514163]/30" />
-            <span className="font-body text-xs text-neutral-500 uppercase tracking-widest">How it works</span>
+            <span className="font-body text-xs text-neutral-500 uppercase tracking-widest">{t('strava.howItWorks')}</span>
             <div className="h-px flex-1 bg-[#514163]/30" />
           </div>
 
-          <HowItWorks />
+          <HowItWorks t={t} />
 
           {/* CTA */}
           <div className="pt-2">
@@ -349,10 +348,10 @@ export function StravaSection() {
               ) : (
                 <Link2 className="w-4 h-4" />
               )}
-              {connecting ? 'Redirecting to Strava…' : 'Connect to Strava'}
+              {connecting ? t('strava.redirectingToStrava') : t('strava.connectButton')}
             </button>
             <p className="font-body text-xs text-neutral-500 mt-2.5">
-              You will be redirected to Strava to authorize access. No password is shared with Asciende.
+              {t('strava.noPasswordShared')}
             </p>
           </div>
         </div>
@@ -365,7 +364,7 @@ export function StravaSection() {
           {/* Athlete card */}
           <div
             className="rounded-xl border p-4 space-y-3"
-            style={{ borderColor: 'rgba(253,218,54,0.2)', background: 'rgba(253,218,54,0.03)' }}
+            style={{ borderColor: 'rgba(253,218,54,0.2)' }}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -377,7 +376,7 @@ export function StravaSection() {
                 <div>
                   <div className="flex items-center gap-2 mb-0.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    <span className="font-body text-xs text-emerald-400 font-semibold">Connected</span>
+                    <span className="font-body text-xs text-emerald-400 font-semibold">{t('strava.connected')}</span>
                   </div>
                   <h3 className="font-heading text-sm text-white leading-tight">
                     {connection.athlete_firstname || connection.athlete_lastname
@@ -386,7 +385,7 @@ export function StravaSection() {
                   </h3>
                   {connection.last_sync_at && (
                     <p className="font-body text-xs text-neutral-500 mt-0.5">
-                      Last synced {new Date(connection.last_sync_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      {t('strava.lastSynced')} {new Date(connection.last_sync_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </p>
                   )}
                 </div>
@@ -398,19 +397,19 @@ export function StravaSection() {
                 className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#514163]/50 text-xs font-body text-neutral-400 hover:border-red-500/40 hover:text-red-400 transition-colors disabled:opacity-50"
               >
                 <Unlink className="w-3.5 h-3.5" />
-                {disconnecting ? 'Disconnecting…' : 'Disconnect'}
+                {disconnecting ? t('strava.disconnecting') : t('strava.disconnect')}
               </button>
             </div>
 
             {/* Data badges */}
             <div className="flex flex-wrap gap-2 pt-1">
-              <DataBadge icon={Activity} label="Activities" active={true} />
+              <DataBadge icon={Activity} label={t('strava.dataBadges.activities')} active={true} />
               <DataBadge
                 icon={Heart}
-                label={connection.has_heartrate_permission !== false ? 'Heart Rate' : 'HR Disabled'}
+                label={connection.has_heartrate_permission !== false ? t('strava.dataBadges.heartRate') : t('strava.dataBadges.hrDisabled')}
                 active={connection.has_heartrate_permission !== false}
               />
-              <DataBadge icon={Zap} label="Power & Streams" active={true} />
+              <DataBadge icon={Zap} label={t('strava.dataBadges.powerStreams')} active={true} />
             </div>
 
             {/* Scopes */}
@@ -426,15 +425,15 @@ export function StravaSection() {
           </div>
 
           {/* HR warning */}
-          {connection.has_heartrate_permission === false && <HeartRateWarning />}
+          {connection.has_heartrate_permission === false && <HeartRateWarning t={t} />}
 
           {/* Sync card */}
-          <div className="rounded-xl border border-[#514163]/40 bg-[#514163]/5 p-4">
+          <div className="rounded-xl border border-[#514163]/40 p-4">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="font-heading text-xs text-white">Sync Activities</p>
+                <p className="font-heading text-xs text-white">{t('strava.syncActivities')}</p>
                 <p className="font-body text-xs text-neutral-400 mt-0.5">
-                  Fetches activities, streams, power, HR, and GPS.
+                  {t('strava.syncDesc')}
                 </p>
               </div>
               <button
@@ -447,27 +446,27 @@ export function StravaSection() {
                 }}
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-                {syncing ? 'Syncing…' : 'Sync Now'}
+                {syncing ? t('strava.syncing') : t('strava.syncNow')}
               </button>
             </div>
 
-            {lastSyncResult && <SyncSummary result={lastSyncResult} />}
+            {lastSyncResult && <SyncSummary result={lastSyncResult} t={t} />}
           </div>
 
           {/* "How it works" hint to re-authorize with better scopes */}
           {connection.granted_scopes && !connection.granted_scopes.includes('activity:read_all') && (
-            <div className="flex items-start gap-3 p-3.5 rounded-xl border border-[#514163]/40 bg-[#514163]/5">
+            <div className="flex items-start gap-3 p-3.5 rounded-xl border border-[#514163]/40">
               <AlertTriangle className="w-4 h-4 text-[#fdda36] mt-0.5 shrink-0" />
               <div>
-                <p className="font-body text-xs text-neutral-300 font-semibold">Limited permissions detected</p>
+                <p className="font-body text-xs text-neutral-300 font-semibold">{t('strava.limitedPermissions')}</p>
                 <p className="font-body text-xs text-neutral-400 mt-0.5">
-                  Reconnect to grant full activity access, including private activities and complete metrics.
+                  {t('strava.reconnectFullAccess')}
                 </p>
                 <button
                   onClick={handleConnect}
                   className="inline-flex items-center gap-1 mt-2 text-xs font-body font-medium text-[#fdda36] hover:opacity-80 transition-opacity"
                 >
-                  Reconnect with full permissions
+                  {t('strava.reconnectWithFullPermissions')}
                   <ArrowRight className="w-3 h-3" />
                 </button>
               </div>

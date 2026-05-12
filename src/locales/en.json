@@ -785,5 +785,46 @@
         "button": "Complete anamnesis"
       }
     }
+  },
+  "strava": {
+    "title": "Strava",
+    "subtitle": "Import your training data, GPS routes, power, and heart rate.",
+    "howItWorks": "How it works",
+    "step1Title": "Connect your Strava account",
+    "step1Desc": "Press \"Connect to Strava\" below to open the Strava authorization page in your browser.",
+    "step2Title": "Authorize activity access",
+    "step2Desc": "Approve activity permissions so Asciende can import your training data, metrics, and GPS routes.",
+    "step3Title": "Enable Heart Rate data",
+    "step3Desc": "Strava may block heart rate by default. Enable Health Data permissions inside Strava Settings to unlock complete physiological analysis.",
+    "openStravaPermissions": "Open Strava Permissions",
+    "connectButton": "Connect to Strava",
+    "redirectingToStrava": "Redirecting to Strava…",
+    "noPasswordShared": "You will be redirected to Strava to authorize access. No password is shared with Asciende.",
+    "connected": "Connected",
+    "connectedSuccessfully": "Strava connected successfully.",
+    "lastSynced": "Last synced",
+    "disconnect": "Disconnect",
+    "disconnecting": "Disconnecting…",
+    "confirmDisconnect": "Disconnect your Strava account? Your synced activities will remain.",
+    "syncActivities": "Sync Activities",
+    "syncDesc": "Fetches activities, streams, power, HR, and GPS.",
+    "syncNow": "Sync Now",
+    "syncing": "Syncing…",
+    "activitiesSynced": "activities synced",
+    "streamsFetched": "streams",
+    "removed": "removed",
+    "rateLimitHit": "Rate limit hit — remaining streams queued",
+    "hrDataDisabled": "Heart rate data is currently disabled in Strava permissions.",
+    "hrLimited": "You can still sync activities, but physiological analysis will be limited.",
+    "enableHeartRate": "Enable heart rate in Strava",
+    "limitedPermissions": "Limited permissions detected",
+    "reconnectFullAccess": "Reconnect to grant full activity access, including private activities and complete metrics.",
+    "reconnectWithFullPermissions": "Reconnect with full permissions",
+    "dataBadges": {
+      "activities": "Activities",
+      "heartRate": "Heart Rate",
+      "powerStreams": "Power & Streams",
+      "hrDisabled": "HR Disabled"
+    }
   }
 }

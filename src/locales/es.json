@@ -811,5 +811,46 @@
         "button": "Completar anamnesis"
       }
     }
+  },
+  "strava": {
+    "title": "Strava",
+    "subtitle": "Importá tus datos de entrenamiento, rutas GPS, potencia y frecuencia cardíaca.",
+    "howItWorks": "Cómo funciona",
+    "step1Title": "Conectá tu cuenta de Strava",
+    "step1Desc": "Presioná \"Conectar a Strava\" para abrir la página de autorización de Strava en tu navegador.",
+    "step2Title": "Autorizá el acceso a actividades",
+    "step2Desc": "Aprobá los permisos de actividades para que Asciende pueda importar tus datos de entrenamiento, métricas y rutas GPS.",
+    "step3Title": "Habilitá datos de frecuencia cardíaca",
+    "step3Desc": "Strava puede bloquear la frecuencia cardíaca por defecto. Habilitá los permisos de Datos de Salud en tu Configuración de Strava para desbloquear análisis fisiológico completo.",
+    "openStravaPermissions": "Abrir Configuración de Strava",
+    "connectButton": "Conectar a Strava",
+    "redirectingToStrava": "Redirigiendo a Strava…",
+    "noPasswordShared": "Serás redirigido a Strava para autorizar el acceso. Ninguna contraseña se comparte con Asciende.",
+    "connected": "Conectado",
+    "connectedSuccessfully": "Strava conectado exitosamente.",
+    "lastSynced": "Última sincronización",
+    "disconnect": "Desconectar",
+    "disconnecting": "Desconectando…",
+    "confirmDisconnect": "¿Desconectar tu cuenta de Strava? Tus actividades sincronizadas permanecerán.",
+    "syncActivities": "Sincronizar Actividades",
+    "syncDesc": "Obtiene actividades, streams, potencia, FC y GPS.",
+    "syncNow": "Sincronizar Ahora",
+    "syncing": "Sincronizando…",
+    "activitiesSynced": "actividades sincronizadas",
+    "streamsFetched": "streams",
+    "removed": "removidas",
+    "rateLimitHit": "Límite de velocidad alcanzado — streams restantes en cola",
+    "hrDataDisabled": "Los datos de frecuencia cardíaca están actualmente deshabilitados en los permisos de Strava.",
+    "hrLimited": "Todavía podés sincronizar actividades, pero el análisis fisiológico será limitado.",
+    "enableHeartRate": "Habilitar frecuencia cardíaca en Strava",
+    "limitedPermissions": "Permisos limitados detectados",
+    "reconnectFullAccess": "Reconéctate para otorgar acceso completo a actividades, incluidas actividades privadas y métricas completas.",
+    "reconnectWithFullPermissions": "Reconectar con permisos completos",
+    "dataBadges": {
+      "activities": "Actividades",
+      "heartRate": "Frecuencia Cardíaca",
+      "powerStreams": "Potencia y Streams",
+      "hrDisabled": "FC Deshabilitada"
+    }
   }
 }
