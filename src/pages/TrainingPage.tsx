@@ -2293,6 +2293,7 @@ export default function TrainingPage() {
               workout={selectedEnduranceWorkout}
               language={language}
               initialExpanded={true}
+              showFitExport={true}
               onStartWorkout={() => {
                 const w = selectedEnduranceWorkout;
                 setSelectedEnduranceWorkout(null);
