@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bike, PersonStanding, Waves, Dumbbell, Clock, Zap, ChevronDown, ChevronUp, RotateCcw, Play, Target, Activity, FileText, ClipboardCheck, CheckCircle2, ArrowLeftRight, Download, Share2 } from 'lucide-react';
+import { Bike, PersonStanding, Waves, Dumbbell, Clock, Zap, ChevronDown, ChevronUp, RotateCcw, Play, Target, Activity, FileText, ClipboardCheck, CheckCircle2, ArrowLeftRight, Download, Share2, Info, AlertTriangle } from 'lucide-react';
 import { exportFitWorkout } from '../../utils/fit/exportFitFile';
 
 export interface WorkoutStep {
@@ -257,6 +257,7 @@ export default function EnduranceWorkoutCard({ workout, language, initialExpande
   const [expanded, setExpanded] = useState(initialExpanded);
   const [fitExporting, setFitExporting] = useState(false);
   const [fitExportMsg, setFitExportMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [showFitInfo, setShowFitInfo] = useState(false);
 
   const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -442,17 +443,21 @@ export default function EnduranceWorkoutCard({ workout, language, initialExpande
 
           {/* FIT Export */}
           {showFitExport && (workout.steps?.length ?? 0) > 0 && (
-            <div className="px-4 py-3 border-t border-cyan-100 dark:border-cyan-900/50">
+            <div className="px-4 py-3 border-t border-cyan-100 dark:border-cyan-900/50 space-y-2">
+
+              {/* Row: title + export button */}
               <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
+                <div className="min-w-0 flex items-center gap-1.5">
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-200 leading-tight">
                     {language === 'es' ? 'Exportar archivo .FIT' : 'Export .FIT File'}
                   </p>
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
-                    {language === 'es'
-                      ? 'TrainingPeaks · intervals.icu · dispositivo vía USB'
-                      : 'TrainingPeaks · intervals.icu · device via USB'}
-                  </p>
+                  <button
+                    onClick={() => setShowFitInfo(v => !v)}
+                    className="text-gray-400 dark:text-gray-500 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
+                    title={language === 'es' ? 'Cómo usar el archivo' : 'How to use this file'}
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                  </button>
                 </div>
                 <button
                   onClick={handleFitExport}
@@ -472,22 +477,64 @@ export default function EnduranceWorkoutCard({ workout, language, initialExpande
                 </button>
               </div>
 
-              {/* Garmin Connect upload note */}
-              <p className="mt-1.5 text-[10px] text-amber-600 dark:text-amber-500 leading-tight">
-                {language === 'es'
-                  ? 'Garmin Connect no acepta workout .FIT por upload. Para Garmin: copia el archivo a GARMIN/NewFiles/ vía USB.'
-                  : 'Garmin Connect upload rejects workout .FIT files by design. For Garmin devices: copy the file to GARMIN/NewFiles/ via USB.'}
-              </p>
+              {/* Collapsible usage instructions */}
+              {showFitInfo && (
+                <div className="rounded-lg border border-cyan-200 dark:border-cyan-800 bg-cyan-50/60 dark:bg-cyan-900/20 p-3 space-y-2.5 text-[11px] leading-relaxed text-gray-600 dark:text-gray-300">
 
+                  {/* intervals.icu */}
+                  <div>
+                    <p className="font-semibold text-gray-700 dark:text-gray-200 mb-0.5">intervals.icu</p>
+                    <p>
+                      {language === 'es'
+                        ? 'Usa la Biblioteca de Entrenamientos (icono de libro) → menú "···" → "Importar Workout". NO uses el botón de subir actividades (nube) — ese espera archivos de actividad grabados, no planes.'
+                        : 'Use the Workout Library (book icon) → "···" menu → "Import Workout". Do NOT use the activity Upload button (cloud icon) — that expects recorded activity files, not plans.'}
+                    </p>
+                  </div>
+
+                  {/* TrainingPeaks */}
+                  <div>
+                    <p className="font-semibold text-gray-700 dark:text-gray-200 mb-0.5">TrainingPeaks</p>
+                    <p>
+                      {language === 'es'
+                        ? 'Biblioteca → "Agregar Workout" → "Importar desde archivo .FIT".'
+                        : 'Library → "Add Workout" → "Import from .FIT file".'}
+                    </p>
+                  </div>
+
+                  {/* Garmin device */}
+                  <div>
+                    <p className="font-semibold text-gray-700 dark:text-gray-200 mb-0.5">
+                      {language === 'es' ? 'Dispositivo Garmin (USB)' : 'Garmin Device (USB)'}
+                    </p>
+                    <p>
+                      {language === 'es'
+                        ? 'Conecta el dispositivo por USB y copia el archivo a GARMIN/NewFiles/. El dispositivo lo procesará al arrancar.'
+                        : 'Connect your device via USB and copy the file to GARMIN/NewFiles/. The device processes it on next boot.'}
+                    </p>
+                  </div>
+
+                  {/* Garmin Connect warning */}
+                  <div className="flex items-start gap-1.5 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-2.5 py-2">
+                    <AlertTriangle className="w-3 h-3 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <p className="text-amber-700 dark:text-amber-400">
+                      {language === 'es'
+                        ? 'Garmin Connect rechaza workout .FIT por diseño (error 406). Su endpoint de subida solo acepta actividades grabadas. Usa el método USB arriba para dispositivos Garmin.'
+                        : 'Garmin Connect upload intentionally rejects workout .FIT files (HTTP 406). Its upload endpoint only accepts recorded activities. Use the USB method above for Garmin devices.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Result feedback */}
               {fitExportMsg && (
-                <div className={`mt-2 flex items-center gap-1.5 text-[11px] font-medium rounded-md px-2.5 py-1.5 ${
+                <div className={`flex items-center gap-1.5 text-[11px] font-medium rounded-md px-2.5 py-1.5 ${
                   fitExportMsg.type === 'success'
                     ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
                     : 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800'
                 }`}>
                   {fitExportMsg.type === 'success'
                     ? <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
-                    : <Zap className="w-3 h-3 flex-shrink-0" />}
+                    : <AlertTriangle className="w-3 h-3 flex-shrink-0" />}
                   {fitExportMsg.text}
                 </div>
               )}
