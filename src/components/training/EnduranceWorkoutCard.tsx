@@ -446,12 +446,12 @@ export default function EnduranceWorkoutCard({ workout, language, initialExpande
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-gray-700 dark:text-gray-200 leading-tight">
-                    {language === 'es' ? 'Exportar a dispositivo' : 'Send to Device'}
+                    {language === 'es' ? 'Exportar archivo .FIT' : 'Export .FIT File'}
                   </p>
                   <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
                     {language === 'es'
-                      ? 'Garmin · COROS · Suunto · Wahoo · Hammerhead'
-                      : 'Garmin · COROS · Suunto · Wahoo · Hammerhead'}
+                      ? 'TrainingPeaks · intervals.icu · dispositivo vía USB'
+                      : 'TrainingPeaks · intervals.icu · device via USB'}
                   </p>
                 </div>
                 <button
@@ -471,6 +471,13 @@ export default function EnduranceWorkoutCard({ workout, language, initialExpande
                     : 'Export .FIT'}
                 </button>
               </div>
+
+              {/* Garmin Connect upload note */}
+              <p className="mt-1.5 text-[10px] text-amber-600 dark:text-amber-500 leading-tight">
+                {language === 'es'
+                  ? 'Garmin Connect no acepta workout .FIT por upload. Para Garmin: copia el archivo a GARMIN/NewFiles/ vía USB.'
+                  : 'Garmin Connect upload rejects workout .FIT files by design. For Garmin devices: copy the file to GARMIN/NewFiles/ via USB.'}
+              </p>
 
               {fitExportMsg && (
                 <div className={`mt-2 flex items-center gap-1.5 text-[11px] font-medium rounded-md px-2.5 py-1.5 ${
