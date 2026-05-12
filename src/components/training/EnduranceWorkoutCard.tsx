@@ -265,9 +265,14 @@ export default function EnduranceWorkoutCard({ workout, language, initialExpande
     setFitExportMsg(null);
     const result = await exportFitWorkout(workout);
     if (result.success) {
-      setFitExportMsg({ type: 'success', text: language === 'es' ? 'Archivo .FIT descargado' : '.FIT file downloaded' });
+      const isShared = 'method' in result && result.method.startsWith('share');
+      const successText = isShared
+        ? (language === 'es' ? 'Archivo .FIT compartido' : '.FIT file shared')
+        : (language === 'es' ? 'Archivo .FIT descargado' : '.FIT file downloaded');
+      setFitExportMsg({ type: 'success', text: successText });
     } else {
-      setFitExportMsg({ type: 'error', text: language === 'es' ? 'No se pudo exportar el archivo .FIT. Intenta de nuevo.' : 'Unable to export FIT workout. Please try again.' });
+      console.error('[FIT Export] Error shown to user:', result.error);
+      setFitExportMsg({ type: 'error', text: language === 'es' ? 'Error al exportar .FIT. Revisa la consola.' : 'FIT export failed. Check console for details.' });
     }
     setFitExporting(false);
     setTimeout(() => setFitExportMsg(null), 5000);
