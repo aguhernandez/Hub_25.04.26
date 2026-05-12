@@ -49,9 +49,17 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>Asciende needs access to your camera for exercise video analysis and form assessment</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Asciende needs access to your photo library to select images for your profile and training</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Asciende needs permission to save photos to your library</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Asciende needs access to your location to record GPS activities and track outdoor training</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Asciende needs access to your location to record GPS activities and track outdoor training</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Asciende needs access to your location in the background to continue recording GPS activities</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Asciende uses motion data to improve activity tracking accuracy</string>
 </dict>
 </plist>
