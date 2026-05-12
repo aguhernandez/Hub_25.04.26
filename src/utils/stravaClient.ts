@@ -49,26 +49,28 @@ export interface SyncResult {
 
 export class StravaClient {
   private static STRAVA_AUTH_URL = 'https://www.strava.com/oauth/authorize';
-  private static STRAVA_CLIENT_ID = import.meta.env.VITE_STRAVA_CLIENT_ID;
   private static REDIRECT_URI = `${window.location.origin}/settings?strava=callback`;
 
-  static isConfigured(): boolean {
-    return !!this.STRAVA_CLIENT_ID;
+  private static async fetchClientId(): Promise<string> {
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/strava-oauth-callback`,
+      { method: 'GET' }
+    );
+    if (!response.ok) throw new Error('Strava is not configured on this platform');
+    const data = await response.json();
+    if (!data.client_id) throw new Error('Strava is not configured on this platform');
+    return data.client_id;
   }
 
-  static getAuthorizationUrl(scope: string = 'read,activity:read_all'): string {
-    if (!this.STRAVA_CLIENT_ID) {
-      throw new Error('STRAVA_NOT_CONFIGURED');
-    }
-
+  static async getAuthorizationUrl(scope: string = 'read,activity:read_all'): Promise<string> {
+    const clientId = await this.fetchClientId();
     const params = new URLSearchParams({
-      client_id: this.STRAVA_CLIENT_ID,
+      client_id: clientId,
       redirect_uri: this.REDIRECT_URI,
       response_type: 'code',
-      scope: scope,
+      scope,
       approval_prompt: 'auto',
     });
-
     return `${this.STRAVA_AUTH_URL}?${params.toString()}`;
   }
 

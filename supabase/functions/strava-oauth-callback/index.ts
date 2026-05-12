@@ -9,10 +9,22 @@ const corsHeaders = {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
+  }
+
+  // GET: return the public client ID so the frontend can build the OAuth URL
+  if (req.method === "GET") {
+    const clientId = Deno.env.get("STRAVA_CLIENT_ID");
+    if (!clientId) {
+      return new Response(
+        JSON.stringify({ error: "Strava not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    return new Response(
+      JSON.stringify({ client_id: clientId }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   try {
