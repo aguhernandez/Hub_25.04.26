@@ -571,7 +571,7 @@ Deno.serve(async (req: Request) => {
         .from("external_nutrition_plans")
         .upsert({
           athlete_id: athleteId,
-          planner_source: plannerInfo.planner_name,
+          planner_source: plannerInfo?.planner_name ?? "nutrition_satellite",
           plan_date,
           plan_name: plan_name || null,
           summary: summary || {},
@@ -632,7 +632,7 @@ Deno.serve(async (req: Request) => {
         .from("external_endurance_plans")
         .upsert({
           athlete_id: athleteId,
-          planner_source: plannerInfo.planner_name,
+          planner_source: plannerInfo?.planner_name ?? "nutrition_satellite",
           week_start_date: String(week_start_date).substring(0, 10),
           plan_name: plan_name || null,
           summary: summary || {},
@@ -1117,7 +1117,7 @@ Deno.serve(async (req: Request) => {
 
         const payload: any = {
           athlete_id: athleteId,
-          planner_source: plannerInfo.planner_name,
+          planner_source: plannerInfo?.planner_name ?? "nutrition_satellite",
           name: w.name || "Endurance Session",
           sport: w.sport || "cycling",
           sub_discipline: w.sub_discipline || null,
@@ -2114,7 +2114,7 @@ Deno.serve(async (req: Request) => {
           athlete_notes: athlete_notes ?? null,
           segments: segments ?? null,
           notes: notes ?? null,
-          planner_source: plannerInfo.planner_name,
+          planner_source: plannerInfo?.planner_name ?? "nutrition_satellite",
           external_plan_id: external_plan_id ?? null,
           plan_version: plan_version ?? "1.0",
           generated_at: generated_at ?? new Date().toISOString(),
