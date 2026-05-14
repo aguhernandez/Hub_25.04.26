@@ -75,6 +75,15 @@ Deno.serve(async (req: Request) => {
         return errorResponse("INVALID_BODY", "Request body must be valid JSON.", 400);
       }
 
+      // Diagnostic log — remove after confirming race_date arrives correctly
+      console.log("push-race-plan received:", JSON.stringify({
+        race_name: body.race_name,
+        race_date: body.race_date,
+        scheduled_date: body.scheduled_date,
+        generated_at: body.generated_at,
+        plan_version: body.plan_version,
+      }));
+
       // Deactivate any previously active plan for this athlete
       await supabase
         .from("race_plans")

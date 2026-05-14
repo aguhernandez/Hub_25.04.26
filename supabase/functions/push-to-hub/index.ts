@@ -110,98 +110,9 @@ Deno.serve(async (req: Request) => {
 
     const athleteId = athleteProfile.id;
 
-    // ── POST /push-to-hub (race plan) ──────────────────────────────────
+    // ── POST /push-to-hub (nutrition planner) ──────────────────────────
     if (req.method === "POST" && plannerInfo.planner_type === "nutrition") {
       const body = await req.json();
-
-      // If the body contains race_name + race_date it's a race plan push
-      if (body.race_name !== undefined || body.race_date !== undefined) {
-        // Deactivate previous active plan for this athlete
-        await supabaseAdmin
-          .from("race_plans")
-          .update({ is_active: false, updated_at: new Date().toISOString() })
-          .eq("athlete_id", athleteId)
-          .eq("is_active", true);
-
-        const planRow: Record<string, unknown> = {
-          athlete_id: athleteId,
-          is_active: true,
-          planner_source: plannerInfo.planner_name,
-          plan_version: body.plan_version ?? "1.0",
-          generated_at: body.generated_at ?? new Date().toISOString(),
-          race_name: body.race_name ?? "Race",
-          sport: body.sport ?? "triathlon",
-          race_date: body.race_date ?? null,
-          scheduled_date: body.scheduled_date ?? body.race_date ?? null,
-          distance_km: body.distance_km ?? null,
-          expected_duration_min: body.expected_duration_min ?? null,
-          target_pace_min_km: body.target_pace_min_km ?? null,
-          temperature_c: body.temperature_c ?? null,
-          humidity_pct: body.humidity_pct ?? null,
-          altitude_m: body.altitude_m ?? null,
-          intensity_percent: body.intensity_percent ?? null,
-          intensity_zone: body.intensity_zone ?? null,
-          pacing_recommendation: body.pacing_recommendation ?? null,
-          carbs_g_per_hour: body.carbs_g_per_hour ?? null,
-          total_carbs_g: body.total_carbs_g ?? null,
-          carb_sources: body.carb_sources ?? null,
-          carb_timing: body.carb_timing ?? null,
-          fluid_l_per_hour: body.fluid_l_per_hour ?? null,
-          total_fluid_l: body.total_fluid_l ?? null,
-          sodium_mg_per_hour: body.sodium_mg_per_hour ?? null,
-          total_sodium_mg: body.total_sodium_mg ?? null,
-          sweat_rate_l_per_hour: body.sweat_rate_l_per_hour ?? null,
-          projected_mass_loss_pct: body.projected_mass_loss_pct ?? null,
-          caffeine_total_mg: body.caffeine_total_mg ?? null,
-          caffeine_mg_per_kg: body.caffeine_mg_per_kg ?? null,
-          caffeine_pre_dose_mg: body.caffeine_pre_dose_mg ?? null,
-          caffeine_pre_dose_min_before: body.caffeine_pre_dose_min_before ?? null,
-          caffeine_mid_race_doses: body.caffeine_mid_race_doses ?? null,
-          caffeine_sources: body.caffeine_sources ?? null,
-          caffeine_notes: body.caffeine_notes ?? null,
-          pre_comp_notes: body.pre_comp_notes ?? null,
-          cho_loading_days: body.cho_loading_days ?? null,
-          pre_comp_days: body.pre_comp_days ?? null,
-          race_breakfast_timing: body.race_breakfast_timing ?? null,
-          race_breakfast_description: body.race_breakfast_description ?? null,
-          race_breakfast_carbs_g: body.race_breakfast_carbs_g ?? null,
-          gi_training_weeks: body.gi_training_weeks ?? null,
-          gi_training_target_g_per_hour: body.gi_training_target_g_per_hour ?? null,
-          gi_training_notes: body.gi_training_notes ?? null,
-          gi_sessions: body.gi_sessions ?? null,
-          segments: body.segments ?? null,
-          risks: body.risks ?? null,
-          athlete_notes: body.athlete_notes ?? null,
-          notes: body.notes ?? null,
-          updated_at: new Date().toISOString(),
-        };
-
-        const { data: inserted, error: insertError } = await supabaseAdmin
-          .from("race_plans")
-          .insert(planRow)
-          .select("id")
-          .single();
-
-        if (insertError) throw insertError;
-
-        await supabaseAdmin.from("external_planner_access_log").insert({
-          planner_token_id: plannerInfo.id,
-          athlete_id: athleteId,
-          action: "write",
-          endpoint: "push-to-hub/race-plan",
-          status_code: 200,
-        }).then(() => {});
-
-        return new Response(JSON.stringify({
-          success: true,
-          id: inserted.id,
-          race_date: planRow.race_date,
-          message: `Race plan for ${planRow.race_name} saved to Hub successfully`,
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
       const { plan_date, plan_name, summary, plan_data, adherence_data, notes, plan_mode, start_date } = body;
 
       if (!plan_date) {
