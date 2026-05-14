@@ -135,6 +135,7 @@ export default function TrainingPage() {
   const [activePlan, setActivePlan] = useState<{ id: string; race_name: string } | null>(null);
   const [showCoachWellness, setShowCoachWellness] = useState(false);
   const [selectedEnduranceWorkout, setSelectedEnduranceWorkout] = useState<EnduranceWorkout | null>(null);
+  const [selectedRacePlan, setSelectedRacePlan] = useState<any | null>(null);
   const [logWorkoutTarget, setLogWorkoutTarget] = useState<EnduranceWorkout | null>(null);
   const [reassignSourceWorkout, setReassignSourceWorkout] = useState<EnduranceWorkout | null>(null);
   const [logReassignTarget, setLogReassignTarget] = useState<{ workout: EnduranceWorkout; executedOnDate: string; originalPlannedDay: string } | null>(null);
@@ -1070,7 +1071,7 @@ export default function TrainingPage() {
         .eq('id', planId)
         .maybeSingle();
       if (!fullPlan) return;
-      window.dispatchEvent(new CustomEvent('openActivityRecorder', { detail: { racePlan: fullPlan } }));
+      setSelectedRacePlan(fullPlan);
       return;
     }
 
@@ -2404,6 +2405,133 @@ export default function TrainingPage() {
                 setReassignSourceWorkout(w);
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {selectedRacePlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl bg-white dark:bg-neutral-800">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800 rounded-t-2xl">
+              <div className="flex items-center gap-2">
+                <Flag className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                  {language === 'es' ? 'Plan de Carrera' : 'Race Plan'}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedRacePlan(null)}
+                className="p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-800/50 transition-colors"
+              >
+                <X className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4">
+              {/* Race identity */}
+              <div>
+                <h2 className="text-xl font-bold text-neutral-900 dark:text-white">{selectedRacePlan.race_name}</h2>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {selectedRacePlan.sport && (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-medium capitalize">{selectedRacePlan.sport}</span>
+                  )}
+                  {selectedRacePlan.race_date && (
+                    <span className="px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 text-xs">{selectedRacePlan.race_date}</span>
+                  )}
+                  {selectedRacePlan.distance_km && (
+                    <span className="px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 text-xs">{selectedRacePlan.distance_km} km</span>
+                  )}
+                  {selectedRacePlan.expected_duration_min && (
+                    <span className="px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 text-xs">{Math.floor(selectedRacePlan.expected_duration_min / 60)}h {selectedRacePlan.expected_duration_min % 60}min</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Fuel summary */}
+              <div className="grid grid-cols-3 gap-3">
+                {selectedRacePlan.carbs_g_per_hour != null && (
+                  <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-3 text-center">
+                    <p className="text-lg font-bold text-orange-600 dark:text-orange-400">{selectedRacePlan.carbs_g_per_hour}g</p>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400">{language === 'es' ? 'Carbos/h' : 'Carbs/h'}</p>
+                  </div>
+                )}
+                {selectedRacePlan.fluid_l_per_hour != null && (
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 text-center">
+                    <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{selectedRacePlan.fluid_l_per_hour}L</p>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400">{language === 'es' ? 'Fluido/h' : 'Fluid/h'}</p>
+                  </div>
+                )}
+                {selectedRacePlan.caffeine_total_mg != null && (
+                  <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-3 text-center">
+                    <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{selectedRacePlan.caffeine_total_mg}mg</p>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400">{language === 'es' ? 'Cafeína' : 'Caffeine'}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Segments */}
+              {Array.isArray(selectedRacePlan.segments) && selectedRacePlan.segments.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wide mb-2">{language === 'es' ? 'Segmentos' : 'Segments'}</p>
+                  <div className="space-y-1.5">
+                    {selectedRacePlan.segments.map((seg: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between bg-neutral-50 dark:bg-neutral-700/50 rounded-lg px-3 py-2 text-sm">
+                        <span className="font-medium text-neutral-800 dark:text-neutral-200 capitalize">{seg.name || seg.sport || seg.segment}</span>
+                        <div className="flex gap-3 text-neutral-500 dark:text-neutral-400 text-xs">
+                          {seg.distance_km && <span>{seg.distance_km}km</span>}
+                          {seg.duration_min && <span>{seg.duration_min}min</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Pre-comp notes */}
+              {selectedRacePlan.pre_comp_notes && (
+                <div className="bg-neutral-50 dark:bg-neutral-700/50 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wide mb-1">{language === 'es' ? 'Notas previas' : 'Pre-race notes'}</p>
+                  <p className="text-sm text-neutral-700 dark:text-neutral-300">{selectedRacePlan.pre_comp_notes}</p>
+                </div>
+              )}
+
+              {/* Fuel alerts preview */}
+              {selectedRacePlan.carbs_g_per_hour != null && selectedRacePlan.expected_duration_min != null && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-3">
+                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wide mb-1">
+                    {language === 'es' ? 'Alertas de combustible activadas' : 'Fuel alerts enabled'}
+                  </p>
+                  <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                    {language === 'es'
+                      ? 'Durante la carrera recibirás recordatorios sonoros para consumir carbohidratos, fluidos y cafeína en los momentos óptimos.'
+                      : 'During the race you will receive audio reminders to consume carbohydrates, fluids and caffeine at optimal times.'}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-3 px-5 pb-5">
+              <button
+                onClick={() => setSelectedRacePlan(null)}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 text-sm font-medium hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors"
+              >
+                {language === 'es' ? 'Cancelar' : 'Cancel'}
+              </button>
+              <button
+                onClick={() => {
+                  const plan = selectedRacePlan;
+                  setSelectedRacePlan(null);
+                  window.dispatchEvent(new CustomEvent('openActivityRecorder', { detail: { racePlan: plan } }));
+                }}
+                className="flex-1 flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold px-4 py-2.5 rounded-xl transition-colors"
+              >
+                <Play className="w-4 h-4" />
+                {language === 'es' ? 'Iniciar GPS' : 'Start GPS'}
+              </button>
+            </div>
           </div>
         </div>
       )}
