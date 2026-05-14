@@ -621,12 +621,12 @@ export default function TrainingPage() {
       // Load race plans — show on their race_date or scheduled_date
       const { data: racePlansData } = await supabase
         .from('race_plans')
-        .select('id, race_name, sport, race_date, scheduled_date, expected_duration_min, distance_km, is_active')
+        .select('id, race_name, sport, race_date, scheduled_date, expected_duration_min, distance_km, is_active, created_at')
         .eq('athlete_id', effectiveAthleteId)
         .order('created_at', { ascending: false });
 
       const formattedRacePlans: any[] = (racePlansData || []).map((rp: any) => {
-        const dateStr = (rp.race_date || rp.scheduled_date || '').substring(0, 10);
+        const dateStr = (rp.race_date || rp.scheduled_date || rp.created_at || '').substring(0, 10);
         return {
           id: `race-plan-${rp.id}`,
           race_plan_id: rp.id,
@@ -1569,39 +1569,6 @@ export default function TrainingPage() {
         </button>
       </div>
 
-      {/* START RACE banner — only shown when an active race plan exists */}
-      {activePlan && (
-        <button
-          onClick={() => {
-            window.dispatchEvent(new CustomEvent('navigate', {
-              detail: { page: 'live-race', racePlanId: activePlan.id }
-            }));
-          }}
-          className="w-full flex items-center gap-4 rounded-2xl px-5 py-4 transition-all hover:brightness-110 active:scale-[0.99]"
-          style={{
-            background: 'linear-gradient(135deg, rgba(74,222,128,0.12) 0%, rgba(34,197,94,0.06) 100%)',
-            border: '1.5px solid rgba(74,222,128,0.35)',
-          }}
-        >
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'rgba(74,222,128,0.15)' }}>
-            <Flag className="w-5 h-5 text-green-400" />
-          </div>
-          <div className="flex-1 text-left">
-            <p className="text-sm font-bold text-green-400">
-              {language === 'es' ? 'Plan de carrera activo' : 'Active race plan'}
-            </p>
-            <p className="text-xs text-white/50 mt-0.5 truncate">{activePlan.race_name}</p>
-          </div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg flex-shrink-0"
-            style={{ background: 'rgba(74,222,128,0.2)' }}>
-            <Play className="w-3.5 h-3.5 text-green-400 fill-current" />
-            <span className="text-xs font-semibold text-green-400">
-              {language === 'es' ? 'Iniciar' : 'Start'}
-            </span>
-          </div>
-        </button>
-      )}
 
       {/* AI Upgrade Modal — inline, no dependency extra */}
       {showAIUpgradeModal && (
