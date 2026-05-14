@@ -75,13 +75,16 @@ Deno.serve(async (req: Request) => {
         return errorResponse("INVALID_BODY", "Request body must be valid JSON.", 400);
       }
 
-      // Diagnostic log — remove after confirming race_date arrives correctly
-      console.log("push-race-plan received:", JSON.stringify({
-        race_name: body.race_name,
+      // Log all keys received for debugging
+      console.log("push-race-plan body keys:", Object.keys(body).join(", "));
+      console.log("push-race-plan race_date candidates:", JSON.stringify({
         race_date: body.race_date,
         scheduled_date: body.scheduled_date,
+        event_date: body.event_date,
+        competition_date: body.competition_date,
+        date: body.date,
+        race_name: body.race_name,
         generated_at: body.generated_at,
-        plan_version: body.plan_version,
       }));
 
       // Deactivate any previously active plan for this athlete
