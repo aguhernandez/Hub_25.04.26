@@ -70,22 +70,23 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      const body = await req.json().catch(() => null);
-      if (!body) {
+      let bodyText: string;
+      try {
+        bodyText = await req.text();
+      } catch (e) {
+        return errorResponse("INVALID_BODY", "Could not read request body.", 400);
+      }
+
+      console.log("push-race-plan raw body text:", bodyText);
+
+      let body: Record<string, unknown>;
+      try {
+        body = JSON.parse(bodyText);
+      } catch (e) {
         return errorResponse("INVALID_BODY", "Request body must be valid JSON.", 400);
       }
 
-      // Log all keys received for debugging
-      console.log("push-race-plan body keys:", Object.keys(body).join(", "));
-      console.log("push-race-plan race_date candidates:", JSON.stringify({
-        race_date: body.race_date,
-        scheduled_date: body.scheduled_date,
-        event_date: body.event_date,
-        competition_date: body.competition_date,
-        date: body.date,
-        race_name: body.race_name,
-        generated_at: body.generated_at,
-      }));
+      console.log("push-race-plan parsed race_date:", body.race_date, "type:", typeof body.race_date);
 
       // Deactivate any previously active plan for this athlete
       await supabase
@@ -184,7 +185,7 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      return jsonResponse({ success: true, id: inserted.id });
+      return jsonResponse({ success: true, id: inserted.id, debug_race_date_received: body.race_date ?? "WAS_NULL" });
     }
 
     // ── Unknown endpoint ───────────────────────────────────────────────────
