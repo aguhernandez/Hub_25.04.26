@@ -25,7 +25,7 @@ import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 import { useMembership } from '../hooks/useMembership';
 import WorkoutTagsSection from '../components/tags/WorkoutTagsSection';
-import { Dumbbell, Calendar, Plus, Play, ChevronLeft, ChevronRight, TrendingUp, Clock, Weight, History, Copy, Activity, Clipboard, MoreVertical, GripVertical, Trash2, X, CreditCard as Edit, Calculator, RotateCw, Sparkles, Heart, Zap, BarChart2, Users, ChevronDown, BookOpen, CheckCircle2 } from 'lucide-react';
+import { Dumbbell, Calendar, Plus, Play, ChevronLeft, ChevronRight, TrendingUp, Clock, Weight, History, Copy, Activity, Clipboard, MoreVertical, GripVertical, Trash2, X, CreditCard as Edit, Calculator, RotateCw, Sparkles, Heart, Zap, BarChart2, Users, ChevronDown, BookOpen, CheckCircle2, Flag } from 'lucide-react';
 
 interface Exercise {
   id: string;
@@ -132,6 +132,7 @@ export default function TrainingPage() {
   const [selectedWellnessEntry, setSelectedWellnessEntry] = useState<any | null>(null);
   const [showCMJAssessment, setShowCMJAssessment] = useState(false);
   const [showBarVelocity, setShowBarVelocity] = useState(false);
+  const [activePlan, setActivePlan] = useState<{ id: string; race_name: string } | null>(null);
   const [showCoachWellness, setShowCoachWellness] = useState(false);
   const [selectedEnduranceWorkout, setSelectedEnduranceWorkout] = useState<EnduranceWorkout | null>(null);
   const [logWorkoutTarget, setLogWorkoutTarget] = useState<EnduranceWorkout | null>(null);
@@ -147,6 +148,20 @@ export default function TrainingPage() {
   useEffect(() => {
     if (profile?.id) checkTodayWellness();
   }, [profile?.id]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    const athleteId = effectiveAthleteId;
+    supabase
+      .from('race_plans')
+      .select('id, race_name')
+      .eq('athlete_id', athleteId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => setActivePlan(data ?? null));
+  }, [profile?.id, effectiveAthleteId]);
 
   const checkTodayWellness = async () => {
     const today = formatDateLocal(new Date());
@@ -1510,6 +1525,40 @@ export default function TrainingPage() {
           </div>
         </button>
       </div>
+
+      {/* START RACE banner — only shown when an active race plan exists */}
+      {activePlan && (
+        <button
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('navigate', {
+              detail: { page: 'live-race', racePlanId: activePlan.id }
+            }));
+          }}
+          className="w-full flex items-center gap-4 rounded-2xl px-5 py-4 transition-all hover:brightness-110 active:scale-[0.99]"
+          style={{
+            background: 'linear-gradient(135deg, rgba(74,222,128,0.12) 0%, rgba(34,197,94,0.06) 100%)',
+            border: '1.5px solid rgba(74,222,128,0.35)',
+          }}
+        >
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: 'rgba(74,222,128,0.15)' }}>
+            <Flag className="w-5 h-5 text-green-400" />
+          </div>
+          <div className="flex-1 text-left">
+            <p className="text-sm font-bold text-green-400">
+              {language === 'es' ? 'Plan de carrera activo' : 'Active race plan'}
+            </p>
+            <p className="text-xs text-white/50 mt-0.5 truncate">{activePlan.race_name}</p>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg flex-shrink-0"
+            style={{ background: 'rgba(74,222,128,0.2)' }}>
+            <Play className="w-3.5 h-3.5 text-green-400 fill-current" />
+            <span className="text-xs font-semibold text-green-400">
+              {language === 'es' ? 'Iniciar' : 'Start'}
+            </span>
+          </div>
+        </button>
+      )}
 
       {/* AI Upgrade Modal — inline, no dependency extra */}
       {showAIUpgradeModal && (

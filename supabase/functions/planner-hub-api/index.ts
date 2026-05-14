@@ -1988,6 +1988,104 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // ──────────────────────────────────────────────────────────────────
+    // POST /planner-hub-api/push-race-plan
+    // Endurance planner pushes a race-day fuel plan for an athlete.
+    // Creates or replaces the active race plan for that athlete.
+    // Body: { race_name, sport, distance_km, expected_duration_min,
+    //         target_pace_min_km?, temperature_c?,
+    //         carbs_g_per_hour, fluid_l_per_hour, sodium_mg_per_hour,
+    //         caffeine_total_mg?, caffeine_pre_dose_mg?,
+    //         caffeine_pre_dose_min_before?, caffeine_mid_race_doses?,
+    //         segments?: [{name, duration_min, carbs_g_per_hour?, ...}],
+    //         scheduled_date?, notes? }
+    // ──────────────────────────────────────────────────────────────────
+    if (endpoint === "push-race-plan" && req.method === "POST") {
+      const body = await req.json();
+      const {
+        race_name,
+        sport = "cycling",
+        distance_km,
+        expected_duration_min,
+        target_pace_min_km,
+        temperature_c,
+        carbs_g_per_hour,
+        fluid_l_per_hour,
+        sodium_mg_per_hour,
+        caffeine_total_mg,
+        caffeine_pre_dose_mg,
+        caffeine_pre_dose_min_before,
+        caffeine_mid_race_doses,
+        total_carbs_g,
+        total_fluid_l,
+        total_sodium_mg,
+        segments,
+        scheduled_date,
+        notes,
+        external_plan_id,
+      } = body;
+
+      if (!race_name) {
+        return new Response(JSON.stringify({ error: "race_name is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Deactivate any previous active plan for this athlete
+      await supabaseAdmin
+        .from("race_plans")
+        .update({ is_active: false })
+        .eq("athlete_id", athleteId)
+        .eq("is_active", true);
+
+      const { data: newPlan, error: insertError } = await supabaseAdmin
+        .from("race_plans")
+        .insert({
+          athlete_id: athleteId,
+          race_name,
+          sport,
+          distance_km: distance_km ?? null,
+          expected_duration_min: expected_duration_min ?? null,
+          target_pace_min_km: target_pace_min_km ?? null,
+          temperature_c: temperature_c ?? null,
+          carbs_g_per_hour: carbs_g_per_hour ?? null,
+          fluid_l_per_hour: fluid_l_per_hour ?? null,
+          sodium_mg_per_hour: sodium_mg_per_hour ?? null,
+          caffeine_total_mg: caffeine_total_mg ?? null,
+          caffeine_pre_dose_mg: caffeine_pre_dose_mg ?? null,
+          caffeine_pre_dose_min_before: caffeine_pre_dose_min_before ?? null,
+          caffeine_mid_race_doses: caffeine_mid_race_doses ?? null,
+          total_carbs_g: total_carbs_g ?? null,
+          total_fluid_l: total_fluid_l ?? null,
+          total_sodium_mg: total_sodium_mg ?? null,
+          segments: segments ?? null,
+          scheduled_date: scheduled_date ?? null,
+          notes: notes ?? null,
+          planner_source: plannerInfo.planner_name,
+          external_plan_id: external_plan_id ?? null,
+          is_active: true,
+        })
+        .select("id, race_name, sport, scheduled_date, expected_duration_min")
+        .single();
+
+      if (insertError) throw insertError;
+
+      await logAccess(plannerInfo.id, athleteId, "write", endpoint, 200);
+
+      return new Response(JSON.stringify({
+        success: true,
+        race_plan_id: newPlan.id,
+        race_name: newPlan.race_name,
+        sport: newPlan.sport,
+        scheduled_date: newPlan.scheduled_date,
+        expected_duration_min: newPlan.expected_duration_min,
+        message: "Race plan pushed successfully. Previous active plan deactivated.",
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({
       error: "Unknown endpoint",
       available_endpoints: {

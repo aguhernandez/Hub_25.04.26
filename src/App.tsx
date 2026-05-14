@@ -55,12 +55,13 @@ const FeedbackPage = lazy(() => import('./pages/FeedbackPage'));
 const ActivityHistoryPage = lazy(() => import('./pages/ActivityHistoryPage'));
 const BiologicalPassportPage = lazy(() => import('./pages/BiologicalPassportPage'));
 const TrainerAthleteNutritionPage = lazy(() => import('./pages/TrainerAthleteNutritionPage'));
+const LiveRacePage = lazy(() => import('./pages/LiveRacePage'));
 import AdaptiveNavigation from './components/AdaptiveNavigation';
 import PWAInstallPrompt from './components/PWAInstallPrompt';
 import AppUpdateBanner from './components/AppUpdateBanner';
 import { removePushListeners, deletePushToken } from './services/pushNotificationService';
 
-type Page = 'dashboard' | 'training' | 'activity-history' | 'nutrition' | 'nutrition-dashboard' | 'habits' | 'bioimpedance' | 'chat' | 'membership' | 'book' | 'events' | 'brand' | 'discover' | 'brand-dashboard' | 'invoices' | 'incoming-requests' | 'settings' | 'exercises' | 'workout-builder' | 'programs' | 'about-asciende' | 'teams' | 'my-teams' | 'my-athletes' | 'athlete-profile' | 'feedback-analytics' | 'performance' | 'program-builder' | 'program-builder-detail' | 'programs-marketplace' | 'atp' | 'impact' | 'admin' | 'brand-requests' | 'marketplace' | 'services' | 'goals' | 'admin-platform-dashboard' | 'admin-communications' | 'admin-brands' | 'admin-users' | 'admin-library' | 'admin-stripe' | 'admin-memberships' | 'admin-projects' | 'admin-foods' | 'memberships-marketplace' | 'exercise-management' | 'external-activities' | 'feedback' | 'biological-passport' | 'trainer-athlete-nutrition';
+type Page = 'dashboard' | 'training' | 'activity-history' | 'nutrition' | 'nutrition-dashboard' | 'habits' | 'bioimpedance' | 'chat' | 'membership' | 'book' | 'events' | 'brand' | 'discover' | 'brand-dashboard' | 'invoices' | 'incoming-requests' | 'settings' | 'exercises' | 'workout-builder' | 'programs' | 'about-asciende' | 'teams' | 'my-teams' | 'my-athletes' | 'athlete-profile' | 'feedback-analytics' | 'performance' | 'program-builder' | 'program-builder-detail' | 'programs-marketplace' | 'atp' | 'impact' | 'admin' | 'brand-requests' | 'marketplace' | 'services' | 'goals' | 'admin-platform-dashboard' | 'admin-communications' | 'admin-brands' | 'admin-users' | 'admin-library' | 'admin-stripe' | 'admin-memberships' | 'admin-projects' | 'admin-foods' | 'memberships-marketplace' | 'exercise-management' | 'external-activities' | 'feedback' | 'biological-passport' | 'trainer-athlete-nutrition' | 'live-race';
 
 const SATELLITE_ORIGINS = [
   'lab.asciende.pro',
@@ -83,6 +84,7 @@ function isSatelliteOrigin(url: string): boolean {
 function App() {
   const { user, loading, profile } = useAuth();
   const [programId, setProgramId] = useState<string | null>(null);
+  const [racePlanId, setRacePlanId] = useState<string | null>(null);
   const [splashVisible, setSplashVisible] = useState(true);
   const [splashSkipAnimation, setSplashSkipAnimation] = useState(false);
   const [selectedSatelliteId, setSelectedSatelliteId] = useState<string | null | undefined>(undefined);
@@ -140,6 +142,9 @@ function App() {
         setCurrentPage(e.detail.page);
         if (e.detail.programId) {
           setProgramId(e.detail.programId);
+        }
+        if (e.detail.racePlanId !== undefined) {
+          setRacePlanId(e.detail.racePlanId);
         }
       } else {
         setCurrentPage(e.detail);
@@ -219,6 +224,13 @@ function App() {
 
   const renderPage = () => {
     switch (currentPage) {
+      case 'live-race':
+        return (
+          <LiveRacePage
+            planId={racePlanId}
+            onBack={() => { setCurrentPage('training'); setRacePlanId(null); }}
+          />
+        );
       case 'training':
         return <TrainingPage />;
       case 'activity-history':
