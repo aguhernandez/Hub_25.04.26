@@ -3,8 +3,10 @@ import { supabase } from '../../lib/supabase';
 import {
   Play, Pause, X, CheckCircle,
   ChevronRight, ChevronLeft, AlertTriangle, MapPin, Clock, Zap, Mountain, Flag,
-  Flame, Timer, ChevronDown, ChevronUp, RotateCcw, BatteryCharging, WifiOff
+  Flame, Timer, ChevronDown, ChevronUp, RotateCcw, BatteryCharging, WifiOff,
+  Droplets, Coffee, Sandwich
 } from 'lucide-react';
+import { type RacePlan, type FuelAlert, buildFuelSchedule } from '../../utils/fuelSchedule';
 import { useGPSPermission } from '../../hooks/useGPSPermission';
 import {
   calculateTotalDistance,
@@ -34,6 +36,16 @@ interface ActivityRecorderProps {
   onClose: () => void;
   onSave: (data: ActivityRecorderData) => Promise<void>;
   plannedWorkout?: EnduranceWorkout | null;
+  racePlan?: RacePlan | null;
+}
+
+export interface ConsumedFuelEntry {
+  time_min: number;
+  label: string;
+  carbs_g: number;
+  fluid_ml: number;
+  sodium_mg: number;
+  caffeine_mg: number;
 }
 
 export interface ActivityRecorderData {
@@ -52,6 +64,8 @@ export interface ActivityRecorderData {
   isPublic: boolean;
   local_date: string;
   planned_workout_id?: string | null;
+  race_plan_id?: string | null;
+  consumedFuel?: ConsumedFuelEntry[];
   feedback?: {
     rpe: number;
     energy_level: string;
@@ -79,7 +93,7 @@ const SPORT_TYPES = [
 
 type RecorderPhase = 'setup' | 'recording' | 'paused' | 'details' | 'feedback' | 'done';
 
-export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorkout }: ActivityRecorderProps) {
+export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorkout, racePlan }: ActivityRecorderProps) {
   const { language } = useLanguage();
   const { requestGPSPermission } = useGPSPermission();
 
@@ -127,6 +141,12 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
   const [workoutPanelExpanded, setWorkoutPanelExpanded] = useState(true);
   const stepScrollRef = useRef<HTMLDivElement>(null);
   const activeStepRef = useRef<HTMLDivElement>(null);
+
+  // Race plan fuel alerts
+  const [fuelAlerts, setFuelAlerts] = useState<FuelAlert[]>([]);
+  const [fuelPanelExpanded, setFuelPanelExpanded] = useState(true);
+  const [activeFuelFlash, setActiveFuelFlash] = useState<FuelAlert | null>(null);
+  const [consumedFuel, setConsumedFuel] = useState<ConsumedFuelEntry[]>([]);
 
   const watchIdRef = useRef<number | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -188,6 +208,44 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
       setTimeout(() => ctx.close(), 600);
     } catch {}
   };
+
+  // Build fuel alerts when racePlan changes
+  useEffect(() => {
+    if (!racePlan) { setFuelAlerts([]); return; }
+    setFuelAlerts(buildFuelSchedule(racePlan));
+  }, [racePlan]);
+
+  // Fuel alert follower: check every second if an unacknowledged alert should fire
+  useEffect(() => {
+    if (!isRecording || !fuelAlerts.length) return;
+    const elapsedMin = durationSeconds / 60;
+    const nextAlert = fuelAlerts.find(a => !a.acknowledged && a.time_min > 0 && elapsedMin >= a.time_min);
+    if (nextAlert) {
+      // Mark as acknowledged in state
+      setFuelAlerts(prev => prev.map(a => a === nextAlert ? { ...a, acknowledged: true } : a));
+      // Play fuel beep — lower softer tone (3 pulses)
+      try {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const playTone = (freq: number, start: number, dur: number, gain: number) => {
+          const osc = ctx.createOscillator();
+          const vol = ctx.createGain();
+          osc.connect(vol); vol.connect(ctx.destination);
+          osc.type = 'sine'; osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+          vol.gain.setValueAtTime(0, ctx.currentTime + start);
+          vol.gain.linearRampToValueAtTime(gain, ctx.currentTime + start + 0.02);
+          vol.gain.linearRampToValueAtTime(0, ctx.currentTime + start + dur);
+          osc.start(ctx.currentTime + start); osc.stop(ctx.currentTime + start + dur);
+        };
+        playTone(660, 0,    0.15, 0.5);
+        playTone(660, 0.20, 0.15, 0.5);
+        playTone(880, 0.40, 0.20, 0.6);
+        setTimeout(() => ctx.close(), 900);
+      } catch {}
+      // Show flash notification for 6 seconds
+      setActiveFuelFlash(nextAlert);
+      setTimeout(() => setActiveFuelFlash(null), 6000);
+    }
+  }, [durationSeconds]);
 
   // Step follower: advance stepElapsed every second while recording
   useEffect(() => {
@@ -422,6 +480,8 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
     setFeedbackStep(1); setFeedback({ rpe: 5, energy_level: 'normal', pain_level: 'none', mood: 'normal', feedback_notes: '' });
     setLapPointIndices([]); setWarmUpEndIndex(null); setExcludeWarmUp(false);
     setRecoveredSession(null);
+    setConsumedFuel([]); setActiveFuelFlash(null);
+    if (racePlan) setFuelAlerts(buildFuelSchedule(racePlan));
   };
 
   const handleLap = () => {
@@ -466,6 +526,8 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
         distanceKm, durationSeconds, elevationGainM, isPublic,
         local_date: localDate,
         planned_workout_id: plannedWorkout?.id ?? null,
+        race_plan_id: racePlan?.id ?? null,
+        consumedFuel: consumedFuel.length > 0 ? consumedFuel : undefined,
         feedback,
       };
 
@@ -581,6 +643,7 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
         data={savedData}
         activityId={savedActivityId}
         plannedWorkout={plannedWorkout}
+        racePlanName={racePlan?.race_name ?? null}
         onShare={() => setShowShareCard(true)}
         onClose={handleClose}
       />
@@ -970,6 +1033,7 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
     const safeTop = 'env(safe-area-inset-top, 20px)';
     const safeBottom = 'env(safe-area-inset-bottom, 24px)';
     const hasPlanned = !!(plannedWorkout?.steps?.length);
+    const hasRacePlan = !!(racePlan && fuelAlerts.length > 0);
     const steps = plannedWorkout?.steps ?? [];
     const currentStep = steps[activeStepIndex] ?? null;
     const currentStepStyle = currentStep ? (STEP_STYLES[currentStep.step_type] ?? STEP_STYLES.steady) : null;
@@ -978,12 +1042,12 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
 
     return (
       <div className="fixed inset-0 z-50 bg-black" style={{ display: 'flex', flexDirection: 'column' }}>
-        {/* Map — smaller when planned workout is shown */}
+        {/* Map — smaller when planned workout or race plan is shown */}
         <div
           ref={mapContainerRef}
           style={{
-            flex: hasPlanned ? '0 0 auto' : 1,
-            height: hasPlanned ? '38vh' : undefined,
+            flex: (hasPlanned || hasRacePlan) ? '0 0 auto' : 1,
+            height: (hasPlanned || hasRacePlan) ? '38vh' : undefined,
             minHeight: 0,
             position: 'relative',
             zIndex: 1,
@@ -1155,6 +1219,89 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
           </div>
         )}
 
+        {/* ── Race Plan Fuel Alert Panel ────────────────────────────────── */}
+        {hasRacePlan && (() => {
+          const elapsedMin = durationSeconds / 60;
+          const nextAlert = fuelAlerts.find(a => !a.acknowledged && a.time_min > 0);
+          const minToNext = nextAlert ? Math.max(0, nextAlert.time_min - elapsedMin) : null;
+          const doneCount = fuelAlerts.filter(a => a.acknowledged).length;
+          const totalCount = fuelAlerts.filter(a => a.time_min > 0).length;
+          const progressFrac = totalCount > 0 ? doneCount / totalCount : 0;
+
+          return (
+            <div className="flex-shrink-0 bg-gray-950 border-t border-white/10" style={{ zIndex: 2000, position: 'relative' }}>
+              {/* Header */}
+              <div className="px-4 pt-3 pb-2 cursor-pointer select-none" onClick={() => setFuelPanelExpanded(e => !e)}>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Flag className="w-4 h-4 text-yellow-400 flex-shrink-0" />
+                    <span className="text-white text-sm font-bold truncate">{racePlan!.race_name}</span>
+                    {nextAlert && (
+                      <span className="text-yellow-400 text-xs font-semibold flex-shrink-0">
+                        {minToNext !== null && minToNext <= 2
+                          ? (language === 'es' ? 'AHORA' : 'NOW')
+                          : nextAlert.label.length > 28 ? nextAlert.label.slice(0, 28) + '…' : nextAlert.label}
+                      </span>
+                    )}
+                    {!nextAlert && (
+                      <span className="text-green-400 text-xs font-semibold flex-shrink-0">
+                        {language === 'es' ? 'Plan completado' : 'Plan complete'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                    <span className="text-white/40 text-xs">{doneCount}/{totalCount}</span>
+                    {fuelPanelExpanded ? <ChevronDown className="w-4 h-4 text-white/50" /> : <ChevronUp className="w-4 h-4 text-white/50" />}
+                  </div>
+                </div>
+                {/* Overall fuel progress bar */}
+                <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-1000 bg-yellow-400" style={{ width: `${progressFrac * 100}%` }} />
+                </div>
+              </div>
+
+              {/* Scrollable alert list */}
+              {fuelPanelExpanded && (
+                <div className="overflow-y-auto px-3 pb-2" style={{ maxHeight: '22vh' }}>
+                  {fuelAlerts.filter(a => a.time_min > 0).map((alert, idx) => {
+                    const isNext = alert === nextAlert;
+                    const isDone = alert.acknowledged;
+                    const atMin = alert.time_min;
+                    const h = Math.floor(atMin / 60);
+                    const m = atMin % 60;
+                    const timeLabel = h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m}min`;
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl mb-1.5 transition-all"
+                        style={{
+                          backgroundColor: isNext ? 'rgba(234,179,8,0.12)' : 'transparent',
+                          border: isNext ? '1px solid rgba(234,179,8,0.4)' : '1px solid transparent',
+                          opacity: isDone ? 0.4 : 1,
+                        }}
+                      >
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: isDone ? '#4b5563' : '#EAB308' }} />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs font-semibold" style={{ color: isNext ? '#EAB308' : isDone ? '#6b7280' : '#d1d5db' }}>
+                            {alert.label}
+                          </span>
+                          <div className="flex gap-2 mt-0.5">
+                            {alert.carbs_g > 0 && <span className="text-[10px] text-white/30">{alert.carbs_g}g</span>}
+                            {alert.fluid_ml > 0 && <span className="text-[10px] text-white/30">{alert.fluid_ml}ml</span>}
+                            {alert.caffeine_mg > 0 && <span className="text-[10px] text-yellow-500/60">{alert.caffeine_mg}mg caf</span>}
+                          </div>
+                        </div>
+                        <span className="text-xs flex-shrink-0" style={{ color: isNext ? '#fdda36' : '#6b7280' }}>{timeLabel}</span>
+                        {isDone && <CheckCircle className="w-3.5 h-3.5 flex-shrink-0 text-white/30" />}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
         {/* Controls panel — fixed at bottom, always visible */}
         <div
           className="flex-shrink-0 bg-black"
@@ -1252,6 +1399,41 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
             style={{ zIndex: 3000 }}>
             <Timer className="w-4 h-4 text-blue-600" />
             {lapFlash}
+          </div>
+        )}
+
+        {/* Fuel alert flash notification */}
+        {activeFuelFlash && (
+          <div
+            className="absolute left-1/2 -translate-x-1/2 pointer-events-auto"
+            style={{ top: 'max(80px, calc(env(safe-area-inset-top, 20px) + 60px))', zIndex: 3000, minWidth: 260, maxWidth: '90vw' }}
+          >
+            <button
+              onClick={() => {
+                setConsumedFuel(prev => [...prev, {
+                  time_min: activeFuelFlash.time_min,
+                  label: activeFuelFlash.label,
+                  carbs_g: activeFuelFlash.carbs_g,
+                  fluid_ml: activeFuelFlash.fluid_ml,
+                  sodium_mg: activeFuelFlash.sodium_mg,
+                  caffeine_mg: activeFuelFlash.caffeine_mg,
+                }]);
+                setActiveFuelFlash(null);
+              }}
+              className="w-full bg-yellow-500 text-gray-900 px-5 py-3.5 rounded-2xl shadow-2xl font-bold text-sm flex flex-col gap-1.5 border-2 border-yellow-300 active:scale-95 transition-all"
+            >
+              <div className="flex items-center gap-2">
+                <Flag className="w-5 h-5 flex-shrink-0" />
+                <span className="text-base font-black">{language === 'es' ? 'COMBUSTIBLE' : 'FUEL UP'}</span>
+                <span className="ml-auto text-xs font-bold opacity-70">{language === 'es' ? 'TAP para confirmar' : 'TAP to confirm'}</span>
+              </div>
+              <span className="text-sm font-semibold opacity-90 truncate">{activeFuelFlash.label}</span>
+              <div className="flex items-center gap-3 text-xs opacity-80">
+                {activeFuelFlash.carbs_g > 0 && <span className="flex items-center gap-1"><Sandwich className="w-3 h-3" />{activeFuelFlash.carbs_g}g carbs</span>}
+                {activeFuelFlash.fluid_ml > 0 && <span className="flex items-center gap-1"><Droplets className="w-3 h-3" />{activeFuelFlash.fluid_ml}ml</span>}
+                {activeFuelFlash.caffeine_mg > 0 && <span className="flex items-center gap-1"><Coffee className="w-3 h-3" />{activeFuelFlash.caffeine_mg}mg caf</span>}
+              </div>
+            </button>
           </div>
         )}
 

@@ -1060,6 +1060,20 @@ export default function TrainingPage() {
   };
 
   const openWorkoutModal = async (workout: Workout) => {
+    // Race plan items — load full plan and open GPS recorder with fuel alerts
+    if ((workout as any).type === 'race_plan') {
+      const planId = (workout as any).race_plan_id;
+      if (!planId) return;
+      const { data: fullPlan } = await supabase
+        .from('race_plans')
+        .select('*')
+        .eq('id', planId)
+        .maybeSingle();
+      if (!fullPlan) return;
+      window.dispatchEvent(new CustomEvent('openActivityRecorder', { detail: { racePlan: fullPlan } }));
+      return;
+    }
+
     // If it's an external activity, check if it's a GPS activity first
     if (workout.type === 'external') {
       const raw = (workout as any).raw_data;

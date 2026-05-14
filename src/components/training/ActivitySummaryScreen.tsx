@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Trophy, Share2, X, MapPin, Clock, Zap, Mountain, ChevronDown, ChevronUp,
-  TrendingUp, Heart, Flame, BarChart3, CheckCircle
+  TrendingUp, Heart, Flame, BarChart3, CheckCircle, Flag, Droplets, Coffee, Sandwich
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -15,6 +15,7 @@ interface ActivitySummaryScreenProps {
   onClose: () => void;
   activityId?: string | null;
   plannedWorkout?: EnduranceWorkout | null;
+  racePlanName?: string | null;
 }
 
 const SPORT_META: Record<string, { color: string; isBike: boolean; isSwim: boolean }> = {
@@ -278,7 +279,7 @@ const ZONE_NAMES_ES = ['Zona 1', 'Zona 2', 'Zona 3', 'Zona 4', 'Zona 5'];
 const ZONE_DESC_EN = ['Recovery', 'Aerobic', 'Tempo', 'Threshold', 'VO2 Max'];
 const ZONE_DESC_ES = ['Recuperación', 'Aeróbico', 'Tempo', 'Umbral', 'VO2 Máx'];
 
-export default function ActivitySummaryScreen({ data, onShare, onClose, activityId, plannedWorkout }: ActivitySummaryScreenProps) {
+export default function ActivitySummaryScreen({ data, onShare, onClose, activityId, plannedWorkout, racePlanName }: ActivitySummaryScreenProps) {
   const { language } = useLanguage();
   const { profile } = useAuth();
   const [showSplits, setShowSplits] = useState(false);
@@ -589,6 +590,54 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
                   <div className="text-xs font-bold text-white capitalize">{data.feedback.mood.replace('_', ' ')}</div>
                   <div className="text-[10px] text-white/40">{language === 'es' ? 'Ánimo' : 'Mood'}</div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Consumed fuel log (race plans) */}
+          {data.consumedFuel && data.consumedFuel.length > 0 && (
+            <div className="rounded-2xl border border-white/8 p-4" style={{ background: '#ffffff06' }}>
+              <div className="flex items-center gap-2 mb-3">
+                <Flag className="w-4 h-4 text-yellow-400" />
+                <h3 className="text-xs font-bold text-white/60 uppercase tracking-widest">
+                  {racePlanName ? racePlanName : (language === 'es' ? 'Plan de Carrera' : 'Race Plan')}
+                  {' — '}
+                  {language === 'es' ? 'Combustible consumido' : 'Fuel consumed'}
+                </h3>
+              </div>
+              {/* Totals row */}
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="text-center">
+                  <div className="text-lg font-black text-white">{data.consumedFuel.reduce((s, e) => s + e.carbs_g, 0)}g</div>
+                  <div className="text-[10px] text-white/40">{language === 'es' ? 'Carbos' : 'Carbs'}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-black text-white">{Math.round(data.consumedFuel.reduce((s, e) => s + e.fluid_ml, 0) / 100) / 10}L</div>
+                  <div className="text-[10px] text-white/40">{language === 'es' ? 'Líquido' : 'Fluid'}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-black text-white">{data.consumedFuel.reduce((s, e) => s + e.caffeine_mg, 0)}mg</div>
+                  <div className="text-[10px] text-white/40">{language === 'es' ? 'Cafeína' : 'Caffeine'}</div>
+                </div>
+              </div>
+              {/* Timeline list */}
+              <div className="space-y-1.5">
+                {data.consumedFuel.map((entry, i) => {
+                  const h = Math.floor(entry.time_min / 60);
+                  const m = entry.time_min % 60;
+                  const t = h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m}min`;
+                  return (
+                    <div key={i} className="flex items-center gap-2 text-xs">
+                      <span className="text-white/30 font-mono w-10 flex-shrink-0">{t}</span>
+                      <span className="text-white/70 flex-1 truncate">{entry.label}</span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {entry.carbs_g > 0 && <span className="flex items-center gap-0.5 text-yellow-400/70"><Sandwich className="w-3 h-3" />{entry.carbs_g}g</span>}
+                        {entry.fluid_ml > 0 && <span className="flex items-center gap-0.5 text-blue-400/70"><Droplets className="w-3 h-3" />{entry.fluid_ml}ml</span>}
+                        {entry.caffeine_mg > 0 && <span className="flex items-center gap-0.5 text-orange-400/70"><Coffee className="w-3 h-3" />{entry.caffeine_mg}mg</span>}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

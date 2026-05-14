@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Play, History } from 'lucide-react';
 import ActivityRecorder from './ActivityRecorder';
 import { type EnduranceWorkout } from './EnduranceWorkoutCard';
+import { type RacePlan } from '../../utils/fuelSchedule';
 import { useActivityRecording } from '../../hooks/useActivityRecording';
 import { useToast } from '../../hooks/useToast';
 
 export default function ActivityRecordingSection() {
   const [isRecorderOpen, setIsRecorderOpen] = useState(false);
   const [pendingPlannedWorkout, setPendingPlannedWorkout] = useState<EnduranceWorkout | null>(null);
+  const [pendingRacePlan, setPendingRacePlan] = useState<RacePlan | null>(null);
   const { saveActivity } = useActivityRecording();
   const { showToast } = useToast();
 
@@ -16,8 +18,13 @@ export default function ActivityRecordingSection() {
       const detail = (e as CustomEvent).detail;
       if (detail?.plannedWorkout) {
         setPendingPlannedWorkout(detail.plannedWorkout);
+        setPendingRacePlan(null);
+      } else if (detail?.racePlan) {
+        setPendingRacePlan(detail.racePlan);
+        setPendingPlannedWorkout(null);
       } else {
         setPendingPlannedWorkout(null);
+        setPendingRacePlan(null);
       }
       setIsRecorderOpen(true);
     };
@@ -84,9 +91,11 @@ export default function ActivityRecordingSection() {
         onClose={() => {
           setIsRecorderOpen(false);
           setPendingPlannedWorkout(null);
+          setPendingRacePlan(null);
         }}
         onSave={handleSaveActivity}
         plannedWorkout={pendingPlannedWorkout}
+        racePlan={pendingRacePlan}
       />
     </>
   );
