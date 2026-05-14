@@ -617,13 +617,41 @@ export default function TrainingPage() {
         });
       });
 
+      // Load race plans — show on their race_date or scheduled_date
+      const { data: racePlansData } = await supabase
+        .from('race_plans')
+        .select('id, race_name, sport, race_date, scheduled_date, expected_duration_min, distance_km, is_active')
+        .eq('athlete_id', effectiveAthleteId)
+        .order('created_at', { ascending: false });
+
+      const formattedRacePlans: any[] = (racePlansData || []).map((rp: any) => {
+        const dateStr = (rp.race_date || rp.scheduled_date || '').substring(0, 10);
+        return {
+          id: `race-plan-${rp.id}`,
+          race_plan_id: rp.id,
+          name: rp.race_name || (language === 'es' ? 'Carrera' : 'Race'),
+          description: [
+            rp.distance_km ? `${rp.distance_km} km` : '',
+            rp.expected_duration_min ? `${Math.floor(rp.expected_duration_min / 60)}h${rp.expected_duration_min % 60 > 0 ? String(rp.expected_duration_min % 60).padStart(2, '0') : ''}` : '',
+          ].filter(Boolean).join(' · '),
+          scheduled_date: dateStr,
+          status: 'planned',
+          source: 'race_plan',
+          sport: rp.sport || 'triathlon',
+          is_active: rp.is_active,
+          type: 'race_plan',
+          exercises: [],
+        };
+      }).filter((rp: any) => rp.scheduled_date >= startDateStr && rp.scheduled_date <= endDateStr);
+
       // Combine all activities
       const allActivities = [
         ...formattedWorkouts,
         ...formattedCompletedWorkouts,
         ...formattedExtra,
         ...formattedExternal,
-        ...formattedEndurancePlans
+        ...formattedEndurancePlans,
+        ...formattedRacePlans
       ].sort((a, b) => {
         return parseDateStr(a.scheduled_date).getTime() - parseDateStr(b.scheduled_date).getTime();
       });

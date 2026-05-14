@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   ChevronLeft, ChevronRight, Dumbbell, Activity, MoreVertical,
   Copy, Trash2, Plus, CreditCard as Edit, Bike, PersonStanding, Waves,
-  ChevronDown, Heart, CheckCircle2
+  ChevronDown, Heart, CheckCircle2, Flag
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -92,6 +92,7 @@ function getSessionDotColor(workout: any): string {
 }
 
 function getWorkoutDotColor(workout: any): string {
+  if (workout.type === 'race_plan') return '#EAB308';
   if (workout.source === 'trainingpeaks') return '#3B82F6';
   if (workout.source === 'asciende_gps') return '#14B8A6';
   if (workout.source === 'strava') return '#EF4444';
@@ -481,14 +482,38 @@ export default function TrainingCalendar({
 
           {selectedDayActivities.length > 0 ? (
             <div className="space-y-2">
-              {selectedDayActivities.map((workout, idx) => (
-                <WorkoutDetailCard
-                  key={workout.id || idx}
-                  workout={workout}
-                  language={language}
-                  onClick={() => { if (onWorkoutClick) onWorkoutClick(workout); }}
-                />
-              ))}
+              {selectedDayActivities.map((workout, idx) => {
+                if (workout.type === 'race_plan') {
+                  return (
+                    <button
+                      key={workout.id || idx}
+                      onClick={() => { if (onWorkoutClick) onWorkoutClick(workout); }}
+                      className="w-full text-left bg-yellow-50 dark:bg-yellow-900/20 rounded-xl border border-yellow-200 dark:border-yellow-700 p-3 hover:shadow-md transition-shadow active:scale-[0.99]"
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Flag className="w-4 h-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                        <span className="font-bold text-sm text-yellow-900 dark:text-yellow-200 truncate">{workout.name}</span>
+                        {workout.is_active && (
+                          <span className="ml-auto text-[10px] font-semibold bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                            {language === 'es' ? 'ACTIVO' : 'ACTIVE'}
+                          </span>
+                        )}
+                      </div>
+                      {workout.description && (
+                        <p className="text-xs text-yellow-700 dark:text-yellow-400">{workout.description}</p>
+                      )}
+                    </button>
+                  );
+                }
+                return (
+                  <WorkoutDetailCard
+                    key={workout.id || idx}
+                    workout={workout}
+                    language={language}
+                    onClick={() => { if (onWorkoutClick) onWorkoutClick(workout); }}
+                  />
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-4">
@@ -607,6 +632,24 @@ export default function TrainingCalendar({
                       : workout.status === 'skipped' ? 'bg-neutral-400'
                       : 'bg-[#fdda36]';
 
+                    if (workout.type === 'race_plan') {
+                      return (
+                        <div
+                          key={workout.id || idx}
+                          onClick={(e) => { e.stopPropagation(); if (onWorkoutClick) onWorkoutClick(workout); }}
+                          className="text-xs p-1.5 rounded bg-yellow-100 dark:bg-yellow-900/30 border-l-2 border-yellow-500 cursor-pointer hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex items-center gap-1">
+                            <Flag className="w-3 h-3 flex-shrink-0 text-yellow-600 dark:text-yellow-400" />
+                            <span className="font-semibold text-yellow-800 dark:text-yellow-300 truncate text-[10px]">{workout.name}</span>
+                          </div>
+                          {workout.description && (
+                            <p className="text-[9px] text-yellow-700 dark:text-yellow-400 mt-0.5 truncate">{workout.description}</p>
+                          )}
+                        </div>
+                      );
+                    }
+
                     if (workout.type === 'endurance_plan') {
                       const cs = getEnduranceCardStyle(workout);
                       return (
@@ -719,6 +762,10 @@ export default function TrainingCalendar({
           <div className="flex items-center gap-2">
             <Activity className="w-3 h-3 text-cyan-500" />
             <span className="text-gray-600 dark:text-gray-400">Endurance Planner</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Flag className="w-3 h-3 text-yellow-500" />
+            <span className="text-gray-600 dark:text-gray-400">{language === 'es' ? 'Plan de Carrera' : 'Race Plan'}</span>
           </div>
         </div>
       </div>
