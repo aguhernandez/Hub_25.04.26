@@ -626,7 +626,7 @@ export default function TrainingPage() {
         .order('created_at', { ascending: false });
 
       const formattedRacePlans: any[] = (racePlansData || []).map((rp: any) => {
-        const dateStr = (rp.race_date || rp.scheduled_date || rp.created_at || '').substring(0, 10);
+        const dateStr = (rp.race_date || rp.scheduled_date || '').substring(0, 10);
         return {
           id: `race-plan-${rp.id}`,
           race_plan_id: rp.id,
@@ -1001,13 +1001,15 @@ export default function TrainingPage() {
                       )}
                     </div>
                     )}
+                    {workout.type !== 'race_plan' && workout.source !== 'race_plan' && (
                     <button
                       onClick={() => setContextMenuWorkout(contextMenuWorkout === workout.id ? null : workout.id)}
                       className="absolute top-1 right-1 p-1 opacity-0 group-hover:opacity-100 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded transition-opacity"
                     >
                       <MoreVertical className="w-3 h-3" />
                     </button>
-                    {contextMenuWorkout === workout.id && (
+                    )}
+                    {contextMenuWorkout === workout.id && workout.type !== 'race_plan' && (
                       <div className="absolute right-0 top-8 z-10 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 min-w-[160px]">
                         <button
                           onClick={() => handleEditWorkout(workout)}
