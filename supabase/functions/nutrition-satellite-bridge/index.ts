@@ -8,6 +8,11 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req: Request) => {
+  console.log("DEBUG: Incoming request");
+  console.log("DEBUG: Method:", req.method);
+  console.log("DEBUG: URL:", req.url);
+  console.log("DEBUG: Headers:", Array.from(req.headers.entries()));
+
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
@@ -16,8 +21,12 @@ Deno.serve(async (req: Request) => {
     let authHeader = req.headers.get("Authorization");
     const plannerToken = req.headers.get("X-Planner-Token");
 
+    console.log("DEBUG: authHeader:", authHeader);
+    console.log("DEBUG: plannerToken:", plannerToken);
+
     if (!authHeader && plannerToken) {
       authHeader = `Bearer ${plannerToken}`;
+      console.log("DEBUG: Using plannerToken as Bearer token");
     }
 
     if (!authHeader) {
@@ -39,8 +48,11 @@ Deno.serve(async (req: Request) => {
     );
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
+    console.log("DEBUG: Auth error:", authError);
+    console.log("DEBUG: User:", user?.id);
+
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      return new Response(JSON.stringify({ error: "Unauthorized", details: authError?.message }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -53,14 +65,21 @@ Deno.serve(async (req: Request) => {
     const dateFrom = url.searchParams.get("date_from");
     const dateTo = url.searchParams.get("date_to");
 
+    console.log("DEBUG: Endpoint:", endpoint);
+    console.log("DEBUG: athleteEmail:", athleteEmail);
+
     // POST /nutrition-satellite-bridge/push-nutrition-plan
     // Receives a full nutrition plan from the Nutrition Satellite and stores it
     if (endpoint === "push-nutrition-plan" && req.method === "POST") {
+      console.log("DEBUG: Handling push-nutrition-plan");
+
       const { data: pusherProfile } = await serviceSupabase
         .from("profiles")
         .select("id, role")
         .eq("id", user.id)
         .maybeSingle();
+
+      console.log("DEBUG: Pusher profile:", pusherProfile);
 
       if (!pusherProfile || !["trainer", "admin"].includes(pusherProfile.role)) {
         return new Response(JSON.stringify({ error: "Only trainers and admins can push nutrition plans" }), {
@@ -70,10 +89,18 @@ Deno.serve(async (req: Request) => {
       }
 
       const body = await req.json();
+      console.log("DEBUG: Request body keys:", Object.keys(body));
+      console.log("DEBUG: Full body:", JSON.stringify(body, null, 2));
+
       const { plan_date, plan_name, plan_duration_days, summary, plan_data, notes } = body;
 
+      console.log("DEBUG: Extracted fields - plan_date:", plan_date, "summary:", !!summary, "plan_data:", !!plan_data);
+
       if (!plan_date || !summary || !plan_data) {
-        return new Response(JSON.stringify({ error: "Missing required fields: plan_date, summary, plan_data" }), {
+        return new Response(JSON.stringify({
+          error: "Missing required fields: plan_date, summary, plan_data",
+          received: { plan_date, summary: !!summary, plan_data: !!plan_data }
+        }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
