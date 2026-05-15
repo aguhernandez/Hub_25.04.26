@@ -13,7 +13,13 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
+    let authHeader = req.headers.get("Authorization");
+    const plannerToken = req.headers.get("X-Planner-Token");
+
+    if (!authHeader && plannerToken) {
+      authHeader = `Bearer ${plannerToken}`;
+    }
+
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Missing authorization" }), {
         status: 401,
