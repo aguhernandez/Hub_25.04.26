@@ -122,7 +122,7 @@ Deno.serve(async (req: Request) => {
         carbs_g_per_hour: body.carbs_g_per_hour ?? null,
         total_carbs_g: body.total_carbs_g ?? null,
         carb_sources: body.carb_sources ?? null,
-        carb_timing: body.carb_timing ?? null,
+        carb_timing: typeof body.carb_timing === "string" ? body.carb_timing : (body.carb_timing ? JSON.stringify(body.carb_timing) : null),
 
         // Hydration strategy
         fluid_l_per_hour: body.fluid_l_per_hour ?? null,
@@ -145,7 +145,7 @@ Deno.serve(async (req: Request) => {
         pre_comp_notes: body.pre_comp_notes ?? null,
         cho_loading_days: body.cho_loading_days ?? null,
         pre_comp_days: body.pre_comp_days ?? null,
-        race_breakfast_timing: typeof body.race_breakfast_timing === "number" ? body.race_breakfast_timing : null,
+        race_breakfast_timing: body.race_breakfast_timing ?? null,
         race_breakfast_description: body.race_breakfast_description ?? null,
         race_breakfast_carbs_g: body.race_breakfast_carbs_g ?? null,
 
