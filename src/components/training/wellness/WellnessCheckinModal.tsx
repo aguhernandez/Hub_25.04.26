@@ -75,8 +75,9 @@ function computeWellnessScore(d: WellnessData): number {
     d.prs * 0.20 +
     sleepDurationScore * 0.12;
 
+  // fatigue_level_10 is now 10=no fatigue, 1=exhausted — invert for penalty calculation
   const negatives =
-    d.fatigue_level_10 * 0.14 +
+    (11 - d.fatigue_level_10) * 0.14 +
     d.stress_level_10 * 0.10 +
     avgSoreness * 0.11;
 
@@ -243,7 +244,7 @@ export default function WellnessCheckinModal({ onClose, onComplete, athleteId }:
           rhr: data.rhr,
           general_notes: data.general_notes || null,
           wellness_score_100: score,
-          ready_to_train: data.prs >= 5 && data.fatigue_level_10 <= 6,
+          ready_to_train: data.prs >= 5 && data.fatigue_level_10 >= 5,
         }, { onConflict: 'athlete_id,checkin_date' })
         .select('id')
         .single();
@@ -307,9 +308,8 @@ export default function WellnessCheckinModal({ onClose, onComplete, athleteId }:
             label={t('Fatiga general', 'General fatigue')}
             value={data.fatigue_level_10}
             onChange={v => setData(d => ({ ...d, fatigue_level_10: v }))}
-            inverted
-            lowLabel={t('Sin fatiga', 'No fatigue')}
-            highLabel={t('Agotado', 'Exhausted')}
+            lowLabel={t('Agotado', 'Exhausted')}
+            highLabel={t('Sin fatiga', 'No fatigue')}
           />
           <SliderField
             label={t('Motivación para entrenar', 'Motivation to train')}

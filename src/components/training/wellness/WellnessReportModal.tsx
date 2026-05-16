@@ -213,7 +213,7 @@ export default function WellnessReportModal({ entry, athleteName, onClose, onEdi
               {t('Fatiga & Recuperación', 'Fatigue & Recovery')}
             </h3>
             <div className="space-y-2">
-              {fatigue !== null && <MetricBar value={fatigue} max={10} inverted label={t('Fatiga', 'Fatigue')} />}
+              {fatigue !== null && <MetricBar value={fatigue} max={10} label={t('Fatiga', 'Fatigue')} />}
               {motivation !== null && <MetricBar value={motivation} max={10} label={t('Motivación', 'Motivation')} />}
               {entry.prs !== null && entry.prs !== undefined && <MetricBar value={entry.prs} max={10} label="PRS" />}
             </div>

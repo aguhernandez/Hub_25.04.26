@@ -570,8 +570,8 @@ export default function AthleteDashboard({ onNavigate }: AthleteDashboardProps) 
         : `Accumulated load detected. Active recovery session recommended today.`;
     } else {
       return es
-        ? `Fatiga alta (${fatigue}/10) y solo ${sleep}h de sueño. Prioriza descanso y recuperación hoy.`
-        : `High fatigue (${fatigue}/10) and only ${sleep}h of sleep. Prioritize rest and recovery today.`;
+        ? `Fatiga alta y solo ${sleep}h de sueño. Prioriza descanso y recuperación hoy.`
+        : `High fatigue and only ${sleep}h of sleep. Prioritize rest and recovery today.`;
     }
   };
 

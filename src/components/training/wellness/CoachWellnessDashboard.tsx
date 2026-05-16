@@ -501,7 +501,7 @@ export default function CoachWellnessDashboard({ onClose }: CoachWellnessDashboa
                                 <Zap className="w-3.5 h-3.5" />
                                 {language === 'es' ? 'Energía' : 'Energy'}
                               </p>
-                              <MetricMiniBar value={latest.fatigue_level_10} label={language === 'es' ? 'Fatiga' : 'Fatigue'} inverted />
+                              <MetricMiniBar value={latest.fatigue_level_10} label={language === 'es' ? 'Fatiga' : 'Fatigue'} />
                               <MetricMiniBar value={latest.motivation_10} label={language === 'es' ? 'Motivación' : 'Motivation'} />
                             </div>
 
