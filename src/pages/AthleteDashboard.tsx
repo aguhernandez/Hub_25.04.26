@@ -1489,14 +1489,14 @@ export default function AthleteDashboard({ onNavigate }: AthleteDashboardProps) 
                 onClick={() => satelliteUrls.endurance
                   ? openSatelliteWithToken(satelliteUrls.endurance)
                   : undefined}
-                className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all p-6 text-left"
+                className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500 transition-all p-4 sm:p-6 text-left"
               >
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-transparent dark:from-blue-500/20 rounded-bl-full" />
                 <div className="relative">
                   <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-500/30 dark:to-blue-600/20 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                     <Activity className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="font-bold text-gray-900 dark:text-white text-base mb-1">
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base mb-1 truncate">
                     Endurance
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -1510,14 +1510,14 @@ export default function AthleteDashboard({ onNavigate }: AthleteDashboardProps) 
                 onClick={() => satelliteUrls.nutrition
                   ? openSatelliteWithToken(satelliteUrls.nutrition)
                   : openNutrition()}
-                className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 hover:border-emerald-500 dark:hover:border-emerald-500 transition-all p-6 text-left"
+                className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 hover:border-emerald-500 dark:hover:border-emerald-500 transition-all p-4 sm:p-6 text-left"
               >
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-emerald-500/10 to-transparent dark:from-emerald-500/20 rounded-bl-full" />
                 <div className="relative">
                   <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 dark:from-emerald-500/30 dark:to-emerald-600/20 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                     <Apple className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="font-bold text-gray-900 dark:text-white text-base mb-1">
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base mb-1 truncate">
                     {language === 'es' ? 'Nutrición' : 'Nutrition'}
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -1531,14 +1531,14 @@ export default function AthleteDashboard({ onNavigate }: AthleteDashboardProps) 
                 onClick={() => satelliteUrls.lab
                   ? openSatelliteWithToken(satelliteUrls.lab)
                   : undefined}
-                className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 hover:border-red-500 dark:hover:border-red-500 transition-all p-6 text-left"
+                className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 hover:border-red-500 dark:hover:border-red-500 transition-all p-4 sm:p-6 text-left"
               >
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-red-500/10 to-transparent dark:from-red-500/20 rounded-bl-full" />
                 <div className="relative">
                   <div className="w-12 h-12 bg-gradient-to-br from-red-500 to-red-600 dark:from-red-500/30 dark:to-red-600/20 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                     <FlaskConical className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="font-bold text-gray-900 dark:text-white text-base mb-1">
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base mb-1 truncate">
                     {language === 'es' ? 'Laboratorio' : 'Physiology'}
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -1548,7 +1548,7 @@ export default function AthleteDashboard({ onNavigate }: AthleteDashboardProps) 
               </button>
 
               {/* Motion - Developing */}
-              <div className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 opacity-50 p-6 text-left cursor-not-allowed">
+              <div className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 opacity-50 p-4 sm:p-6 text-left cursor-not-allowed">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-amber-500/10 to-transparent dark:from-amber-500/20 rounded-bl-full" />
                 <div className="absolute top-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700">
                   <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse" />
@@ -1560,7 +1560,7 @@ export default function AthleteDashboard({ onNavigate }: AthleteDashboardProps) 
                   <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-amber-600 dark:from-amber-500/30 dark:to-amber-600/20 rounded-lg flex items-center justify-center mb-4">
                     <Scan className="w-6 h-6 text-white opacity-60" />
                   </div>
-                  <h3 className="font-bold text-gray-900 dark:text-white text-base mb-1">
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base mb-1 truncate">
                     Motion
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -1574,14 +1574,14 @@ export default function AthleteDashboard({ onNavigate }: AthleteDashboardProps) 
                 onClick={() => satelliteUrls.academy
                   ? openSatelliteWithToken(satelliteUrls.academy)
                   : undefined}
-                className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 hover:border-sky-500 dark:hover:border-sky-500 transition-all p-6 text-left"
+                className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 hover:border-sky-500 dark:hover:border-sky-500 transition-all p-4 sm:p-6 text-left"
               >
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-sky-500/10 to-transparent dark:from-sky-500/20 rounded-bl-full" />
                 <div className="relative">
                   <div className="w-12 h-12 bg-gradient-to-br from-sky-500 to-sky-600 dark:from-sky-500/30 dark:to-sky-600/20 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                     <GraduationCap className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="font-bold text-gray-900 dark:text-white text-base mb-1">
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base mb-1 truncate">
                     Academy
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -1591,7 +1591,7 @@ export default function AthleteDashboard({ onNavigate }: AthleteDashboardProps) 
               </button>
 
               {/* Performance - Developing */}
-              <div className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 opacity-50 p-6 text-left cursor-not-allowed">
+              <div className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 opacity-50 p-4 sm:p-6 text-left cursor-not-allowed">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-[#514163]/10 to-transparent dark:from-[#514163]/20 rounded-bl-full" />
                 <div className="absolute top-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700">
                   <div className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-pulse" />
@@ -1603,7 +1603,7 @@ export default function AthleteDashboard({ onNavigate }: AthleteDashboardProps) 
                   <div className="w-12 h-12 bg-gradient-to-br from-[#514163] to-[#3a2f4a] dark:from-[#514163]/30 dark:to-[#3a2f4a]/20 rounded-lg flex items-center justify-center mb-4">
                     <TrendingUp className="w-6 h-6 text-white dark:text-[#fdda36] opacity-60" />
                   </div>
-                  <h3 className="font-bold text-gray-900 dark:text-white text-base mb-1">
+                  <h3 className="font-bold text-gray-900 dark:text-white text-sm sm:text-base mb-1 truncate">
                     Performance
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
