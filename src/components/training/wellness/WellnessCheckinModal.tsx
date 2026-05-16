@@ -7,6 +7,7 @@ import {
   AlertTriangle, CheckCircle, ChevronRight, ChevronLeft
 } from 'lucide-react';
 import WellnessTagsSection from '../../tags/WellnessTagsSection';
+import Toast from '../../Toast';
 
 interface WellnessData {
   sleep_duration: string;
@@ -144,6 +145,7 @@ export default function WellnessCheckinModal({ onClose, onComplete, athleteId }:
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [alreadyDone, setAlreadyDone] = useState(false);
+  const [savedToast, setSavedToast] = useState(false);
   const [existingData, setExistingData] = useState<any>(null);
   const [checkinId, setCheckinId] = useState<string | null>(null);
 
@@ -256,7 +258,11 @@ export default function WellnessCheckinModal({ onClose, onComplete, athleteId }:
       if (error) throw error;
       if (upserted?.id) setCheckinId(upserted.id);
 
-      onComplete(score);
+      setSavedToast(true);
+      setTimeout(() => {
+        onComplete(score);
+        onClose();
+      }, 1800);
     } catch (err) {
       console.error('Error saving wellness:', err);
     } finally {
@@ -581,6 +587,14 @@ export default function WellnessCheckinModal({ onClose, onComplete, athleteId }:
   const progress = ((step + 1) / TOTAL_STEPS) * 100;
 
   return (
+    <>
+    {savedToast && (
+      <Toast
+        message={language === 'es' ? 'Check-in guardado correctamente' : 'Check-in saved successfully'}
+        type="success"
+        onClose={() => setSavedToast(false)}
+      />
+    )}
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="bg-white dark:bg-gray-900 w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
         {/* Header */}
@@ -676,5 +690,6 @@ export default function WellnessCheckinModal({ onClose, onComplete, athleteId }:
         </div>
       </div>
     </div>
+    </>
   );
 }
