@@ -1200,7 +1200,7 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoB
                 {/* Sports */}
                 <div>
                   <label className="block text-xs text-white/40 mb-2">
-                    {language === 'es' ? `Tus deportes (máx. 3) — ${sports.length}/3` : `Your sports (max 3) — ${sports.length}/3`}
+                    {language === 'es' ? `Tus deportes (máx. 5) — ${sports.length}/5` : `Your sports (max 5) — ${sports.length}/5`}
                   </label>
                   <div className="grid grid-cols-4 gap-1.5 max-h-52 overflow-y-auto pr-1">
                     {SPORTS.map(s => {
@@ -1212,7 +1212,7 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoB
                           type="button"
                           onClick={() => {
                             if (sel) { setSports(sports.filter(x => x !== s.id)); if (s.id === 'other') setOtherSport(''); }
-                            else if (sports.length < 3) setSports([...sports, s.id]);
+                            else if (sports.length < 5) setSports([...sports, s.id]);
                           }}
                           className="flex flex-col items-center p-2 rounded-xl border text-center transition-all duration-200"
                           style={{
@@ -1237,6 +1237,11 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoB
                       className="mt-2 w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/25 text-sm focus:outline-none focus:border-[#fdda36]/50 transition-all"
                     />
                   )}
+                  <p className="mt-2 text-[10px] text-white/30 leading-tight">
+                    {language === 'es'
+                      ? 'Esto solo sirve para filtrar el contenido de las Performance Pills de estos deportes. No se usa para ningún cálculo.'
+                      : 'This is only used to filter Performance Pills content for these sports. It is not used for any calculations.'}
+                  </p>
                 </div>
 
                 <div className="flex gap-2">
@@ -1298,7 +1303,7 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoB
 
                   {sports.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 pt-1">
-                      {sports.slice(0, 3).map(s => {
+                      {sports.slice(0, 5).map(s => {
                         const sp = SPORTS.find(x => x.id === s);
                         return sp ? (
                           <span key={s} className="px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: 'rgba(253,218,54,0.1)', color: 'rgba(253,218,54,0.7)', border: '1px solid rgba(253,218,54,0.15)' }}>
