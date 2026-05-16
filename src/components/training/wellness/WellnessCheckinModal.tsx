@@ -494,7 +494,7 @@ export default function WellnessCheckinModal({ onClose, onComplete, athleteId }:
       )
     },
     {
-      title: t('SNA & Notas', 'ANS & Notes'),
+      title: t('Sistema Nervioso & Notas', 'Nervous System & Notes'),
       icon: <Heart className="w-5 h-5" />,
       content: (
         <div className="space-y-5">
@@ -505,7 +505,7 @@ export default function WellnessCheckinModal({ onClose, onComplete, athleteId }:
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                {t('VFC / HRV (ms)', 'HRV (ms)')}
+                {t('VFC — Variabilidad FC (ms)', 'HRV — Heart Rate Variability (ms)')}
               </label>
               <input
                 type="number"
@@ -519,7 +519,7 @@ export default function WellnessCheckinModal({ onClose, onComplete, athleteId }:
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                {t('FC Reposo (lpm)', 'Resting HR (bpm)')}
+                {t('FCR — FC en Reposo (lpm)', 'RHR — Resting Heart Rate (bpm)')}
               </label>
               <input
                 type="number"
