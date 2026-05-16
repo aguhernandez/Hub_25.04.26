@@ -461,26 +461,20 @@ export default function AthleteDashboard({ onNavigate }: AthleteDashboardProps) 
       const week = generateWeekView(today, combinedWeekWorkouts);
       setWeekView(week);
 
-      const readiness = 0;
-      const insight = generateAIInsight(readiness, (completedWeek.count || 0));
-
       const planPendingCount = planDays.filter(d => d.scheduled_date >= today && d.status === 'pending').length;
       const totalCompletedWeek = (completedWeek.count || 0) + (completedExtraWeek.count || 0) + (completedExternalWeek.count || 0);
       const totalUpcoming = (upcomingWorkouts.count || 0) + (enduranceUpcoming.count || 0) + planPendingCount;
 
-      setStats({
-        readinessScore: readiness,
+      setStats(prev => ({
+        ...prev,
         todayWorkouts: allTodayWorkouts.length,
         upcomingSessions: totalUpcoming,
         completedThisWeek: totalCompletedWeek,
         nutritionAdherence: 0,
-        sleepHours: 7.5,
-        stressLevel: 3,
-        hydration: 85,
         unreadDigestArticles: digestData.count || 0
-      });
+      }));
 
-      setAiInsight(insight);
+      setAiInsight(prev => prev || generateAIInsight(0, (completedWeek.count || 0)));
     } catch {
     } finally {
       setLoading(false);
