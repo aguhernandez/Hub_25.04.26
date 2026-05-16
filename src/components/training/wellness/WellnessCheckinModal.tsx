@@ -19,6 +19,7 @@ interface WellnessData {
   motivation_10: number;
   prs: number;
   illness_symptoms: string[];
+  illness_other_text: string;
   urine_color: number;
   hrv: number | null;
   rhr: number | null;
@@ -159,6 +160,7 @@ export default function WellnessCheckinModal({ onClose, onComplete, athleteId }:
     motivation_10: 7,
     prs: 7,
     illness_symptoms: [],
+    illness_other_text: '',
     urine_color: 3,
     hrv: null,
     rhr: null,
@@ -195,6 +197,7 @@ export default function WellnessCheckinModal({ onClose, onComplete, athleteId }:
       if (existing.motivation_10) setData(prev => ({ ...prev, motivation_10: existing.motivation_10 }));
       if (existing.prs != null) setData(prev => ({ ...prev, prs: existing.prs }));
       if (existing.illness_symptoms) setData(prev => ({ ...prev, illness_symptoms: existing.illness_symptoms || [] }));
+      if (existing.illness_other_text) setData(prev => ({ ...prev, illness_other_text: existing.illness_other_text || '' }));
       if (existing.urine_color) setData(prev => ({ ...prev, urine_color: existing.urine_color }));
       if (existing.hrv) setData(prev => ({ ...prev, hrv: existing.hrv }));
       if (existing.rhr) setData(prev => ({ ...prev, rhr: existing.rhr }));
@@ -239,6 +242,7 @@ export default function WellnessCheckinModal({ onClose, onComplete, athleteId }:
           motivation_10: data.motivation_10,
           prs: data.prs,
           illness_symptoms: data.illness_symptoms,
+          illness_other_text: data.illness_other_text || null,
           urine_color: data.urine_color,
           hrv: data.hrv,
           rhr: data.rhr,
@@ -403,10 +407,28 @@ export default function WellnessCheckinModal({ onClose, onComplete, athleteId }:
                 </button>
               ))}
             </div>
-            {data.illness_symptoms.length > 0 && (
+            {/* Other symptom */}
+            <div className="mt-2">
+              <label className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 cursor-text">
+                <div className="w-4 h-4 rounded border-2 border-gray-300 dark:border-gray-600 flex items-center justify-center flex-shrink-0">
+                  {data.illness_other_text.trim() && (
+                    <CheckCircle className="w-3 h-3 text-rose-500" />
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={data.illness_other_text}
+                  onChange={e => setData(d => ({ ...d, illness_other_text: e.target.value }))}
+                  placeholder={t('Otro (describir brevemente)', 'Other (briefly describe)')}
+                  className="flex-1 text-sm bg-transparent text-gray-700 dark:text-gray-300 placeholder-gray-400 dark:placeholder-gray-500 outline-none"
+                  maxLength={120}
+                />
+              </label>
+            </div>
+            {(data.illness_symptoms.length > 0 || data.illness_other_text.trim()) && (
               <p className="mt-2 text-xs text-rose-600 dark:text-rose-400 flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" />
-                {data.illness_symptoms.length} {t('síntoma(s) registrado(s)', 'symptom(s) reported')}
+                {data.illness_symptoms.length + (data.illness_other_text.trim() ? 1 : 0)} {t('síntoma(s) registrado(s)', 'symptom(s) reported')}
               </p>
             )}
           </div>
