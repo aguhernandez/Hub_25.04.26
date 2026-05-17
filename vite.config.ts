@@ -47,6 +47,12 @@ if (!isPackageInstalled('@capacitor/camera')) {
 if (!isPackageInstalled('@capacitor/geolocation')) {
   capacitorAliases['@capacitor/geolocation'] = path.resolve(__dirname, 'src/stubs/capacitor-geolocation.ts');
 }
+if (!isPackageInstalled('@capacitor/app')) {
+  capacitorAliases['@capacitor/app'] = path.resolve(__dirname, 'src/stubs/capacitor-app.ts');
+}
+if (!isPackageInstalled('@capacitor/browser')) {
+  capacitorAliases['@capacitor/browser'] = path.resolve(__dirname, 'src/stubs/capacitor-browser.ts');
+}
 
 // https://vitejs.dev/config/
 export default defineConfig({
