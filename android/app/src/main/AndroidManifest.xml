@@ -56,6 +56,22 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Deep link intent-filter for OAuth callbacks (Google Sign In) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="pro.asciende.app" android:host="login-callback" />
+            </intent-filter>
+
+            <!-- HTTPS deep link for Supabase OAuth redirect -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="app.asciende.pro" android:pathPrefix="/auth/callback" />
+            </intent-filter>
+
         </activity>
 
         <!-- Provider for file sharing (camera, file export) -->

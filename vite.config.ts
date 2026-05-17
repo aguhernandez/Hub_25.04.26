@@ -56,7 +56,7 @@ export default defineConfig({
     alias: capacitorAliases,
   },
   optimizeDeps: {
-    exclude: ['lucide-react', '@capacitor/push-notifications', '@capacitor/core', '@capacitor/camera', '@capacitor/geolocation'],
+    exclude: ['lucide-react', '@capacitor/push-notifications', '@capacitor/core', '@capacitor/camera', '@capacitor/geolocation', '@capacitor/browser', '@capacitor/app'],
   },
   build: {
     rollupOptions: {

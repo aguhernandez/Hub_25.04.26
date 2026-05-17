@@ -309,11 +309,37 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoB
         ? `${window.location.origin}?redirect=${encodeURIComponent(redirectUrl)}`
         : window.location.origin;
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: { redirectTo },
-      });
-      if (error) setError(error.message);
+      // On native Capacitor apps, Google blocks OAuth inside embedded WebViews.
+      // We must open the system browser (Chrome Custom Tabs / SFSafariViewController)
+      // so Google's policies are satisfied.
+      let isNative = false;
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        isNative = Capacitor.isNativePlatform();
+      } catch { /* not native */ }
+
+      if (isNative) {
+        // Use the app's custom URL scheme so the system browser can redirect back
+        const nativeRedirectTo = 'pro.asciende.app://login-callback';
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: nativeRedirectTo,
+            skipBrowserRedirect: true,
+          },
+        });
+        if (error) { setError(error.message); return; }
+        if (data?.url) {
+          const { Browser } = await import('@capacitor/browser');
+          await Browser.open({ url: data.url, windowName: '_self' });
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo },
+        });
+        if (error) setError(error.message);
+      }
     } catch {
       setError(language === 'es' ? 'Error al conectar con Google' : 'Failed to connect with Google');
     } finally {

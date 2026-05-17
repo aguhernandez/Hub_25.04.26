@@ -155,6 +155,57 @@ function App() {
     return () => window.removeEventListener('navigate', handleNavigate);
   }, [currentPage]);
 
+  // Handle deep-link callback from system browser after Google OAuth on native apps
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+
+    (async () => {
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        if (!Capacitor.isNativePlatform()) return;
+
+        const { App: CapApp } = await import('@capacitor/app');
+        const { supabase } = await import('./lib/supabase');
+
+        const listener = await CapApp.addListener('appUrlOpen', async ({ url }) => {
+          // Supabase sends back tokens in the URL fragment (#access_token=...)
+          // or as query params (?code=...) depending on flow type.
+          if (url.includes('access_token') || url.includes('refresh_token') || url.includes('code=')) {
+            // Extract the fragment/query and feed it to Supabase
+            const fragment = url.split('#')[1] ?? '';
+            const query = url.split('?')[1]?.split('#')[0] ?? '';
+            const paramStr = fragment || query;
+
+            if (paramStr) {
+              const params = new URLSearchParams(paramStr);
+              const accessToken = params.get('access_token');
+              const refreshToken = params.get('refresh_token');
+
+              if (accessToken && refreshToken) {
+                await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+              } else {
+                // PKCE flow — exchange code
+                const code = params.get('code');
+                if (code) {
+                  await supabase.auth.exchangeCodeForSession(paramStr);
+                }
+              }
+            }
+
+            try {
+              const { Browser } = await import('@capacitor/browser');
+              await Browser.close();
+            } catch { /* ignore */ }
+          }
+        });
+
+        cleanup = () => { listener.remove(); };
+      } catch { /* not native or plugin unavailable */ }
+    })();
+
+    return () => { cleanup?.(); };
+  }, []);
+
   // If already authenticated and a satellite redirect param is present, forward immediately with a token
   useEffect(() => {
     if (!user || satelliteRedirectHandled.current) return;
