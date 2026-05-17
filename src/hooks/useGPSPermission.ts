@@ -66,14 +66,8 @@ export function useGPSPermission() {
           setStatus(s);
           return s;
         }
-      } catch (error: unknown) {
-        const msg = error instanceof Error ? error.message : 'unknown error';
-        const s: GPSPermissionStatus = {
-          state: 'unavailable',
-          message: `Geolocation plugin unavailable: ${msg}`,
-        };
-        setStatus(s);
-        return s;
+      } catch {
+        // Capacitor plugin failed — fall through to Web Geolocation API fallback
       }
     }
 
