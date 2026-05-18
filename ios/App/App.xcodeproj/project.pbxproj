@@ -295,6 +295,14 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 79;
 				DEVELOPMENT_TEAM = 78WWG7XATW;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../../node_modules/@capacitor/ios/Capacitor",
+				);
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/../../node_modules/@capacitor/ios/Capacitor/Capacitor",
+					"$(inherited)",
+				);
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -318,6 +326,14 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 79;
 				DEVELOPMENT_TEAM = 78WWG7XATW;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../../node_modules/@capacitor/ios/Capacitor",
+				);
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/../../node_modules/@capacitor/ios/Capacitor/Capacitor",
+					"$(inherited)",
+				);
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
