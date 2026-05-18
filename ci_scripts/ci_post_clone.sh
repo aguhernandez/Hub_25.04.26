@@ -1,19 +1,18 @@
 #!/bin/bash
 set -e
 
-# 1. Crear carpetas fantasma para que Xcode no de error 260
-# (Hacemos esto antes de cualquier otra cosa)
+# Imprimir dónde estamos para depurar
+echo "Ejecutando script desde: $(pwd)"
+
+# 1. Crear las carpetas que Xcode busca desesperadamente
 mkdir -p node_modules/@capacitor/app
 mkdir -p node_modules/@capacitor/browser
 mkdir -p node_modules/@capacitor/camera
 mkdir -p node_modules/@capacitor/geolocation
 mkdir -p node_modules/@capacitor/push-notifications
 
-# 2. Instalar dependencias reales
-npm install
+# 2. Instalar dependencias
+npm install --force
 
-# 3. Sincronizar Capacitor
+# 3. Sincronizar Capacitor (esto reconstruye el puente)
 npx cap sync ios
-
-# 4. Forzar a Xcode a "despertar" y ver las librerías reales
-xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj -scheme App
