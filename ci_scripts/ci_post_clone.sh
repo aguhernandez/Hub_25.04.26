@@ -12,3 +12,10 @@ npx cap sync ios
 
 # 4. Forzar la resolución DESPUÉS de haber instalado todo
 xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj -scheme App
+
+# 4. Forzar la configuración de firma para Xcode Cloud
+sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Automatic;/g' ios/App/App.xcodeproj/project.pbxproj
+
+# 5. Forzar el Team ID (el que pusiste en el log) por si acaso
+# Esto asegura que Xcode Cloud sepa quién firma la app
+sed -i '' "s/DEVELOPMENT_TEAM = [^;]*/DEVELOPMENT_TEAM = 78WWG7XATW/g" ios/App/App.xcodeproj/project.pbxproj
