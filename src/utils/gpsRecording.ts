@@ -334,8 +334,8 @@ export async function getGPSWatchPositionAsync(
     try {
       const { Geolocation } = await import('@capacitor/geolocation');
 
-      // Capacitor 6+ watchPosition returns a PluginListenerHandle
-      const handle = await Geolocation.watchPosition(
+      // Capacitor v7: watchPosition returns a string CallbackID
+      const callbackId = await Geolocation.watchPosition(
         {
           enableHighAccuracy: true,
           timeout: 10000,
@@ -344,8 +344,8 @@ export async function getGPSWatchPositionAsync(
         (result, err) => {
           if (err) {
             onError({
-              code: err.code || 2,
-              message: err.message || 'GPS error',
+              code: 2,
+              message: err?.message || 'GPS error',
               PERMISSION_DENIED: 1,
               POSITION_UNAVAILABLE: 2,
               TIMEOUT: 3,
@@ -358,14 +358,9 @@ export async function getGPSWatchPositionAsync(
         }
       );
 
-      // Store the handle for later cleanup
-      if (handle && typeof handle === 'object' && 'remove' in handle) {
-        (handle as any)._isCapacitorHandle = true;
-        _capacitorWatchId = handle as any;
-        return -1; // Return special value indicating Capacitor watch
-      }
+      _capacitorWatchId = callbackId;
+      return -1; // Special value indicating Capacitor watch
     } catch (error) {
-      // Log but fall through to web fallback
       console.debug('Capacitor watchPosition failed, using web geolocation', error);
     }
   }

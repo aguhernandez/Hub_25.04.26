@@ -4,10 +4,17 @@ const config: CapacitorConfig = {
   appId: 'pro.asciende.app',
   appName: 'Asciende',
   webDir: 'dist',
-  bundledWebRuntime: false,
   server: {
     androidScheme: 'https',
+    iosScheme: 'capacitor',
     allowNavigation: ['*'],
+  },
+  ios: {
+    scheme: 'Asciende',
+    contentInset: 'automatic',
+  },
+  android: {
+    allowMixedContent: true,
   },
   plugins: {
     SplashScreen: {
@@ -16,10 +23,6 @@ const config: CapacitorConfig = {
     },
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],
-    },
-    Geolocation: {
-      // Request the highest accuracy available on Android
-      highAccuracy: true,
     },
   },
 };

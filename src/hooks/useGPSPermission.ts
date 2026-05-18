@@ -33,7 +33,7 @@ export function useGPSPermission() {
         const { Geolocation } = await import('@capacitor/geolocation');
 
         const permResult = await Geolocation.requestPermissions();
-        const locationPerm = permResult.geolocation;
+        const locationPerm = (permResult as any).location ?? (permResult as any).geolocation;
 
         if (locationPerm === 'granted') {
           const s: GPSPermissionStatus = { state: 'granted', message: 'GPS permission granted' };

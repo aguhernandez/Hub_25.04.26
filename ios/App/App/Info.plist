@@ -2,12 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CAPACITOR_DEBUG</key>
+	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Asciende</string>
+	<string>Asciende</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -47,26 +47,36 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+
+	<!-- Background Modes: GPS tracking + Push Notifications -->
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
 		<string>fetch</string>
 		<string>remote-notification</string>
 	</array>
+
+	<!-- Camera -->
 	<key>NSCameraUsageDescription</key>
 	<string>Asciende needs access to your camera for exercise video analysis and form assessment</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Asciende needs access to your photo library to select images for your profile and training</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Asciende needs permission to save photos to your library</string>
+
+	<!-- Location / GPS -->
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Asciende needs access to your location to record GPS activities and track outdoor training</string>
+	<string>Asciende needs your location to record GPS activities and track outdoor training routes</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Asciende needs access to your location to record GPS activities and track outdoor training</string>
+	<string>Asciende needs continuous location access to keep recording your training route even when the app is in the background</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>Asciende needs access to your location in the background to continue recording GPS activities</string>
+	<string>Asciende needs background location access to continue recording GPS activities while the screen is off</string>
+
+	<!-- Motion -->
 	<key>NSMotionUsageDescription</key>
 	<string>Asciende uses motion data to improve activity tracking accuracy</string>
+
+	<!-- Deep Link / OAuth URL Scheme -->
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -78,5 +88,16 @@
 			</array>
 		</dict>
 	</array>
+
+	<!-- App Transport Security (allow HTTPS by default, no cleartext) -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+
+	<!-- App Store compliance: no non-exempt encryption -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
