@@ -1,5 +1,5 @@
 import UIKit
-import Capacitor
+@_implementationOnly import Capacitor
 import UserNotifications
 
 @UIApplicationMain
