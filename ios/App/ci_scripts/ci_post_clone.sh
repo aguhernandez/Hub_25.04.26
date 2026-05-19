@@ -1,22 +1,24 @@
 #!/bin/bash
 set -e
 
-# 1. Asegurar que los comandos de Homebrew y Node estén en el PATH
+echo "--- Instalando Node.js y NPM (necesarios para Capacitor) ---"
+# Xcode Cloud no tiene Node por defecto, lo instalamos con brew
+brew install node
+
+# Aseguramos que los binarios recién instalados estén disponibles
 export PATH=$PATH:/usr/local/bin
 
-# 2. Ir a la raíz del proyecto
-cd ../../..
-
-echo "--- Verificando versiones ---"
+echo "--- Verificando instalaciones ---"
 node -v
 npm -v
 
-echo "--- Instalando dependencias ---"
-# Usamos --no-audit para ir más rápido y evitar errores de red
-npm install --force --no-audit
+# Ir a la raíz del proyecto
+cd ../../..
+
+echo "--- Instalando dependencias de la App ---"
+npm install --force
 
 echo "--- Sincronizando Capacitor ---"
-# Ejecutamos npx desde la raíz
 npx cap sync ios
 
 echo "--- Script finalizado con éxito ---"
