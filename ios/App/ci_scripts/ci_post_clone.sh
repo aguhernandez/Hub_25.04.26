@@ -1,22 +1,24 @@
 #!/bin/bash
 set -e
 
-echo "--- Instalando Node.js y NPM (necesarios para Capacitor) ---"
-# Xcode Cloud no tiene Node por defecto, lo instalamos con brew
+echo "--- Instalando Node.js ---"
 brew install node
-
-# Aseguramos que los binarios recién instalados estén disponibles
 export PATH=$PATH:/usr/local/bin
-
-echo "--- Verificando instalaciones ---"
-node -v
-npm -v
 
 # Ir a la raíz del proyecto
 cd ../../..
 
-echo "--- Instalando dependencias de la App ---"
+echo "--- Instalando dependencias ---"
 npm install --force
+
+echo "--- Compilando Aplicación Web ---"
+# Esto genera la carpeta /dist o /www que Capacitor necesita
+npm run build
+
+echo "--- Verificando carpeta de activos ---"
+# Por si acaso el build genera 'www' en lugar de 'dist', 
+# o si falta la carpeta, esto evita que el script explote
+mkdir -p dist
 
 echo "--- Sincronizando Capacitor ---"
 npx cap sync ios
