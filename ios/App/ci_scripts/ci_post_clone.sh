@@ -1,12 +1,22 @@
 #!/bin/bash
 set -e
 
-# Ahora estamos en ios/App/ci_scripts, 
-# así que subimos 3 niveles para llegar a la raíz
+# 1. Asegurar que los comandos de Homebrew y Node estén en el PATH
+export PATH=$PATH:/usr/local/bin
+
+# 2. Ir a la raíz del proyecto
 cd ../../..
 
-echo "Instalando dependencias desde la raíz..."
-npm install --force
+echo "--- Verificando versiones ---"
+node -v
+npm -v
+
+echo "--- Instalando dependencias ---"
+# Usamos --no-audit para ir más rápido y evitar errores de red
+npm install --force --no-audit
+
+echo "--- Sincronizando Capacitor ---"
+# Ejecutamos npx desde la raíz
 npx cap sync ios
 
-echo "Listo, todo sincronizado."
+echo "--- Script finalizado con éxito ---"
