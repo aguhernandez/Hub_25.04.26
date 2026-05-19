@@ -53,29 +53,40 @@ if (isPublicRoute) {
   }
 } else {
   // All other routes — full app with auth
-  import('./contexts/AuthContext').then(({ AuthProvider }) =>
-    import('./contexts/ThemeContext').then(({ ThemeProvider }) =>
-      import('./contexts/LanguageContext').then(({ LanguageProvider }) =>
-        import('./contexts/AthleteContext').then(({ AthleteProvider }) =>
-          import('./App').then(({ default: App }) => {
-            root.render(
-              <StrictMode>
-                <AuthProvider>
-                  <ThemeProvider>
-                    <LanguageProvider>
-                      <AthleteProvider>
-                        <App />
-                      </AthleteProvider>
-                    </LanguageProvider>
-                  </ThemeProvider>
-                </AuthProvider>
-              </StrictMode>
-            );
-          })
-        )
-      )
-    )
-  );
+  Promise.all([
+    import('./contexts/AuthContext'),
+    import('./contexts/ThemeContext'),
+    import('./contexts/LanguageContext'),
+    import('./contexts/AthleteContext'),
+    import('./App'),
+  ])
+    .then(([{ AuthProvider }, { ThemeProvider }, { LanguageProvider }, { AthleteProvider }, { default: App }]) => {
+      root.render(
+        <StrictMode>
+          <AuthProvider>
+            <ThemeProvider>
+              <LanguageProvider>
+                <AthleteProvider>
+                  <App />
+                </AthleteProvider>
+              </LanguageProvider>
+            </ThemeProvider>
+          </AuthProvider>
+        </StrictMode>
+      );
+    })
+    .catch((err) => {
+      console.error('App initialization failed:', err);
+      root.render(
+        <div style={{ padding: '2rem', fontFamily: 'system-ui', color: '#fff', background: '#0C0D0F', minHeight: '100vh' }}>
+          <h1 style={{ fontSize: '1.5rem', marginBottom: '1rem' }}>Error loading app</h1>
+          <p style={{ color: '#999', marginBottom: '1rem' }}>{String(err?.message || err)}</p>
+          <button onClick={() => window.location.reload()} style={{ padding: '0.5rem 1rem', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '0.5rem', cursor: 'pointer' }}>
+            Reload
+          </button>
+        </div>
+      );
+    });
 }
 
 if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
