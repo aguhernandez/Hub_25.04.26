@@ -1,0 +1,1 @@
+function r(n,t){return n?t==="es"?n.exercise_es||n.exercise_en||n.exercise||"":n.exercise_en||n.exercise||"":""}function i(n,t){return n?t==="es"?n.description_es||n.description_en||n.description||"":n.description_en||n.description||"":""}export{i as a,r as g};

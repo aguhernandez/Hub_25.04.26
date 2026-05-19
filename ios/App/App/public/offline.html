@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0C0D0F" />
+  <title>Asciende — Sin conexión</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    @import url('https://fonts.googleapis.com/css2?family=Krona+One&family=Jost:wght@300;400;600&display=swap');
+
+    :root {
+      --yellow: #fdda36;
+      --bg: #0C0D0F;
+      --surface: #161820;
+      --border: rgba(255,255,255,0.08);
+      --text: rgba(255,255,255,0.85);
+      --text-dim: rgba(255,255,255,0.38);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Jost', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100dvh;
+      padding: max(2rem, env(safe-area-inset-top)) max(1.5rem, env(safe-area-inset-right)) max(2rem, env(safe-area-inset-bottom)) max(1.5rem, env(safe-area-inset-left));
+      text-align: center;
+    }
+
+    .logo {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 1.5rem;
+      filter: drop-shadow(0 0 20px rgba(253,218,54,0.5));
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(253,218,54,0.08);
+      border: 1px solid rgba(253,218,54,0.2);
+      border-radius: 100px;
+      padding: 5px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: var(--yellow);
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+    }
+
+    .badge-dot {
+      width: 7px;
+      height: 7px;
+      background: var(--yellow);
+      border-radius: 50%;
+      animation: pulse-dot 1.6s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.75); }
+    }
+
+    h1 {
+      font-family: 'Krona One', sans-serif;
+      font-size: clamp(1.5rem, 5vw, 2rem);
+      color: #fff;
+      margin-bottom: 0.75rem;
+      letter-spacing: 0.02em;
+    }
+
+    p {
+      font-size: 0.9375rem;
+      color: var(--text-dim);
+      max-width: 320px;
+      line-height: 1.6;
+      margin-bottom: 2.5rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 1.25rem 1.5rem;
+      width: 100%;
+      max-width: 360px;
+      margin-bottom: 1.5rem;
+    }
+
+    .card-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.875rem;
+    }
+
+    .feature-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 0;
+      font-size: 0.875rem;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+    }
+    .feature-row:last-child { border-bottom: none; }
+
+    .feature-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      max-width: 360px;
+      padding: 14px 24px;
+      background: var(--yellow);
+      color: #0C0D0F;
+      border: none;
+      border-radius: 14px;
+      font-family: 'Jost', sans-serif;
+      font-size: 0.9375rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn:active { opacity: 0.85; transform: scale(0.98); }
+
+    .footer-text {
+      margin-top: 2rem;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+    }
+
+    .spinner {
+      display: none;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(0,0,0,0.2);
+      border-top-color: #0C0D0F;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .btn.loading .spinner { display: block; }
+    .btn.loading .btn-label { display: none; }
+  </style>
+</head>
+<body>
+  <img src="/logo_transp.png" alt="Asciende" class="logo" onerror="this.style.display='none'" />
+
+  <div class="badge">
+    <span class="badge-dot"></span>
+    Sin conexión
+  </div>
+
+  <h1>Modo Offline</h1>
+  <p>No hay conexión a internet en este momento. Tus datos guardados siguen disponibles.</p>
+
+  <div class="card">
+    <div class="card-title">Disponible sin conexión</div>
+    <div class="feature-row">
+      <span class="feature-dot" style="background:#4ade80"></span>
+      Registro de entrenamientos
+    </div>
+    <div class="feature-row">
+      <span class="feature-dot" style="background:#fb923c"></span>
+      Planes de nutrición guardados
+    </div>
+    <div class="feature-row">
+      <span class="feature-dot" style="background:#38bdf8"></span>
+      Perfil y estadísticas
+    </div>
+    <div class="feature-row">
+      <span class="feature-dot" style="background:#f472b6"></span>
+      Historial de actividades
+    </div>
+  </div>
+
+  <button class="btn" id="retryBtn" onclick="retry()">
+    <span class="btn-label">Reintentar conexión</span>
+    <span class="spinner"></span>
+  </button>
+
+  <p class="footer-text">ASCIENDE &nbsp;·&nbsp; The Athletes' Support Platform</p>
+
+  <script>
+    let lang = 'es';
+    try { lang = localStorage.getItem('asciende_language') || 'es'; } catch(e) {}
+
+    const t = {
+      es: {
+        badge: 'Sin conexión',
+        title: 'Modo Offline',
+        desc: 'No hay conexión a internet en este momento. Tus datos guardados siguen disponibles.',
+        cardTitle: 'Disponible sin conexión',
+        f1: 'Registro de entrenamientos',
+        f2: 'Planes de nutrición guardados',
+        f3: 'Perfil y estadísticas',
+        f4: 'Historial de actividades',
+        btn: 'Reintentar conexión',
+      },
+      en: {
+        badge: 'Offline',
+        title: 'Offline Mode',
+        desc: 'No internet connection right now. Your saved data is still available.',
+        cardTitle: 'Available offline',
+        f1: 'Training logs',
+        f2: 'Saved nutrition plans',
+        f3: 'Profile & stats',
+        f4: 'Activity history',
+        btn: 'Retry connection',
+      }
+    };
+
+    const tx = t[lang] || t.es;
+    document.querySelector('.badge').childNodes[1].textContent = ' ' + tx.badge;
+    document.querySelector('h1').textContent = tx.title;
+    document.querySelectorAll('p')[0].textContent = tx.desc;
+    document.querySelector('.card-title').textContent = tx.cardTitle;
+    const rows = document.querySelectorAll('.feature-row');
+    rows[0].childNodes[1].textContent = ' ' + tx.f1;
+    rows[1].childNodes[1].textContent = ' ' + tx.f2;
+    rows[2].childNodes[1].textContent = ' ' + tx.f3;
+    rows[3].childNodes[1].textContent = ' ' + tx.f4;
+    document.querySelector('.btn-label').textContent = tx.btn;
+
+    function retry() {
+      const btn = document.getElementById('retryBtn');
+      btn.classList.add('loading');
+      btn.disabled = true;
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 800);
+    }
+
+    window.addEventListener('online', () => {
+      window.location.href = '/';
+    });
+  </script>
+</body>
+</html>
