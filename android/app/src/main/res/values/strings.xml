@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Asciende</string>
+    <string name="title_activity_main">Asciende</string>
+    <string name="package_name">pro.asciende.app</string>
+    <string name="custom_url_scheme">pro.asciende.app</string>
+</resources>
