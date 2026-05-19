@@ -1,23 +1,25 @@
 #!/bin/bash
 set -e
 
-echo "--- Preparando entorno de Node.js ---"
-# Instalamos Node porque Xcode Cloud no lo incluye por defecto
+echo "--- Instalando Node.js ---"
 brew install node
 export PATH=$PATH:/usr/local/bin
 
-# Regresamos a la raíz del proyecto para trabajar
 cd ../../..
 
-echo "--- Instalando dependencias de Node ---"
+echo "--- Instalando Dependencias y Build Web ---"
 npm install --force
-
-echo "--- Construyendo activos web (Generando carpeta dist) ---"
-# Este paso es vital para que Capacitor encuentre lo que definiste en webDir
 npm run build
 
-echo "--- Sincronizando con Capacitor ---"
-# Ahora que 'dist' existe, este comando no fallará
+echo "--- Sincronizando Capacitor ---"
 npx cap sync ios
 
-echo "--- Proceso completado exitosamente ---"
+echo "--- CIRUGÍA DE XCODE: Eliminando fantasmas de Cordova ---"
+# Entramos a la carpeta del proyecto nativo
+cd ios/App/App.xcodeproj
+
+# Este comando busca cualquier línea que mencione Cordova.framework y la ELIMINA 
+# del archivo de configuración del proyecto para que Apple no la busque más.
+sed -i '' '/Cordova\.framework/d' project.pbxproj
+
+echo "--- Limpieza completada. Compilando... ---"
