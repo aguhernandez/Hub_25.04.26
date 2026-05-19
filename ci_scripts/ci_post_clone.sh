@@ -1,16 +1,18 @@
 #!/bin/bash
 set -e
 
-# 1. Instalar todo
+# 1. Instalar dependencias
 npm install
-npm install @capacitor/ios@latest # Forzamos la versión más reciente
+npx cap sync ios
 
-# 2. El comando mágico: Limpiar y recrear los enlaces nativos
-npx cap ios sync
+# 2. LIMPIEZA PROFUNDA (Eliminar rastro de Cordova)
+# Este bloque busca y destruye cualquier mención a Cordova en el archivo del proyecto
+cd ios/App
+echo "Iniciando limpieza de referencias a Cordova..."
+sed -i '' '/Cordova\.framework/d' App.xcodeproj/project.pbxproj
+sed -i '' 's/Cordova//g' App.xcodeproj/project.pbxproj
 
-# 3. Forzar a Xcode a RE-INDEXAR todo el proyecto desde cero
-xcodebuild -resolvePackageDependencies -project ios/App/App.xcodeproj -scheme App
+# 3. Resolver paquetes de Swift
+xcodebuild -resolvePackageDependencies -project App.xcodeproj -scheme App
 
-# 4. Asegurar el Team ID y la firma
-sed -i '' "s/DEVELOPMENT_TEAM = [^;]*/DEVELOPMENT_TEAM = 78WWG7XATW/g" ios/App/App.xcodeproj/project.pbxproj
-sed -i '' 's/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Automatic;/g' ios/App/App.xcodeproj/project.pbxproj
+echo "Listo. Cordova ha sido eliminado del mapa de compilación."
