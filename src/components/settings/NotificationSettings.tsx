@@ -2,170 +2,170 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { supabase } from '../../lib/supabase';
-import { Bell, Mail, Smartphone, Save, Shield } from 'lucide-react';
+import { Bell, MessageSquare, Dumbbell, Apple, BookOpen, Target, Save, Smartphone } from 'lucide-react';
+import { initPushNotifications } from '../../services/pushNotificationService';
 
-interface NotificationPreferences {
-  chat_in_app: boolean;
-  chat_email: boolean;
-  chat_push: boolean;
-  training_in_app: boolean;
-  training_email: boolean;
-  training_push: boolean;
-  team_in_app: boolean;
-  team_email: boolean;
-  team_push: boolean;
-  digest_in_app: boolean;
-  digest_email: boolean;
-  digest_push: boolean;
-  system_in_app: boolean;
-  system_email: boolean;
-  system_push: boolean;
-  email_consent: boolean;
-  push_consent: boolean;
+interface PushPreferences {
+  trainer_messages: boolean;
+  new_training_plan: boolean;
+  new_nutrition_plan: boolean;
+  new_academy_course: boolean;
+  new_habit: boolean;
 }
+
+const DEFAULT_PREFERENCES: PushPreferences = {
+  trainer_messages: true,
+  new_training_plan: true,
+  new_nutrition_plan: true,
+  new_academy_course: true,
+  new_habit: true,
+};
 
 export default function NotificationSettings() {
   const { profile } = useAuth();
   const { language } = useLanguage();
-  const [preferences, setPreferences] = useState<NotificationPreferences | null>(null);
+  const [preferences, setPreferences] = useState<PushPreferences>(DEFAULT_PREFERENCES);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushStatus, setPushStatus] = useState<'unknown' | 'granted' | 'denied' | 'unavailable'>('unknown');
 
   useEffect(() => {
     if (profile?.id) {
       loadPreferences();
+      checkPushStatus();
     }
   }, [profile?.id]);
+
+  const checkPushStatus = async () => {
+    try {
+      const { Capacitor } = await import('@capacitor/core');
+      if (!Capacitor.isNativePlatform()) {
+        setPushStatus('unavailable');
+        return;
+      }
+      const { PushNotifications } = await import('@capacitor/push-notifications');
+      const result = await PushNotifications.checkPermissions();
+      setPushStatus(result.receive as any);
+      setPushEnabled(result.receive === 'granted');
+    } catch {
+      setPushStatus('unavailable');
+    }
+  };
 
   const loadPreferences = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('notification_preferences')
+      const { data } = await supabase
+        .from('push_notification_preferences')
         .select('*')
-        .eq('user_id', profile?.id)
+        .eq('user_id', profile!.id)
         .maybeSingle();
-
-      if (error) throw error;
 
       if (data) {
         setPreferences({
-          chat_in_app: data.chat_in_app,
-          chat_email: data.chat_email,
-          chat_push: data.chat_push,
-          training_in_app: data.training_in_app,
-          training_email: data.training_email,
-          training_push: data.training_push,
-          team_in_app: data.team_in_app,
-          team_email: data.team_email,
-          team_push: data.team_push,
-          digest_in_app: data.digest_in_app,
-          digest_email: data.digest_email,
-          digest_push: data.digest_push,
-          system_in_app: data.system_in_app,
-          system_email: data.system_email,
-          system_push: data.system_push,
-          email_consent: data.email_consent,
-          push_consent: data.push_consent,
+          trainer_messages: data.trainer_messages,
+          new_training_plan: data.new_training_plan,
+          new_nutrition_plan: data.new_nutrition_plan,
+          new_academy_course: data.new_academy_course,
+          new_habit: data.new_habit,
         });
       }
-    } catch (error) {
-      console.error('Error loading preferences:', error);
+    } catch (err) {
+      console.error('Error loading push preferences:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSave = async () => {
-    if (!profile?.id || !preferences) return;
+  const handleEnablePush = async () => {
+    try {
+      const status = await initPushNotifications();
+      if (status === 'granted') {
+        setPushEnabled(true);
+        setPushStatus('granted');
+      } else if (status === 'denied') {
+        setPushStatus('denied');
+      }
+    } catch {
+      // Silently fail
+    }
+  };
 
+  const handleSave = async () => {
+    if (!profile?.id) return;
     setSaving(true);
     try {
       const { error } = await supabase
-        .from('notification_preferences')
+        .from('push_notification_preferences')
         .upsert({
           user_id: profile.id,
           ...preferences,
-        });
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'user_id' });
 
       if (error) throw error;
-
-      alert(language === 'es' ? '✅ Preferencias guardadas' : '✅ Preferences saved');
-    } catch (error: any) {
-      alert(language === 'es' ? `Error: ${error.message}` : `Error: ${error.message}`);
+    } catch (err: any) {
+      console.error('Error saving push preferences:', err);
     } finally {
       setSaving(false);
     }
   };
 
-  const updatePreference = (key: keyof NotificationPreferences, value: boolean) => {
-    if (!preferences) return;
-    setPreferences({ ...preferences, [key]: value });
+  const togglePreference = (key: keyof PushPreferences) => {
+    setPreferences(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   if (loading) {
     return (
-      <div className="text-center py-12">
-        <div className="animate-spin w-12 h-12 border-4 border-[#fdda36] border-t-transparent rounded-full mx-auto"></div>
+      <div className="flex items-center justify-center py-16">
+        <div className="w-10 h-10 border-4 border-[#fdda36] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
-  if (!preferences) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-500 dark:text-gray-400 dark:text-gray-400">
-          {language === 'es' ? 'No se pudieron cargar las preferencias' : 'Could not load preferences'}
-        </p>
-      </div>
-    );
-  }
-
-  const NotificationRow = ({
-    title,
-    prefix,
-  }: {
-    title: string;
-    prefix: 'chat' | 'training' | 'team' | 'digest' | 'system';
-  }) => (
-    <div className="grid grid-cols-4 gap-4 p-4 bg-gray-50 dark:bg-gray-900 dark:bg-gray-900 rounded-lg">
-      <div className="col-span-1 flex items-center">
-        <span className="text-sm font-semibold text-gray-900 dark:text-white dark:text-white">{title}</span>
-      </div>
-      <div className="flex items-center justify-center">
-        <label className="flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            checked={preferences[`${prefix}_in_app` as keyof NotificationPreferences] as boolean}
-            onChange={(e) => updatePreference(`${prefix}_in_app` as keyof NotificationPreferences, e.target.checked)}
-            className="w-4 h-4 text-[#fdda36] border-gray-300 dark:border-gray-600 rounded focus:ring-[#fdda36]"
-          />
-        </label>
-      </div>
-      <div className="flex items-center justify-center">
-        <label className="flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            checked={preferences[`${prefix}_email` as keyof NotificationPreferences] as boolean}
-            onChange={(e) => updatePreference(`${prefix}_email` as keyof NotificationPreferences, e.target.checked)}
-            disabled={!preferences.email_consent}
-            className="w-4 h-4 text-[#fdda36] border-gray-300 dark:border-gray-600 rounded focus:ring-[#fdda36] disabled:opacity-50"
-          />
-        </label>
-      </div>
-      <div className="flex items-center justify-center">
-        <label className="flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            checked={preferences[`${prefix}_push` as keyof NotificationPreferences] as boolean}
-            onChange={(e) => updatePreference(`${prefix}_push` as keyof NotificationPreferences, e.target.checked)}
-            disabled={!preferences.push_consent}
-            className="w-4 h-4 text-[#fdda36] border-gray-300 dark:border-gray-600 rounded focus:ring-[#fdda36] disabled:opacity-50"
-          />
-        </label>
-      </div>
-    </div>
-  );
+  const categories: { key: keyof PushPreferences; icon: typeof Bell; label_es: string; label_en: string; desc_es: string; desc_en: string }[] = [
+    {
+      key: 'trainer_messages',
+      icon: MessageSquare,
+      label_es: 'Mensajes del entrenador',
+      label_en: 'Trainer messages',
+      desc_es: 'Recibe avisos cuando tu entrenador te envie un mensaje',
+      desc_en: 'Get notified when your trainer sends you a message',
+    },
+    {
+      key: 'new_training_plan',
+      icon: Dumbbell,
+      label_es: 'Nuevo plan de entrenamiento',
+      label_en: 'New training plan',
+      desc_es: 'Aviso cuando se te asigne un nuevo plan de entrenamiento',
+      desc_en: 'Get notified when a new training plan is assigned to you',
+    },
+    {
+      key: 'new_nutrition_plan',
+      icon: Apple,
+      label_es: 'Nuevo plan de nutricion',
+      label_en: 'New nutrition plan',
+      desc_es: 'Aviso cuando se te asigne un nuevo plan de nutricion',
+      desc_en: 'Get notified when a new nutrition plan is assigned to you',
+    },
+    {
+      key: 'new_academy_course',
+      icon: BookOpen,
+      label_es: 'Nuevos cursos en Academy',
+      label_en: 'New Academy courses',
+      desc_es: 'Aviso cuando haya nuevos cursos disponibles',
+      desc_en: 'Get notified when new courses are available',
+    },
+    {
+      key: 'new_habit',
+      icon: Target,
+      label_es: 'Nuevos habitos',
+      label_en: 'New habits',
+      desc_es: 'Aviso cuando se te asigne un nuevo habito',
+      desc_en: 'Get notified when a new habit is assigned to you',
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -173,127 +173,104 @@ export default function NotificationSettings() {
       <div className="bg-gradient-to-r from-[#fdda36] to-[#ffd51a] rounded-xl p-6">
         <h2 className="text-2xl font-bold text-[#514163] mb-2 flex items-center gap-2">
           <Bell className="w-6 h-6" />
-          {language === 'es' ? 'Configuración de Notificaciones' : 'Notification Settings'}
+          {language === 'es' ? 'Notificaciones Push' : 'Push Notifications'}
         </h2>
         <p className="text-[#514163]/80 text-sm">
           {language === 'es'
-            ? 'Personaliza cómo y cuándo recibes notificaciones'
-            : 'Customize how and when you receive notifications'}
+            ? 'Configura que notificaciones quieres recibir en tu dispositivo'
+            : 'Configure which notifications you want to receive on your device'}
         </p>
       </div>
 
-      {/* GDPR Consent */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <div className="flex items-start gap-3 mb-4">
-          <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-1">
-              {language === 'es' ? 'Protección de Datos (GDPR)' : 'Data Protection (GDPR)'}
-            </p>
-            <p className="text-xs text-blue-800 dark:text-blue-300">
+      {/* Push Status */}
+      {pushStatus === 'unavailable' ? (
+        <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+          <div className="flex items-center gap-3">
+            <Smartphone className="w-5 h-5 text-gray-400" />
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               {language === 'es'
-                ? 'Tus datos están protegidos bajo las regulaciones GDPR. Solo recibirás notificaciones por email o push si das tu consentimiento explícito.'
-                : 'Your data is protected under GDPR regulations. You will only receive email or push notifications if you give explicit consent.'}
+                ? 'Las notificaciones push solo estan disponibles en la app nativa (iOS/Android).'
+                : 'Push notifications are only available in the native app (iOS/Android).'}
             </p>
           </div>
         </div>
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={preferences.email_consent}
-              onChange={(e) => updatePreference('email_consent', e.target.checked)}
-              className="w-4 h-4 text-[#fdda36] border-gray-300 dark:border-gray-600 rounded focus:ring-[#fdda36]"
-            />
-            <span className="text-sm text-blue-900 dark:text-blue-200">
-              {language === 'es'
-                ? 'Acepto recibir notificaciones por correo electrónico'
-                : 'I consent to receive email notifications'}
-            </span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={preferences.push_consent}
-              onChange={(e) => updatePreference('push_consent', e.target.checked)}
-              className="w-4 h-4 text-[#fdda36] border-gray-300 dark:border-gray-600 rounded focus:ring-[#fdda36]"
-            />
-            <span className="text-sm text-blue-900 dark:text-blue-200">
-              {language === 'es'
-                ? 'Acepto recibir notificaciones push'
-                : 'I consent to receive push notifications'}
-            </span>
-          </label>
+      ) : pushStatus === 'denied' ? (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-5">
+          <p className="text-sm text-red-700 dark:text-red-300">
+            {language === 'es'
+              ? 'Las notificaciones estan desactivadas. Ve a la configuracion de tu dispositivo para activarlas.'
+              : 'Notifications are disabled. Go to your device settings to enable them.'}
+          </p>
         </div>
-      </div>
+      ) : !pushEnabled ? (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-200">
+                {language === 'es'
+                  ? 'Activa las notificaciones push'
+                  : 'Enable push notifications'}
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                {language === 'es'
+                  ? 'Necesitas activar las notificaciones para recibir avisos en tiempo real'
+                  : 'You need to enable notifications to receive real-time alerts'}
+              </p>
+            </div>
+            <button
+              onClick={handleEnablePush}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              {language === 'es' ? 'Activar' : 'Enable'}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
-      {/* Notification Table */}
-      <div className="bg-white dark:bg-gray-800 dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 dark:border-gray-700 overflow-hidden">
-        {/* Table Header */}
-        <div className="grid grid-cols-4 gap-4 p-4 bg-gray-100 dark:bg-gray-800 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 dark:border-gray-700">
-          <div className="col-span-1">
-            <span className="text-xs font-bold text-gray-600 dark:text-gray-400 dark:text-gray-400 uppercase">
-              {language === 'es' ? 'Tipo' : 'Type'}
-            </span>
+      {/* Categories */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden divide-y divide-gray-100 dark:divide-gray-700">
+        {categories.map(({ key, icon: Icon, label_es, label_en, desc_es, desc_en }) => (
+          <div key={key} className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                <Icon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                  {language === 'es' ? label_es : label_en}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                  {language === 'es' ? desc_es : desc_en}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => togglePreference(key)}
+              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ml-3 ${
+                preferences[key] ? 'bg-[#fdda36]' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              <span
+                className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                  preferences[key] ? 'translate-x-5' : ''
+                }`}
+              />
+            </button>
           </div>
-          <div className="flex items-center justify-center">
-            <Bell className="w-4 h-4 text-gray-600 dark:text-gray-400 dark:text-gray-400" />
-            <span className="text-xs font-bold text-gray-600 dark:text-gray-400 dark:text-gray-400 uppercase ml-1">
-              {language === 'es' ? 'App' : 'In-App'}
-            </span>
-          </div>
-          <div className="flex items-center justify-center">
-            <Mail className="w-4 h-4 text-gray-600 dark:text-gray-400 dark:text-gray-400" />
-            <span className="text-xs font-bold text-gray-600 dark:text-gray-400 dark:text-gray-400 uppercase ml-1">Email</span>
-          </div>
-          <div className="flex items-center justify-center">
-            <Smartphone className="w-4 h-4 text-gray-600 dark:text-gray-400 dark:text-gray-400" />
-            <span className="text-xs font-bold text-gray-600 dark:text-gray-400 dark:text-gray-400 uppercase ml-1">Push</span>
-          </div>
-        </div>
-
-        {/* Table Body */}
-        <div className="divide-y divide-gray-200 dark:divide-gray-700">
-          <NotificationRow title={language === 'es' ? 'Chat' : 'Chat'} prefix="chat" />
-          <NotificationRow
-            title={language === 'es' ? 'Entrenamiento' : 'Training'}
-            prefix="training"
-          />
-          <NotificationRow title={language === 'es' ? 'Equipo' : 'Team'} prefix="team" />
-          <NotificationRow
-            title={language === 'es' ? 'Resumen Semanal' : 'Weekly Digest'}
-            prefix="digest"
-          />
-          <NotificationRow title={language === 'es' ? 'Sistema' : 'System'} prefix="system" />
-        </div>
+        ))}
       </div>
 
       {/* Save Button */}
-      <div className="flex justify-end">
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-6 py-3 bg-[#fdda36] text-[#514163] rounded-lg font-semibold hover:bg-[#ffd51a] transition-colors disabled:opacity-50"
-        >
-          <Save className="w-5 h-5" />
-          {saving
-            ? language === 'es'
-              ? 'Guardando...'
-              : 'Saving...'
-            : language === 'es'
-            ? 'Guardar Preferencias'
-            : 'Save Preferences'}
-        </button>
-      </div>
-
-      {/* Info */}
-      <div className="bg-gray-50 dark:bg-gray-900 dark:bg-gray-900 rounded-lg p-4">
-        <p className="text-xs text-gray-600 dark:text-gray-400 dark:text-gray-400">
-          {language === 'es'
-            ? '📌 Las notificaciones push requieren configuración adicional y estarán disponibles próximamente. Los registros de notificaciones se eliminan automáticamente después de 30 días (cumplimiento GDPR).'
-            : '📌 Push notifications require additional setup and will be available soon. Notification logs are automatically deleted after 30 days (GDPR compliance).'}
-        </p>
-      </div>
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[#fdda36] text-[#514163] rounded-xl font-semibold hover:bg-[#ffd51a] transition-colors disabled:opacity-50"
+      >
+        <Save className="w-5 h-5" />
+        {saving
+          ? language === 'es' ? 'Guardando...' : 'Saving...'
+          : language === 'es' ? 'Guardar Preferencias' : 'Save Preferences'}
+      </button>
     </div>
   );
 }

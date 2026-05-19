@@ -1,4 +1,3 @@
-import { capacitorReady } from '../main';
 import { supabase } from '../lib/supabase';
 
 export type PushPermissionStatus = 'granted' | 'denied' | 'prompt' | 'unavailable';
@@ -148,12 +147,6 @@ export async function initPushNotifications(): Promise<PushPermissionStatus> {
   initializationInProgress = true;
 
   try {
-    const isNative = await capacitorReady;
-    if (!isNative) {
-      initializationInProgress = false;
-      return 'unavailable';
-    }
-
     let Capacitor: typeof import('@capacitor/core').Capacitor;
     try {
       const coreMod = await import('@capacitor/core');
