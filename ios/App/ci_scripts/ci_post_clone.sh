@@ -1,25 +1,25 @@
 #!/bin/bash
 set -e
 
-echo "--- Instalando Node.js ---"
+# 1. Entorno
 brew install node
 export PATH=$PATH:/usr/local/bin
-
 cd ../../..
 
-echo "--- Instalando Dependencias y Build Web ---"
+# 2. Instalación limpia
 npm install --force
 npm run build
-
-echo "--- Sincronizando Capacitor ---"
 npx cap sync ios
 
-echo "--- CIRUGÍA DE XCODE: Eliminando fantasmas de Cordova ---"
-# Entramos a la carpeta del proyecto nativo
+# 3. ELIMINACIÓN QUIRÚRGICA (La clave de la 104)
+echo "--- Eliminando rastro de Cordova en el ADN del proyecto ---"
 cd ios/App/App.xcodeproj
 
-# Este comando busca cualquier línea que mencione Cordova.framework y la ELIMINA 
-# del archivo de configuración del proyecto para que Apple no la busque más.
+# Borra la línea del Framework
 sed -i '' '/Cordova\.framework/d' project.pbxproj
 
-echo "--- Limpieza completada. Compilando... ---"
+# Borra las rutas de búsqueda (Search Paths) que apuntan a Cordova
+sed -i '' '/"$(inherited)",/d' project.pbxproj
+sed -i '' 's/.*Cordova.*//g' project.pbxproj
+
+echo "--- Limpieza profunda terminada ---"
