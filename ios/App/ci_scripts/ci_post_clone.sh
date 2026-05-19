@@ -14,12 +14,4 @@ npm run build
 echo "--- Sincronizando Capacitor ---"
 npx cap sync ios
 
-echo "--- CIRUGÍA DE XCODE: Eliminando fantasmas de Cordova ---"
-# Entramos a la carpeta del proyecto nativo
-cd ios/App/App.xcodeproj
-
-# Este comando busca cualquier línea que mencione Cordova.framework y la ELIMINA 
-# del archivo de configuración del proyecto para que Apple no la busque más.
-sed -i '' '/Cordova\.framework/d' project.pbxproj
-
 echo "--- Limpieza completada. Compilando... ---"
