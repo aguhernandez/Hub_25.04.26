@@ -15,6 +15,7 @@ interface MembershipStatus {
   canAccessWorkoutBuilder: boolean;
   canAccessTeams: boolean;
   canAccessAIWorkouts: boolean;
+  canAccessAssessments: boolean;
   loading: boolean;
 }
 
@@ -114,6 +115,7 @@ export function useMembership(): MembershipStatus {
     canAccessWorkoutBuilder: currentLvl >= LEVEL_HIERARCHY.pro,
     canAccessTeams: level === 'teams_sports',
     canAccessAIWorkouts: currentLvl >= LEVEL_HIERARCHY.intermediate,
+    canAccessAssessments: currentLvl >= LEVEL_HIERARCHY.intermediate,
     loading
   };
 }

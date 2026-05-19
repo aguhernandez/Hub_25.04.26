@@ -101,7 +101,7 @@ export default function TrainingPage() {
   const { toast, showToast, hideToast, success, error } = useToast();
   const { selectedAthleteId, selectedAthleteName, clearSelectedAthlete } = useAthlete();
   const effectiveAthleteId = profile?.role === 'trainer' && selectedAthleteId ? selectedAthleteId : profile?.id;
-  const { canAccessAIWorkouts } = useMembership();
+  const { canAccessAIWorkouts, canAccessAssessments } = useMembership();
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [calendarView, setCalendarView] = useState<CalendarView>('week');
@@ -120,6 +120,7 @@ export default function TrainingPage() {
   const [showQuickActionMenu, setShowQuickActionMenu] = useState(false);
   const [showFAB, setShowFAB] = useState(false);
   const [showAssessmentMenu, setShowAssessmentMenu] = useState(false);
+  const [showAssessmentUpgradeModal, setShowAssessmentUpgradeModal] = useState(false);
   const [showStrengthEstimator, setShowStrengthEstimator] = useState(false);
   const [estimatorExerciseId, setEstimatorExerciseId] = useState<string>('');
   const [estimatorExerciseName, setEstimatorExerciseName] = useState<string>('');
@@ -1497,9 +1498,21 @@ export default function TrainingPage() {
                   </p>
                   <div className="grid grid-cols-2 gap-3">
                     <button
-                      onClick={() => { setShowAssessmentMenu(false); setShowCMJAssessment(true); }}
-                      className="group flex flex-col items-center gap-2 p-4 rounded-xl bg-cyan-50 dark:bg-cyan-900/20 hover:bg-cyan-500 transition-all border border-cyan-200 dark:border-cyan-800 hover:border-cyan-500"
+                      onClick={() => {
+                        setShowAssessmentMenu(false);
+                        if (canAccessAssessments) {
+                          setShowCMJAssessment(true);
+                        } else {
+                          setShowAssessmentUpgradeModal(true);
+                        }
+                      }}
+                      className="group relative flex flex-col items-center gap-2 p-4 rounded-xl bg-cyan-50 dark:bg-cyan-900/20 hover:bg-cyan-500 transition-all border border-cyan-200 dark:border-cyan-800 hover:border-cyan-500"
                     >
+                      {!canAccessAssessments && (
+                        <div className="absolute top-2 right-2 bg-[#fdda36] text-[#514163] text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-tight uppercase tracking-wide">
+                          PRO
+                        </div>
+                      )}
                       <div className="w-10 h-10 rounded-lg bg-cyan-500 group-hover:bg-white/20 flex items-center justify-center transition-colors">
                         <Zap className="w-5 h-5 text-white" />
                       </div>
@@ -1509,9 +1522,21 @@ export default function TrainingPage() {
                       </div>
                     </button>
                     <button
-                      onClick={() => { setShowAssessmentMenu(false); setShowBarVelocity(true); }}
-                      className="group flex flex-col items-center gap-2 p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-600 transition-all border border-blue-200 dark:border-blue-800 hover:border-blue-600"
+                      onClick={() => {
+                        setShowAssessmentMenu(false);
+                        if (canAccessAssessments) {
+                          setShowBarVelocity(true);
+                        } else {
+                          setShowAssessmentUpgradeModal(true);
+                        }
+                      }}
+                      className="group relative flex flex-col items-center gap-2 p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-600 transition-all border border-blue-200 dark:border-blue-800 hover:border-blue-600"
                     >
+                      {!canAccessAssessments && (
+                        <div className="absolute top-2 right-2 bg-[#fdda36] text-[#514163] text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-tight uppercase tracking-wide">
+                          PRO
+                        </div>
+                      )}
                       <div className="w-10 h-10 rounded-lg bg-blue-600 group-hover:bg-white/20 flex items-center justify-center transition-colors">
                         <BarChart2 className="w-5 h-5 text-white" />
                       </div>
@@ -1646,6 +1671,67 @@ export default function TrainingPage() {
                   {language === 'es' ? 'Ver plan Intermedio' : 'See Intermediate plan'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assessment Upgrade Modal */}
+      {showAssessmentUpgradeModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="relative bg-gradient-to-br from-cyan-600 to-blue-700 p-6 pb-8">
+              <button
+                onClick={() => setShowAssessmentUpgradeModal(false)}
+                className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-14 h-14 bg-white/15 rounded-2xl flex items-center justify-center mb-4">
+                <Activity className="w-7 h-7 text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-1">
+                {language === 'es' ? 'Evaluaciones de Rendimiento' : 'Performance Assessments'}
+              </h2>
+              <p className="text-white/70 text-sm">
+                {language === 'es'
+                  ? 'Necesitás el plan Intermedio o superior para acceder a las evaluaciones CMJ y Bar Velocity.'
+                  : 'You need Intermediate plan or higher to access CMJ and Bar Velocity assessments.'}
+              </p>
+            </div>
+
+            <div className="px-6 py-5">
+              <div className="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded-xl p-4 mb-5">
+                <p className="text-xs font-bold text-cyan-700 dark:text-cyan-400 uppercase tracking-wide mb-3">
+                  {language === 'es' ? 'Incluido en Intermediate y Pro' : 'Included in Intermediate & Pro'}
+                </p>
+                <ul className="space-y-2">
+                  {[
+                    language === 'es' ? 'Jump Assessment (CMJ) — altura y potencia' : 'Jump Assessment (CMJ) — height & power',
+                    language === 'es' ? 'Bar Velocity (VBT) — perfiles de velocidad' : 'Bar Velocity (VBT) — velocity profiles',
+                    language === 'es' ? 'Historial completo de evaluaciones' : 'Full assessment history',
+                    language === 'es' ? 'Prescripción de carga por velocidad' : 'Velocity-based load prescription',
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-2 text-sm text-cyan-800 dark:text-cyan-300">
+                      <div className="w-4 h-4 rounded-full bg-cyan-500 flex items-center justify-center flex-shrink-0">
+                        <CheckCircle2 className="w-3 h-3 text-white" />
+                      </div>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <button
+                onClick={() => {
+                  setShowAssessmentUpgradeModal(false);
+                  window.dispatchEvent(new CustomEvent('navigate', { detail: 'memberships-marketplace' }));
+                }}
+                className="w-full py-3 rounded-xl bg-[#514163] hover:bg-[#3a2f4a] text-white font-semibold transition-colors text-sm flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4 text-[#fdda36]" />
+                {language === 'es' ? 'Ver planes disponibles' : 'See available plans'}
+              </button>
             </div>
           </div>
         </div>
