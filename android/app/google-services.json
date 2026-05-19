@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "411572523",
+    "project_id": "asciende-hub",
+    "storage_bucket": "asciende-hub.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:411572523:android:a407fc497c8846a25d0d6e",
+        "android_client_info": {
+          "package_name": "pro.asciende.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCEhJxiSiePENsNB-PvqMMv-im1Wkxm_ZM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
