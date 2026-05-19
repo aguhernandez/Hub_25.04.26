@@ -1,4 +1,4 @@
-const CACHE_NAME = 'asciende-v6';
+const CACHE_NAME = 'asciende-v7';
 const OFFLINE_URL = '/offline.html';
 
 const PRECACHE_URLS = [
