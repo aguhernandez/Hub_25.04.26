@@ -78,16 +78,19 @@ if (isPublicRoute) {
   );
 }
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', async () => {
-    try {
-      await navigator.serviceWorker.register('/service-worker.js', {
-        scope: '/',
-        updateViaCache: 'none',
-      });
-    } catch (error) {
-      console.error('Service Worker registration failed:', error);
-    }
+if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+  capacitorReady.then((isNative) => {
+    if (isNative) return;
+    window.addEventListener('load', async () => {
+      try {
+        await navigator.serviceWorker.register('/service-worker.js', {
+          scope: '/',
+          updateViaCache: 'none',
+        });
+      } catch {
+        // Service Worker not available in this context
+      }
+    });
   });
 }
 
