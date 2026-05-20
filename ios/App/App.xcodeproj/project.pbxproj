@@ -387,10 +387,10 @@
 /* Begin XCRemoteSwiftPackageReference section */
 		C355821C2FBB9DCB00EC1194 /* XCRemoteSwiftPackageReference "capacitor-swift-pm" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ionic-team/capacitor-swift-pm";
+			repositoryURL = "https://github.com/ionic-team/capacitor-swift-pm.git";
 			requirement = {
-				branch = main;
-				kind = branch;
+				kind = exactVersion;
+				version = 7.6.5;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */

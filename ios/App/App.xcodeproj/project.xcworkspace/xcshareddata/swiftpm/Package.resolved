@@ -1,4 +1,5 @@
 {
+  "originHash" : "5e76fa1b9c18e1cba1bf29d2f57e41b08ca58e31f26b6a89c49e7b2a1ddb67c4",
   "pins" : [
     {
       "identity" : "capacitor-swift-pm",
@@ -14,10 +15,10 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ionic-team/ion-ios-geolocation.git",
       "state" : {
-        "revision" : "db36392",
+        "revision" : "db363927d3a954e3ea24d2e72b6e9814769a84be",
         "version" : "2.1.1"
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }
