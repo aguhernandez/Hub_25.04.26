@@ -8,6 +8,15 @@
         "revision" : "aa5713389a96b9f9c30e73c15d326ab2b0c258d2",
         "version" : "7.6.5"
       }
+    },
+    {
+      "identity" : "ion-ios-geolocation",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ionic-team/ion-ios-geolocation.git",
+      "state" : {
+        "revision" : "db36392",
+        "version" : "2.1.1"
+      }
     }
   ],
   "version" : 2
