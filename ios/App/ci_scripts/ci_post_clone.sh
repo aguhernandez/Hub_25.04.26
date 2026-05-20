@@ -18,8 +18,14 @@ npm install --force
 npm run build
 npx cap sync ios
 
-echo "--- Limpieza de Cordova ---"
+echo "--- Limpieza de Cordova en pbxproj ---"
 cd ios/App/App.xcodeproj
 sed -i '' '/Cordova\.framework/d' project.pbxproj
+cd ../../..
+
+echo "--- Forzando resolucion SPM a version pinneada ---"
+cd ios/App
+xcodebuild -resolvePackageDependencies -project App.xcodeproj -scheme App 2>/dev/null || true
+cd ../..
 
 echo "--- Build completado ---"
