@@ -28,6 +28,7 @@
     <!-- ─── Foreground service for GPS recording ─────────────────────────── -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- ─── Hardware features (optional, prevents store filtering issues) ── -->
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
@@ -73,6 +74,13 @@
             </intent-filter>
 
         </activity>
+
+        <!-- GPS Tracking Foreground Service -->
+        <service
+            android:name="pro.asciende.app.LocationForegroundService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
 
         <!-- Provider for file sharing (camera, file export) -->
         <provider

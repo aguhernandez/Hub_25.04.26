@@ -329,6 +329,33 @@ export async function getGPSWatchPositionAsync(
   onError: (error: GeolocationPositionError) => void,
 ): Promise<number> {
   const isNative = await checkNativeCapacitor();
+  const platform = await getNativePlatform();
+
+  // Android: use native foreground service for reliable background GPS
+  if (platform === 'android') {
+    try {
+      await startAndroidBackgroundLocation();
+      await addNativeLocationListener((data) => {
+        const position: GeolocationPosition = {
+          coords: {
+            latitude: data.latitude,
+            longitude: data.longitude,
+            altitude: data.altitude ?? null,
+            accuracy: data.accuracy,
+            altitudeAccuracy: null,
+            heading: data.heading ?? null,
+            speed: data.speed ?? null,
+          },
+          timestamp: data.timestamp,
+          toJSON() { return this; },
+        } as GeolocationPosition;
+        onSuccess(position);
+      });
+      return -2; // Special value indicating Android native service
+    } catch (error) {
+      console.debug('Android foreground service failed, falling back to Capacitor watchPosition', error);
+    }
+  }
 
   if (isNative) {
     try {
@@ -389,6 +416,13 @@ export function getGPSWatchPosition(
 }
 
 export async function clearGPSWatchAsync(watchId: number): Promise<void> {
+  // Android native foreground service
+  if (watchId === -2) {
+    await removeNativeLocationListener();
+    await stopAndroidBackgroundLocation();
+    return;
+  }
+  // Capacitor watchPosition (iOS)
   if (_capacitorWatchId !== null) {
     try {
       const { Geolocation } = await import('@capacitor/geolocation');
@@ -403,6 +437,13 @@ export async function clearGPSWatchAsync(watchId: number): Promise<void> {
 }
 
 export function clearGPSWatch(watchId: number): void {
+  // Android native foreground service
+  if (watchId === -2) {
+    removeNativeLocationListener().catch(() => {});
+    stopAndroidBackgroundLocation().catch(() => {});
+    return;
+  }
+  // Capacitor watchPosition (iOS)
   if (_capacitorWatchId !== null) {
     import('@capacitor/geolocation').then(({ Geolocation }) => {
       Geolocation.clearWatch({ id: _capacitorWatchId! }).catch(() => {});
@@ -493,16 +534,26 @@ export async function releaseWakeLock(): Promise<void> {
   destroySilentAudioContext();
 }
 
-// ── iOS BACKGROUND LOCATION PLUGIN ───────────────────────────────────────────
-// Activates BackgroundLocationPlugin.swift so GPS keeps running with screen off.
+// ── NATIVE BACKGROUND LOCATION PLUGIN ────────────────────────────────────────
+// On iOS: activates BackgroundLocationPlugin.swift (CLLocationManager with background mode)
+// On Android: starts LocationForegroundService (persistent notification + FusedLocationProvider)
 
-async function isIOSNative(): Promise<boolean> {
+async function getNativePlatform(): Promise<'ios' | 'android' | 'web'> {
   try {
     const { Capacitor } = await import('@capacitor/core');
-    return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios';
+    if (!Capacitor.isNativePlatform()) return 'web';
+    return Capacitor.getPlatform() as 'ios' | 'android';
   } catch {
-    return false;
+    return 'web';
   }
+}
+
+async function isIOSNative(): Promise<boolean> {
+  return (await getNativePlatform()) === 'ios';
+}
+
+async function isAndroidNative(): Promise<boolean> {
+  return (await getNativePlatform()) === 'android';
 }
 
 export async function startIOSBackgroundLocation(): Promise<void> {
@@ -527,6 +578,81 @@ export async function stopIOSBackgroundLocation(): Promise<void> {
       await plugin.stopBackgroundLocation();
     }
   } catch {}
+}
+
+export async function startAndroidBackgroundLocation(): Promise<void> {
+  if (!(await isAndroidNative())) return;
+  try {
+    const { Plugins } = await import('@capacitor/core');
+    const plugin = (Plugins as any).BackgroundLocation;
+    if (plugin?.startBackgroundLocation) {
+      await plugin.startBackgroundLocation();
+    }
+  } catch {
+    console.debug('Android BackgroundLocation plugin not available');
+  }
+}
+
+export async function stopAndroidBackgroundLocation(): Promise<void> {
+  if (!(await isAndroidNative())) return;
+  try {
+    const { Plugins } = await import('@capacitor/core');
+    const plugin = (Plugins as any).BackgroundLocation;
+    if (plugin?.stopBackgroundLocation) {
+      await plugin.stopBackgroundLocation();
+    }
+  } catch {}
+}
+
+// Unified start/stop that handles both platforms
+export async function startNativeBackgroundLocation(): Promise<void> {
+  const platform = await getNativePlatform();
+  if (platform === 'ios') {
+    await startIOSBackgroundLocation();
+  } else if (platform === 'android') {
+    await startAndroidBackgroundLocation();
+  }
+}
+
+export async function stopNativeBackgroundLocation(): Promise<void> {
+  const platform = await getNativePlatform();
+  if (platform === 'ios') {
+    await stopIOSBackgroundLocation();
+  } else if (platform === 'android') {
+    await stopAndroidBackgroundLocation();
+  }
+}
+
+// Listen to native background location events (both iOS and Android emit "backgroundLocationUpdate")
+type NativeLocationCallback = (data: {
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  accuracy: number;
+  speed: number;
+  heading: number;
+  timestamp: number;
+}) => void;
+
+let _nativeLocationListenerHandle: any = null;
+
+export async function addNativeLocationListener(callback: NativeLocationCallback): Promise<void> {
+  try {
+    const { Plugins } = await import('@capacitor/core');
+    const plugin = (Plugins as any).BackgroundLocation;
+    if (plugin?.addListener) {
+      _nativeLocationListenerHandle = await plugin.addListener('backgroundLocationUpdate', callback);
+    }
+  } catch {}
+}
+
+export async function removeNativeLocationListener(): Promise<void> {
+  if (_nativeLocationListenerHandle) {
+    try {
+      await _nativeLocationListenerHandle.remove();
+    } catch {}
+    _nativeLocationListenerHandle = null;
+  }
 }
 
 // ── GPS BACKGROUND RECONNECT ──────────────────────────────────────────────────
