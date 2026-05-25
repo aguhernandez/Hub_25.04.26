@@ -51,7 +51,7 @@ public class BackgroundLocationPlugin: CAPPlugin, CAPBridgedPlugin, CLLocationMa
 
             // Sport-level accuracy and minimum movement threshold
             mgr.desiredAccuracy = kCLLocationAccuracyBest
-            mgr.distanceFilter  = 5.0
+            mgr.distanceFilter  = 2.0
 
             self.locationManager = mgr
             self.activeCall = call

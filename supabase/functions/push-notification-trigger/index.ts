@@ -8,24 +8,116 @@ const corsHeaders = {
     "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-/**
- * This function is called as a Supabase Database Webhook.
- * It detects the type of event and sends push notifications to the appropriate users.
- *
- * Supported triggers:
- * 1. New chat message -> notify recipient (category: trainer_messages)
- * 2. New workout assigned -> notify athlete (category: new_training_plan)
- * 3. New meal plan assigned -> notify athlete (category: new_nutrition_plan)
- * 4. New course published -> notify all athletes (category: new_academy_course)
- * 5. New habit assigned -> notify athlete (category: new_habit)
- */
-
 interface WebhookPayload {
   type: "INSERT" | "UPDATE" | "DELETE";
   table: string;
   schema: string;
   record: Record<string, any>;
   old_record: Record<string, any> | null;
+}
+
+interface LocalizedText {
+  es: { title: string; body: string };
+  en: { title: string; body: string };
+}
+
+function getLocalizedMessages(
+  table: string,
+  record: Record<string, any>,
+  senderName?: string
+): LocalizedText | null {
+  switch (table) {
+    case "chat_messages":
+      return {
+        es: {
+          title: senderName || "Tu entrenador",
+          body: record.content?.slice(0, 100) || "Te ha enviado un mensaje",
+        },
+        en: {
+          title: senderName || "Your coach",
+          body: record.content?.slice(0, 100) || "Sent you a message",
+        },
+      };
+
+    case "athlete_workouts":
+      return {
+        es: {
+          title: "Nuevo entrenamiento",
+          body: record.name
+            ? `Se te ha asignado: ${record.name}`
+            : "Tienes un nuevo entrenamiento asignado",
+        },
+        en: {
+          title: "New workout",
+          body: record.name
+            ? `Assigned to you: ${record.name}`
+            : "You have a new workout assigned",
+        },
+      };
+
+    case "meal_plans":
+      return {
+        es: {
+          title: "Nuevo plan de nutricion",
+          body: record.name
+            ? `Plan asignado: ${record.name}`
+            : "Tienes un nuevo plan de nutricion",
+        },
+        en: {
+          title: "New nutrition plan",
+          body: record.name
+            ? `Plan assigned: ${record.name}`
+            : "You have a new nutrition plan",
+        },
+      };
+
+    case "nutrition_pushed_plans":
+      return {
+        es: {
+          title: "Nuevo plan de nutricion",
+          body: "Tu entrenador te ha enviado un plan de nutricion",
+        },
+        en: {
+          title: "New nutrition plan",
+          body: "Your coach has sent you a nutrition plan",
+        },
+      };
+
+    case "courses":
+      return {
+        es: {
+          title: "Nuevo curso disponible",
+          body: record.title
+            ? `${record.title} ya esta disponible en Academy`
+            : "Hay un nuevo curso disponible en Academy",
+        },
+        en: {
+          title: "New course available",
+          body: record.title
+            ? `${record.title} is now available in Academy`
+            : "There is a new course available in Academy",
+        },
+      };
+
+    case "user_habits":
+      return {
+        es: {
+          title: "Nuevo habito asignado",
+          body: record.name
+            ? `Nuevo habito: ${record.name}`
+            : "Se te ha asignado un nuevo habito",
+        },
+        en: {
+          title: "New habit assigned",
+          body: record.name
+            ? `New habit: ${record.name}`
+            : "You have been assigned a new habit",
+        },
+      };
+
+    default:
+      return null;
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -49,18 +141,15 @@ Deno.serve(async (req: Request) => {
     }
 
     let targetUserIds: string[] = [];
-    let title = "";
-    let body = "";
     let category = "";
     let data: Record<string, string> = {};
+    let senderName: string | undefined;
 
     switch (table) {
       case "chat_messages": {
-        // New chat message: notify the other participant
         const conversationId = record.conversation_id;
         const senderId = record.sender_id;
 
-        // Get conversation participants
         const { data: participants } = await supabase
           .from("chat_participants")
           .select("user_id")
@@ -71,68 +160,47 @@ Deno.serve(async (req: Request) => {
           targetUserIds = participants.map((p: any) => p.user_id);
         }
 
-        // Get sender name
         const { data: senderProfile } = await supabase
           .from("profiles")
           .select("full_name")
           .eq("id", senderId)
           .maybeSingle();
 
-        const senderName = senderProfile?.full_name || "Tu entrenador";
-        title = senderName;
-        body = record.content?.slice(0, 100) || "Te ha enviado un mensaje";
+        senderName = senderProfile?.full_name || undefined;
         category = "trainer_messages";
         data = { page: "chat" };
         break;
       }
 
       case "athlete_workouts": {
-        // New workout assigned to athlete
         const athleteId = record.athlete_id;
         if (!athleteId) break;
-
         targetUserIds = [athleteId];
-        title = "Nuevo entrenamiento";
-        body = record.name
-          ? `Se te ha asignado: ${record.name}`
-          : "Tienes un nuevo entrenamiento asignado";
         category = "new_training_plan";
         data = { page: "training" };
         break;
       }
 
       case "meal_plans": {
-        // New meal plan assigned to athlete
         const athleteId = record.athlete_id;
         if (!athleteId) break;
-
         targetUserIds = [athleteId];
-        title = "Nuevo plan de nutricion";
-        body = record.name
-          ? `Plan asignado: ${record.name}`
-          : "Tienes un nuevo plan de nutricion";
         category = "new_nutrition_plan";
         data = { page: "nutrition-dashboard" };
         break;
       }
 
       case "nutrition_pushed_plans": {
-        // Nutrition plan pushed to athlete
         const athleteId = record.athlete_id;
         if (!athleteId) break;
-
         targetUserIds = [athleteId];
-        title = "Nuevo plan de nutricion";
-        body = "Tu entrenador te ha enviado un plan de nutricion";
         category = "new_nutrition_plan";
         data = { page: "nutrition-dashboard" };
         break;
       }
 
       case "courses": {
-        // New course published - notify all athletes
         if (record.status !== "published") break;
-
         const { data: athletes } = await supabase
           .from("profiles")
           .select("id")
@@ -141,30 +209,17 @@ Deno.serve(async (req: Request) => {
         if (athletes) {
           targetUserIds = athletes.map((a: any) => a.id);
         }
-
-        title = "Nuevo curso disponible";
-        body = record.title
-          ? `${record.title} ya esta disponible en Academy`
-          : "Hay un nuevo curso disponible en Academy";
         category = "new_academy_course";
         data = { page: "dashboard" };
         break;
       }
 
       case "user_habits": {
-        // New habit assigned to user
         const userId = record.user_id;
         if (!userId) break;
-
-        // Only notify if someone else assigned it (trainer)
         const createdBy = record.created_by;
         if (createdBy && createdBy === userId) break;
-
         targetUserIds = [userId];
-        title = "Nuevo habito asignado";
-        body = record.name
-          ? `Nuevo habito: ${record.name}`
-          : "Se te ha asignado un nuevo habito";
         category = "new_habit";
         data = { page: "habits" };
         break;
@@ -177,34 +232,62 @@ Deno.serve(async (req: Request) => {
         );
     }
 
-    if (targetUserIds.length === 0 || !title) {
+    if (targetUserIds.length === 0) {
       return new Response(
-        JSON.stringify({ skipped: true, reason: "No target users or empty notification" }),
+        JSON.stringify({ skipped: true, reason: "No target users" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Call the send-push-notification function
-    const sendUrl = `${supabaseUrl}/functions/v1/send-push-notification`;
-    const response = await fetch(sendUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${supabaseServiceKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        user_ids: targetUserIds,
-        title,
-        body,
-        data,
-        category,
-      }),
-    });
+    const localizedMessages = getLocalizedMessages(table, record, senderName);
+    if (!localizedMessages) {
+      return new Response(
+        JSON.stringify({ skipped: true, reason: "No messages for table" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    const result = await response.json();
+    // Fetch user languages to group by locale
+    const { data: userProfiles } = await supabase
+      .from("profiles")
+      .select("id, language")
+      .in("id", targetUserIds);
+
+    const usersByLang: Record<string, string[]> = { es: [], en: [] };
+    for (const userId of targetUserIds) {
+      const profile = userProfiles?.find((p: any) => p.id === userId);
+      const lang = profile?.language === "es" ? "es" : "en";
+      usersByLang[lang].push(userId);
+    }
+
+    const sendUrl = `${supabaseUrl}/functions/v1/send-push-notification`;
+    const results: any[] = [];
+
+    for (const lang of ["es", "en"] as const) {
+      const ids = usersByLang[lang];
+      if (ids.length === 0) continue;
+
+      const msg = localizedMessages[lang];
+      const response = await fetch(sendUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_ids: ids,
+          title: msg.title,
+          body: msg.body,
+          data,
+          category,
+        }),
+      });
+
+      const result = await response.json();
+      results.push({ lang, ...result });
+    }
 
     return new Response(
-      JSON.stringify({ success: true, table, category, ...result }),
+      JSON.stringify({ success: true, table, category, results }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {

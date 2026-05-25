@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { initPushNotifications, silentReRegister } from '../services/pushNotificationService';
 import type { Database } from '../lib/database.types';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -24,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const pushInitDone = useRef(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -31,6 +33,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         loadProfile(session.user.id);
+        if (!pushInitDone.current) {
+          pushInitDone.current = true;
+          setTimeout(() => { silentReRegister(); }, 1500);
+        }
       } else {
         setLoading(false);
       }
@@ -41,8 +47,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         loadProfile(session.user.id);
+        if (!pushInitDone.current) {
+          pushInitDone.current = true;
+          setTimeout(() => { initPushNotifications(); }, 1500);
+        }
       } else {
         setProfile(null);
+        pushInitDone.current = false;
         setLoading(false);
       }
     });

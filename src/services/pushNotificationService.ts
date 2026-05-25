@@ -139,9 +139,40 @@ async function addListeners(platform: string): Promise<void> {
 }
 
 /**
- * Must ONLY be called from an explicit user interaction (e.g. toggling a setting).
- * Never call this automatically on app startup or login.
+ * Silently re-registers push notifications without prompting for permission.
+ * Used after login when permission was already granted in a previous session.
  */
+export async function silentReRegister(): Promise<void> {
+  try {
+    let Capacitor: typeof import('@capacitor/core').Capacitor;
+    try {
+      const coreMod = await import('@capacitor/core');
+      Capacitor = coreMod.Capacitor;
+    } catch {
+      return;
+    }
+
+    if (!Capacitor.isNativePlatform()) return;
+
+    let PushNotifications: typeof import('@capacitor/push-notifications').PushNotifications;
+    try {
+      const mod = await import('@capacitor/push-notifications');
+      PushNotifications = mod.PushNotifications;
+    } catch {
+      return;
+    }
+
+    const permStatus = await PushNotifications.checkPermissions();
+    if (permStatus.receive !== 'granted') return;
+
+    const platform = Capacitor.getPlatform();
+    await addListeners(platform);
+    await PushNotifications.register();
+  } catch {
+    // Silent re-register is best-effort
+  }
+}
+
 export async function initPushNotifications(): Promise<PushPermissionStatus> {
   if (initializationInProgress) return 'unavailable';
   initializationInProgress = true;

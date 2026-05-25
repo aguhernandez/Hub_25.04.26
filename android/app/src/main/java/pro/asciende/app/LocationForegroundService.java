@@ -135,7 +135,7 @@ public class LocationForegroundService extends Service {
                     PowerManager.PARTIAL_WAKE_LOCK,
                     "asciende:gps_tracking_lock"
             );
-            wakeLock.acquire(4 * 60 * 60 * 1000L); // 4 hours max
+            wakeLock.acquire(12 * 60 * 60 * 1000L); // 12 hours max
         }
     }
 
