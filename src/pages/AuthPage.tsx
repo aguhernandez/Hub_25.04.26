@@ -347,6 +347,48 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoB
     }
   };
 
+  const handleAppleSignIn = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      const redirectTo = redirectUrl
+        ? `${window.location.origin}?redirect=${encodeURIComponent(redirectUrl)}`
+        : window.location.origin;
+
+      let isNative = false;
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        isNative = Capacitor.isNativePlatform();
+      } catch { /* not native */ }
+
+      if (isNative) {
+        const nativeRedirectTo = 'pro.asciende.app://login-callback';
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: 'apple',
+          options: {
+            redirectTo: nativeRedirectTo,
+            skipBrowserRedirect: true,
+          },
+        });
+        if (error) { setError(error.message); return; }
+        if (data?.url) {
+          const { Browser } = await import('@capacitor/browser');
+          await Browser.open({ url: data.url, windowName: '_self' });
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'apple',
+          options: { redirectTo },
+        });
+        if (error) setError(error.message);
+      }
+    } catch {
+      setError(language === 'es' ? 'Error al conectar con Apple' : 'Failed to connect with Apple');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -884,7 +926,7 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoB
               </button>
             </form>
 
-            {/* Google Sign In */}
+            {/* Social Sign In */}
             <div className="mt-5 md:mt-6">
               <div className="flex items-center gap-4 mb-5">
                 <div className="flex-1 h-px bg-white/8" />
@@ -894,23 +936,40 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoB
                 <div className="flex-1 h-px bg-white/8" />
               </div>
 
-              <button
-                type="button"
-                onClick={handleGoogleSignIn}
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-3 py-3.5 md:py-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {/* Google "G" SVG logo */}
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M17.64 9.2045c0-.6381-.0573-1.2518-.1636-1.8409H9v3.4814h4.8436c-.2086 1.125-.8427 2.0782-1.7959 2.7164v2.2581h2.9087c1.7018-1.5668 2.6836-3.874 2.6836-6.615z" fill="#4285F4"/>
-                  <path d="M9 18c2.43 0 4.4673-.8059 5.9564-2.1818l-2.9087-2.2581c-.8059.54-1.8368.8591-3.0477.8591-2.3441 0-4.3282-1.5836-5.036-3.7105H.9574v2.3318C2.4382 15.9832 5.4818 18 9 18z" fill="#34A853"/>
-                  <path d="M3.964 10.71c-.18-.54-.2827-1.1168-.2827-1.71s.1027-1.17.2827-1.71V4.9582H.9573C.3477 6.1732 0 7.5477 0 9s.3477 2.8268.9573 4.0418L3.964 10.71z" fill="#FBBC05"/>
-                  <path d="M9 3.5795c1.3214 0 2.5077.4541 3.4405 1.346l2.5813-2.5814C13.4632.8918 11.4259 0 9 0 5.4818 0 2.4382 2.0168.9573 4.9582L3.964 7.29C4.6718 5.1632 6.6559 3.5795 9 3.5795z" fill="#EA4335"/>
-                </svg>
-                <span className="text-white/70 text-sm md:text-base font-medium">
-                  {language === 'es' ? 'Continuar con Google' : 'Continue with Google'}
-                </span>
-              </button>
+              <div className="space-y-3">
+                {/* Sign in with Apple */}
+                <button
+                  type="button"
+                  onClick={handleAppleSignIn}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-3 py-3.5 md:py-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg width="17" height="20" viewBox="0 0 170 200" fill="currentColor" className="text-white">
+                    <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.197-2.12-9.973-3.17-14.34-3.17-4.58 0-9.492 1.05-14.746 3.17-5.262 2.13-9.501 3.24-12.742 3.35-4.929.21-9.842-1.96-14.746-6.52-3.13-2.73-7.045-7.41-11.735-14.04-5.032-7.08-9.169-15.29-12.41-24.65-3.471-10.11-5.211-19.9-5.211-29.378 0-10.857 2.346-20.221 7.045-28.068 3.693-6.303 8.606-11.275 14.755-14.925s12.793-5.51 19.948-5.629c3.915 0 9.049 1.211 15.429 3.591 6.362 2.388 10.447 3.599 12.238 3.599 1.339 0 5.877-1.416 13.57-4.239 7.275-2.618 13.415-3.702 18.445-3.275 13.63 1.1 23.87 6.473 30.68 16.153-12.19 7.386-18.22 17.731-18.1 31.002.11 10.337 3.86 18.939 11.23 25.769 3.34 3.17 7.07 5.62 11.22 7.36-.9 2.61-1.85 5.11-2.86 7.51zM119.11 7.24c0 8.102-2.96 15.667-8.86 22.669-7.12 8.324-15.732 13.134-25.071 12.375a25.222 25.222 0 0 1-.188-3.071c0-7.778 3.386-16.102 9.399-22.908 3.002-3.446 6.82-6.311 11.45-8.597 4.62-2.252 8.99-3.497 13.1-3.71.12 1.083.17 2.166.17 3.242z"/>
+                  </svg>
+                  <span className="text-white/70 text-sm md:text-base font-medium">
+                    {language === 'es' ? 'Continuar con Apple' : 'Continue with Apple'}
+                  </span>
+                </button>
+
+                {/* Sign in with Google */}
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-3 py-3.5 md:py-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M17.64 9.2045c0-.6381-.0573-1.2518-.1636-1.8409H9v3.4814h4.8436c-.2086 1.125-.8427 2.0782-1.7959 2.7164v2.2581h2.9087c1.7018-1.5668 2.6836-3.874 2.6836-6.615z" fill="#4285F4"/>
+                    <path d="M9 18c2.43 0 4.4673-.8059 5.9564-2.1818l-2.9087-2.2581c-.8059.54-1.8368.8591-3.0477.8591-2.3441 0-4.3282-1.5836-5.036-3.7105H.9574v2.3318C2.4382 15.9832 5.4818 18 9 18z" fill="#34A853"/>
+                    <path d="M3.964 10.71c-.18-.54-.2827-1.1168-.2827-1.71s.1027-1.17.2827-1.71V4.9582H.9573C.3477 6.1732 0 7.5477 0 9s.3477 2.8268.9573 4.0418L3.964 10.71z" fill="#FBBC05"/>
+                    <path d="M9 3.5795c1.3214 0 2.5077.4541 3.4405 1.346l2.5813-2.5814C13.4632.8918 11.4259 0 9 0 5.4818 0 2.4382 2.0168.9573 4.9582L3.964 7.29C4.6718 5.1632 6.6559 3.5795 9 3.5795z" fill="#EA4335"/>
+                  </svg>
+                  <span className="text-white/70 text-sm md:text-base font-medium">
+                    {language === 'es' ? 'Continuar con Google' : 'Continue with Google'}
+                  </span>
+                </button>
+              </div>
             </div>
 
             <div className="mt-5 md:mt-6 flex items-center gap-4">
@@ -1126,22 +1185,38 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoB
                   <div className="flex-1 h-px bg-white/8" />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleGoogleSignIn}
-                  disabled={loading || !termsAccepted}
-                  className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M17.64 9.2045c0-.6381-.0573-1.2518-.1636-1.8409H9v3.4814h4.8436c-.2086 1.125-.8427 2.0782-1.7959 2.7164v2.2581h2.9087c1.7018-1.5668 2.6836-3.874 2.6836-6.615z" fill="#4285F4"/>
-                    <path d="M9 18c2.43 0 4.4673-.8059 5.9564-2.1818l-2.9087-2.2581c-.8059.54-1.8368.8591-3.0477.8591-2.3441 0-4.3282-1.5836-5.036-3.7105H.9574v2.3318C2.4382 15.9832 5.4818 18 9 18z" fill="#34A853"/>
-                    <path d="M3.964 10.71c-.18-.54-.2827-1.1168-.2827-1.71s.1027-1.17.2827-1.71V4.9582H.9573C.3477 6.1732 0 7.5477 0 9s.3477 2.8268.9573 4.0418L3.964 10.71z" fill="#FBBC05"/>
-                    <path d="M9 3.5795c1.3214 0 2.5077.4541 3.4405 1.346l2.5813-2.5814C13.4632.8918 11.4259 0 9 0 5.4818 0 2.4382 2.0168.9573 4.9582L3.964 7.29C4.6718 5.1632 6.6559 3.5795 9 3.5795z" fill="#EA4335"/>
-                  </svg>
-                  <span className="text-white/70 text-sm font-medium">
-                    {language === 'es' ? 'Continuar con Google' : 'Continue with Google'}
-                  </span>
-                </button>
+                <div className="space-y-3">
+                  <button
+                    type="button"
+                    onClick={handleAppleSignIn}
+                    disabled={loading || !termsAccepted}
+                    className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <svg width="16" height="20" viewBox="0 0 814 1000" fill="currentColor" className="text-white">
+                      <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-57.8-155.5-127.4C46 405.8 0 279.4 0 159.6c0-67.3 25.2-130.9 70.7-177.4C121.2-.9 187.4-15.9 252.6-15.9c66.3 0 132.6 25.2 180 63.6 44.5 36.1 82.5 99.7 82.5 172.4 0 4.5-.5 9-.5 13.5 24.5-7.5 51.5-11.5 79-11.5 38.7 0 79.5 7.5 113.2 27.5 0 0 81.4-50 81.4-108.7zM549 88.5c-35.4 40.2-90.7 71.7-144.4 71.7-1.2 0-2.4 0-3.5-.1.7-55.3 24.2-108.4 60.9-146.8C497.4-26.2 554.4-55.5 607-62c.5 3.6.8 7.2.8 11 0 52.3-21.3 108-58.8 139.5z"/>
+                    </svg>
+                    <span className="text-white/70 text-sm font-medium">
+                      {language === 'es' ? 'Continuar con Apple' : 'Continue with Apple'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    disabled={loading || !termsAccepted}
+                    className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M17.64 9.2045c0-.6381-.0573-1.2518-.1636-1.8409H9v3.4814h4.8436c-.2086 1.125-.8427 2.0782-1.7959 2.7164v2.2581h2.9087c1.7018-1.5668 2.6836-3.874 2.6836-6.615z" fill="#4285F4"/>
+                      <path d="M9 18c2.43 0 4.4673-.8059 5.9564-2.1818l-2.9087-2.2581c-.8059.54-1.8368.8591-3.0477.8591-2.3441 0-4.3282-1.5836-5.036-3.7105H.9574v2.3318C2.4382 15.9832 5.4818 18 9 18z" fill="#34A853"/>
+                      <path d="M3.964 10.71c-.18-.54-.2827-1.1168-.2827-1.71s.1027-1.17.2827-1.71V4.9582H.9573C.3477 6.1732 0 7.5477 0 9s.3477 2.8268.9573 4.0418L3.964 10.71z" fill="#FBBC05"/>
+                      <path d="M9 3.5795c1.3214 0 2.5077.4541 3.4405 1.346l2.5813-2.5814C13.4632.8918 11.4259 0 9 0 5.4818 0 2.4382 2.0168.9573 4.9582L3.964 7.29C4.6718 5.1632 6.6559 3.5795 9 3.5795z" fill="#EA4335"/>
+                    </svg>
+                    <span className="text-white/70 text-sm font-medium">
+                      {language === 'es' ? 'Continuar con Google' : 'Continue with Google'}
+                    </span>
+                  </button>
+                </div>
               </form>
             )}
 
