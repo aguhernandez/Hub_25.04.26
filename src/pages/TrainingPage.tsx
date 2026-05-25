@@ -1459,10 +1459,10 @@ export default function TrainingPage() {
         </button>
 
         {/* 2. Assessment */}
-        <div className="relative">
+        <div className="relative flex flex-col">
           <button
             onClick={() => setShowAssessmentMenu(!showAssessmentMenu)}
-            className={`w-full group relative overflow-hidden rounded-xl shadow-lg border-2 transition-all p-6 text-left ${
+            className={`flex-1 w-full group relative overflow-hidden rounded-xl shadow-lg border-2 transition-all p-6 text-left ${
               showAssessmentMenu
                 ? 'bg-cyan-600 border-cyan-600'
                 : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-cyan-500 dark:hover:border-cyan-500'
