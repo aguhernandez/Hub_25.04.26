@@ -91,7 +91,7 @@ const SPORT_TYPES = [
   { id: 'open_water_swim', label: 'Open Water Swim',  labelEs: 'Natación',        color: '#06b6d4', maxSpeedKmh: 10  },
 ];
 
-type RecorderPhase = 'setup' | 'recording' | 'paused' | 'details' | 'feedback' | 'done';
+type RecorderPhase = 'setup' | 'acquiring' | 'recording' | 'paused' | 'details' | 'feedback' | 'done';
 
 export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorkout, racePlan }: ActivityRecorderProps) {
   const { language } = useLanguage();
@@ -132,6 +132,9 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
 
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [wakeLockActive, setWakeLockActive] = useState(false);
+  const [satelliteReady, setSatelliteReady] = useState(false);
+  const [acquiringSeconds, setAcquiringSeconds] = useState(0);
+  const acquiringTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [recoveredSession, setRecoveredSession] = useState<{ sportType: string; points: any[]; startTime: number } | null>(null);
   const startTimeRef = useRef<number>(0);
 
@@ -395,7 +398,8 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
     return watchId;
   };
 
-  const handleStart = async () => {
+  // Phase 1: Request GPS permission + start satellite acquisition (no timer yet)
+  const handleAcquireGPS = async () => {
     setError(null);
     setIsRequestingPermission(true);
     try {
@@ -408,32 +412,86 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
       setElevationGainM(0);
       setDurationSeconds(0);
       setGpsAccuracy(null);
+      setSatelliteReady(false);
+      setAcquiringSeconds(0);
       pausedSecondsRef.current = 0;
-      startTimeRef.current = Date.now();
       gpsFilterRef.current = new GPSFilter(sport.maxSpeedKmh);
 
-      // Acquire Wake Lock to keep screen/GPS alive
       acquireWakeLock().then(() => setWakeLockActive(true)).catch(() => {});
-      // On iOS native: activate background GPS (allowsBackgroundLocationUpdates, etc.)
       startNativeBackgroundLocation().catch(() => {});
 
-      setPhase('recording');
+      setPhase('acquiring');
       setIsRequestingPermission(false);
+
+      acquiringTimerRef.current = setInterval(() => {
+        setAcquiringSeconds(prev => prev + 1);
+      }, 1000);
+
       watchIdRef.current = await startGPSWatch((point) => {
-        persistSessionPoint(sportType, startTimeRef.current, point);
-        setGpsPoints(prev => {
-          const updated = [...prev, point];
-          if (updated.length >= 2) {
-            setDistanceKm(calculateTotalDistance(updated));
-            setElevationGainM(calculateElevationGain(updated));
-          }
-          return updated;
-        });
+        setSatelliteReady(true);
+        setGpsAccuracy(point.accuracy ?? null);
       });
     } catch {
       setError(language === 'es' ? 'No se pudo acceder al GPS.' : 'Could not access GPS.');
       setIsRequestingPermission(false);
     }
+  };
+
+  // Phase 2: Satellite is ready, user taps "Start" -> begin recording with timer
+  const handleStartRecording = () => {
+    if (acquiringTimerRef.current) {
+      clearInterval(acquiringTimerRef.current);
+      acquiringTimerRef.current = null;
+    }
+
+    // Clear any points collected during acquisition (they were just for signal check)
+    setGpsPoints([]);
+    setDistanceKm(0);
+    setElevationGainM(0);
+    gpsFilterRef.current?.reset();
+
+    startTimeRef.current = Date.now();
+    setPhase('recording');
+
+    // Re-start GPS watch now with actual tracking
+    if (watchIdRef.current !== null) {
+      clearGPSWatchAsync(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    unregisterGPSBackgroundReconnect();
+
+    startGPSWatch((point) => {
+      persistSessionPoint(sportType, startTimeRef.current, point);
+      setGpsPoints(prev => {
+        const updated = [...prev, point];
+        if (updated.length >= 2) {
+          setDistanceKm(calculateTotalDistance(updated));
+          setElevationGainM(calculateElevationGain(updated));
+        }
+        return updated;
+      });
+    }).then((id) => {
+      watchIdRef.current = id;
+    });
+  };
+
+  // Cancel acquisition and go back to setup
+  const handleCancelAcquire = () => {
+    if (acquiringTimerRef.current) {
+      clearInterval(acquiringTimerRef.current);
+      acquiringTimerRef.current = null;
+    }
+    if (watchIdRef.current !== null) {
+      clearGPSWatchAsync(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    unregisterGPSBackgroundReconnect();
+    releaseWakeLock().then(() => setWakeLockActive(false)).catch(() => {});
+    stopNativeBackgroundLocation().catch(() => {});
+    setSatelliteReady(false);
+    setGpsAccuracy(null);
+    setAcquiringSeconds(0);
+    setPhase('setup');
   };
 
   const handlePause = () => {
@@ -468,6 +526,7 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
   };
 
   const handleDiscard = () => {
+    if (acquiringTimerRef.current) { clearInterval(acquiringTimerRef.current); acquiringTimerRef.current = null; }
     if (watchIdRef.current !== null) { clearGPSWatchAsync(watchIdRef.current); watchIdRef.current = null; }
     unregisterGPSBackgroundReconnect();
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
@@ -477,6 +536,7 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
     cleanupMap();
     setGpsPoints([]); setDistanceKm(0); setElevationGainM(0); setDurationSeconds(0);
     setTitle(''); setNotes(''); setError(null); setPhase('setup');
+    setSatelliteReady(false); setGpsAccuracy(null); setAcquiringSeconds(0);
     setFeedbackStep(1); setFeedback({ rpe: 5, energy_level: 'normal', pain_level: 'none', mood: 'normal', feedback_notes: '' });
     setLapPointIndices([]); setWarmUpEndIndex(null); setExcludeWarmUp(false);
     setRecoveredSession(null);
@@ -1526,6 +1586,125 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
     );
   }
 
+  // ── ACQUIRING SATELLITE ──────────────────────────────────────────────────────
+  if (phase === 'acquiring') {
+    const accuracyColor = !satelliteReady
+      ? '#ef4444'
+      : (gpsAccuracy ?? 999) <= 10
+        ? '#22c55e'
+        : (gpsAccuracy ?? 999) <= 25
+          ? '#eab308'
+          : '#f97316';
+    const accuracyLabel = !satelliteReady
+      ? (language === 'es' ? 'Buscando satelite...' : 'Searching satellite...')
+      : (gpsAccuracy ?? 999) <= 10
+        ? (language === 'es' ? 'Senal excelente' : 'Excellent signal')
+        : (gpsAccuracy ?? 999) <= 25
+          ? (language === 'es' ? 'Senal buena' : 'Good signal')
+          : (language === 'es' ? 'Senal debil' : 'Weak signal');
+
+    return (
+      <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50">
+        <div className="bg-white dark:bg-gray-900 rounded-t-3xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md">
+          <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              {language === 'es' ? 'Nueva Actividad' : 'New Activity'}
+            </h2>
+            <button onClick={handleCancelAcquire} className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="p-5 space-y-6">
+            {/* Sport badge */}
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: sport.color }}>
+                <MapPin className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="font-bold text-gray-900 dark:text-white">{language === 'es' ? sport.labelEs : sport.label}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {language === 'es' ? 'Preparando GPS' : 'Preparing GPS'}
+                </p>
+              </div>
+            </div>
+
+            {/* Satellite status card */}
+            <div className="relative overflow-hidden rounded-2xl border-2 p-6 text-center transition-all"
+              style={{
+                borderColor: accuracyColor,
+                backgroundColor: satelliteReady ? `${accuracyColor}10` : undefined,
+              }}>
+              {/* Pulsing ring animation while searching */}
+              {!satelliteReady && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-24 h-24 rounded-full border-2 border-red-400/30 animate-ping" />
+                </div>
+              )}
+
+              <div className="relative">
+                <div
+                  className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center transition-all"
+                  style={{ backgroundColor: `${accuracyColor}20` }}
+                >
+                  {satelliteReady ? (
+                    <MapPin className="w-8 h-8" style={{ color: accuracyColor }} />
+                  ) : (
+                    <MapPin className="w-8 h-8 animate-pulse" style={{ color: accuracyColor }} />
+                  )}
+                </div>
+
+                <p className="text-lg font-bold text-gray-900 dark:text-white mb-1">
+                  {accuracyLabel}
+                </p>
+
+                {gpsAccuracy !== null && (
+                  <p className="text-sm font-semibold mb-1" style={{ color: accuracyColor }}>
+                    {`±${Math.round(gpsAccuracy)}m`}
+                  </p>
+                )}
+
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {acquiringSeconds > 0 && (
+                    <span>{acquiringSeconds}s</span>
+                  )}
+                  {!satelliteReady && acquiringSeconds > 10 && (
+                    <span className="block mt-1">
+                      {language === 'es'
+                        ? 'Intenta moverte a un lugar con cielo abierto'
+                        : 'Try moving to an open sky area'}
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Start button -- enabled when satellite signal acquired */}
+            <button
+              onClick={handleStartRecording}
+              disabled={!satelliteReady}
+              className="w-full flex items-center justify-center gap-3 py-4 rounded-xl font-bold text-white text-lg transition-all active:scale-98 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
+              style={{ backgroundColor: satelliteReady ? sport.color : '#9ca3af' }}
+            >
+              <Play className="w-6 h-6 fill-white" />
+              {satelliteReady
+                ? (language === 'es' ? 'Iniciar Actividad' : 'Start Activity')
+                : (language === 'es' ? 'Esperando GPS...' : 'Waiting for GPS...')}
+            </button>
+
+            {/* Cancel link */}
+            <button
+              onClick={handleCancelAcquire}
+              className="w-full text-center text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+            >
+              {language === 'es' ? 'Cancelar' : 'Cancel'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── SETUP ────────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50">
@@ -1610,7 +1789,7 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
             </div>
           )}
 
-          <button onClick={handleStart} disabled={isRequestingPermission}
+          <button onClick={handleAcquireGPS} disabled={isRequestingPermission}
             className="w-full flex items-center justify-center gap-3 py-4 rounded-xl font-bold text-white text-lg transition-all active:scale-98 disabled:opacity-60 shadow-lg"
             style={{ backgroundColor: sport.color }}>
             <Play className="w-6 h-6 fill-white" />
