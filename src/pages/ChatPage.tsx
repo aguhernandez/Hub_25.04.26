@@ -208,14 +208,24 @@ export default function ChatPage() {
   const loadContacts = async () => {
     if (!user || !profile) return;
     try {
-      let query = supabase.from('profiles').select('id, full_name, avatar_url, role, sport').neq('id', user.id);
-
-      if (profile.role === 'athlete') {
-        query = query.in('role', ['trainer', 'admin', 'athlete']);
+      if (profile.role === 'trainer' || profile.role === 'admin') {
+        // Trainer sees all athletes
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url, role, sport')
+          .eq('role', 'athlete')
+          .order('full_name');
+        setContacts(data || []);
+      } else {
+        // Athlete sees their trainers/admins
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, full_name, avatar_url, role, sport')
+          .neq('id', user.id)
+          .in('role', ['trainer', 'admin'])
+          .order('full_name');
+        setContacts(data || []);
       }
-
-      const { data } = await query.order('full_name');
-      setContacts(data || []);
     } catch (e) {
       console.error('Error loading contacts:', e);
     }
@@ -274,49 +284,110 @@ export default function ChatPage() {
   const DEFAULT_COACH_EMAIL = 'agu@asciende.pro';
 
   const ensureTrainerConversation = async () => {
-    if (!user || !profile || profile.role !== 'athlete') return;
+    if (!user || !profile) return;
+
     try {
-      const { data: teamMemberships } = await supabase
-        .from('team_members')
-        .select('teams!inner(coach_id)')
-        .eq('athlete_id', user.id);
+      if (profile.role === 'athlete') {
+        // Athlete: ensure conversation with their coach(es)
+        const { data: teamMemberships } = await supabase
+          .from('team_members')
+          .select('teams!inner(coach_id)')
+          .eq('athlete_id', user.id);
 
-      let coachIds: string[] = [];
+        let coachIds: string[] = [];
 
-      if (teamMemberships && teamMemberships.length > 0) {
-        coachIds = [...new Set(
-          teamMemberships
-            .map((tm: any) => tm.teams?.coach_id)
-            .filter(Boolean)
-        )] as string[];
-      }
-
-      if (coachIds.length === 0) {
-        const { data: defaultCoach } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', DEFAULT_COACH_EMAIL)
-          .maybeSingle();
-
-        if (defaultCoach) {
-          coachIds = [(defaultCoach as any).id];
+        if (teamMemberships && teamMemberships.length > 0) {
+          coachIds = [...new Set(
+            teamMemberships
+              .map((tm: any) => tm.teams?.coach_id)
+              .filter(Boolean)
+          )] as string[];
         }
-      }
 
-      for (const coachId of coachIds) {
-        const { data: existing } = await supabase
-          .from('chat_conversations')
-          .select('id')
-          .eq('type', 'private')
-          .contains('participant_ids', [user.id, coachId])
-          .maybeSingle();
+        if (coachIds.length === 0) {
+          const { data: defaultCoach } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('email', DEFAULT_COACH_EMAIL)
+            .maybeSingle();
 
-        if (!existing) {
-          await (supabase.from('chat_conversations') as any).insert({
-            type: 'private',
-            participant_ids: [user.id, coachId],
-            created_by: user.id,
-          });
+          if (defaultCoach) {
+            coachIds = [(defaultCoach as any).id];
+          }
+        }
+
+        for (const coachId of coachIds) {
+          const { data: existing } = await supabase
+            .from('chat_conversations')
+            .select('id')
+            .eq('type', 'private')
+            .contains('participant_ids', [user.id, coachId])
+            .maybeSingle();
+
+          if (!existing) {
+            await (supabase.from('chat_conversations') as any).insert({
+              type: 'private',
+              participant_ids: [user.id, coachId],
+              created_by: user.id,
+            });
+          }
+        }
+      } else if (profile.role === 'trainer' || profile.role === 'admin') {
+        // Trainer/Admin: ensure conversations with all their athletes
+        const { data: teamAthletes } = await supabase
+          .from('team_members')
+          .select('athlete_id, teams!inner(coach_id)')
+          .eq('teams.coach_id', user.id);
+
+        let athleteIds: string[] = [];
+
+        if (teamAthletes && teamAthletes.length > 0) {
+          athleteIds = [...new Set(
+            teamAthletes.map((tm: any) => tm.athlete_id).filter(Boolean)
+          )] as string[];
+        }
+
+        // If admin with no team athletes, get all athletes
+        if (athleteIds.length === 0 && profile.role === 'admin') {
+          const { data: allAthletes } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('role', 'athlete');
+
+          if (allAthletes) {
+            athleteIds = allAthletes.map((a: any) => a.id);
+          }
+        }
+
+        // If this trainer is the default coach, also include athletes with no team
+        if (profile.email === DEFAULT_COACH_EMAIL) {
+          const { data: allAthletes } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('role', 'athlete');
+
+          if (allAthletes) {
+            const allIds = allAthletes.map((a: any) => a.id);
+            athleteIds = [...new Set([...athleteIds, ...allIds])];
+          }
+        }
+
+        // Create missing conversations
+        for (const athleteId of athleteIds) {
+          const { data: existing } = await supabase
+            .from('chat_conversations')
+            .select('id')
+            .eq('type', 'private')
+            .contains('participant_ids', [user.id, athleteId])
+            .maybeSingle();
+
+          if (!existing) {
+            await (supabase.from('chat_conversations') as any).insert({
+              type: 'private',
+              participant_ids: [user.id, athleteId],
+              created_by: user.id,
+            });
+          }
         }
       }
     } catch (e) {
