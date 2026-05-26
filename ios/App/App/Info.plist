@@ -96,6 +96,10 @@
 		<true/>
 	</dict>
 
+	<!-- Firebase: enable method swizzling so Firebase auto-captures APNs token -->
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<true/>
+
 	<!-- App Store compliance: no non-exempt encryption -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
