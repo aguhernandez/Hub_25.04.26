@@ -57,25 +57,23 @@ public class BackgroundLocationPlugin: CAPPlugin, CAPBridgedPlugin, CLLocationMa
             mgr.distanceFilter  = 2.0
 
             self.locationManager = mgr
-            self.activeCall = call
 
             let status = mgr.authorizationStatus
             if status == .notDetermined {
+                // Save call to resolve later in didChangeAuthorization
+                self.activeCall = call
                 mgr.requestAlwaysAuthorization()
-            } else if status == .authorizedWhenInUse {
-                // Upgrade to Always so background GPS is fully reliable
-                mgr.requestAlwaysAuthorization()
+            } else if status == .authorizedWhenInUse || status == .authorizedAlways {
+                if status == .authorizedWhenInUse {
+                    mgr.requestAlwaysAuthorization()
+                }
                 mgr.startUpdatingLocation()
-            } else if status == .authorizedAlways {
-                mgr.startUpdatingLocation()
+                call.resolve(["status": "started"])
             } else {
                 call.reject("Location permission denied")
                 self.locationManager = nil
-                self.activeCall = nil
                 return
             }
-
-            call.resolve(["status": "started"])
         }
     }
 
@@ -94,6 +92,17 @@ public class BackgroundLocationPlugin: CAPPlugin, CAPBridgedPlugin, CLLocationMa
         let status = manager.authorizationStatus
         if status == .authorizedAlways || status == .authorizedWhenInUse {
             manager.startUpdatingLocation()
+            // Resolve the pending JS call if we were waiting for authorization
+            if let call = self.activeCall {
+                call.resolve(["status": "started"])
+                self.activeCall = nil
+            }
+        } else if status == .denied || status == .restricted {
+            if let call = self.activeCall {
+                call.reject("Location permission denied")
+                self.activeCall = nil
+            }
+            self.locationManager = nil
         }
     }
 
