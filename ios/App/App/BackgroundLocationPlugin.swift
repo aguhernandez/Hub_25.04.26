@@ -44,10 +44,13 @@ public class BackgroundLocationPlugin: CAPPlugin, CAPBridgedPlugin, CLLocationMa
             let mgr = CLLocationManager()
             mgr.delegate = self
 
-            // The three properties Gemini/Apple docs require for background GPS:
+            // The three properties Apple requires for reliable background GPS:
             mgr.allowsBackgroundLocationUpdates    = true
             mgr.pausesLocationUpdatesAutomatically = false
             mgr.showsBackgroundLocationIndicator   = true
+
+            // Activity type helps iOS optimize power without killing GPS
+            mgr.activityType = .fitness
 
             // Sport-level accuracy and minimum movement threshold
             mgr.desiredAccuracy = kCLLocationAccuracyBest

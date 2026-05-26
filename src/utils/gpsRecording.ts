@@ -331,29 +331,43 @@ export async function getGPSWatchPositionAsync(
   const isNative = await checkNativeCapacitor();
   const platform = await getNativePlatform();
 
+  const nativeLocationToPosition = (data: any): GeolocationPosition => ({
+    coords: {
+      latitude: data.latitude,
+      longitude: data.longitude,
+      altitude: data.altitude ?? null,
+      accuracy: data.accuracy,
+      altitudeAccuracy: null,
+      heading: data.heading ?? null,
+      speed: data.speed ?? null,
+    },
+    timestamp: data.timestamp,
+    toJSON() { return this; },
+  } as GeolocationPosition);
+
   // Android: use native foreground service for reliable background GPS
   if (platform === 'android') {
     try {
       await startAndroidBackgroundLocation();
       await addNativeLocationListener((data) => {
-        const position: GeolocationPosition = {
-          coords: {
-            latitude: data.latitude,
-            longitude: data.longitude,
-            altitude: data.altitude ?? null,
-            accuracy: data.accuracy,
-            altitudeAccuracy: null,
-            heading: data.heading ?? null,
-            speed: data.speed ?? null,
-          },
-          timestamp: data.timestamp,
-          toJSON() { return this; },
-        } as GeolocationPosition;
-        onSuccess(position);
+        onSuccess(nativeLocationToPosition(data));
       });
       return -2; // Special value indicating Android native service
     } catch (error) {
       console.debug('Android foreground service failed, falling back to Capacitor watchPosition', error);
+    }
+  }
+
+  // iOS: use native background location plugin for persistent tracking
+  if (platform === 'ios') {
+    try {
+      await startIOSBackgroundLocation();
+      await addNativeLocationListener((data) => {
+        onSuccess(nativeLocationToPosition(data));
+      });
+      return -3; // Special value indicating iOS native background service
+    } catch (error) {
+      console.debug('iOS BackgroundLocation plugin failed, falling back to Capacitor watchPosition', error);
     }
   }
 
@@ -422,7 +436,13 @@ export async function clearGPSWatchAsync(watchId: number): Promise<void> {
     await stopAndroidBackgroundLocation();
     return;
   }
-  // Capacitor watchPosition (iOS)
+  // iOS native background location
+  if (watchId === -3) {
+    await removeNativeLocationListener();
+    await stopIOSBackgroundLocation();
+    return;
+  }
+  // Capacitor watchPosition
   if (_capacitorWatchId !== null) {
     try {
       const { Geolocation } = await import('@capacitor/geolocation');
@@ -443,7 +463,13 @@ export function clearGPSWatch(watchId: number): void {
     stopAndroidBackgroundLocation().catch(() => {});
     return;
   }
-  // Capacitor watchPosition (iOS)
+  // iOS native background location
+  if (watchId === -3) {
+    removeNativeLocationListener().catch(() => {});
+    stopIOSBackgroundLocation().catch(() => {});
+    return;
+  }
+  // Capacitor watchPosition
   if (_capacitorWatchId !== null) {
     import('@capacitor/geolocation').then(({ Geolocation }) => {
       Geolocation.clearWatch({ id: _capacitorWatchId! }).catch(() => {});
@@ -674,13 +700,25 @@ export function registerGPSBackgroundReconnect(
 
   gpsVisibilityHandler = () => {
     if (document.visibilityState === 'visible') {
-      getGPSWatchPositionAsync(onPoint, onError).then((newWatchId) => {
-        onReconnect(newWatchId);
-      }).catch(() => {});
+      // On native platforms, the background service keeps running - no need to reconnect GPS
+      // Only reconnect on web where the browser pauses geolocation in background
+      getNativePlatform().then((platform) => {
+        if (platform === 'ios' || platform === 'android') {
+          // Native service still active, just resume audio keep-alive
+          if (noSleepAudio && noSleepAudio.state === 'suspended') {
+            noSleepAudio.resume().catch(() => {});
+          }
+          return;
+        }
+        // Web: reconnect GPS watch
+        getGPSWatchPositionAsync(onPoint, onError).then((newWatchId) => {
+          onReconnect(newWatchId);
+        }).catch(() => {});
 
-      if (noSleepAudio && noSleepAudio.state === 'suspended') {
-        noSleepAudio.resume().catch(() => {});
-      }
+        if (noSleepAudio && noSleepAudio.state === 'suspended') {
+          noSleepAudio.resume().catch(() => {});
+        }
+      });
     }
   };
 

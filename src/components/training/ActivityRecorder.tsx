@@ -23,7 +23,6 @@ import {
   persistSessionPoint,
   loadPersistedSession,
   clearPersistedSession,
-  startNativeBackgroundLocation,
   stopNativeBackgroundLocation,
 } from '../../utils/gpsRecording';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -418,7 +417,6 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
       gpsFilterRef.current = new GPSFilter(sport.maxSpeedKmh);
 
       acquireWakeLock().then(() => setWakeLockActive(true)).catch(() => {});
-      startNativeBackgroundLocation().catch(() => {});
 
       setPhase('acquiring');
       setIsRequestingPermission(false);
@@ -1679,18 +1677,24 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
               </div>
             </div>
 
-            {/* Start button -- enabled when satellite signal acquired */}
+            {/* Start button -- always enabled, shows warning if no signal yet */}
             <button
               onClick={handleStartRecording}
-              disabled={!satelliteReady}
-              className="w-full flex items-center justify-center gap-3 py-4 rounded-xl font-bold text-white text-lg transition-all active:scale-98 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
-              style={{ backgroundColor: satelliteReady ? sport.color : '#9ca3af' }}
+              className="w-full flex items-center justify-center gap-3 py-4 rounded-xl font-bold text-white text-lg transition-all active:scale-98 shadow-lg"
+              style={{ backgroundColor: satelliteReady ? sport.color : '#6b7280' }}
             >
               <Play className="w-6 h-6 fill-white" />
               {satelliteReady
                 ? (language === 'es' ? 'Iniciar Actividad' : 'Start Activity')
-                : (language === 'es' ? 'Esperando GPS...' : 'Waiting for GPS...')}
+                : (language === 'es' ? 'Iniciar sin GPS' : 'Start without GPS')}
             </button>
+            {!satelliteReady && (
+              <p className="text-xs text-center text-amber-600 dark:text-amber-400 -mt-3">
+                {language === 'es'
+                  ? 'La actividad comenzara a grabar puntos cuando se detecte senal'
+                  : 'Activity will start recording points when signal is detected'}
+              </p>
+            )}
 
             {/* Cancel link */}
             <button
