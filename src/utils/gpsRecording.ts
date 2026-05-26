@@ -358,16 +358,42 @@ export async function getGPSWatchPositionAsync(
     }
   }
 
-  // iOS: use native background location plugin for persistent tracking
+  // iOS: use Capacitor watchPosition for foreground + native plugin for background
+  // Both run simultaneously so GPS works in all app states
   if (platform === 'ios') {
-    try {
-      await startIOSBackgroundLocation();
-      await addNativeLocationListener((data) => {
+    // Start native background location (CLLocationManager with allowsBackgroundLocationUpdates)
+    startIOSBackgroundLocation().then(() => {
+      addNativeLocationListener((data) => {
         onSuccess(nativeLocationToPosition(data));
       });
-      return -3; // Special value indicating iOS native background service
+    }).catch(() => {});
+
+    // Also start Capacitor watchPosition for reliable foreground GPS
+    try {
+      const { Geolocation } = await import('@capacitor/geolocation');
+      const callbackId = await Geolocation.watchPosition(
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+        (result, err) => {
+          if (err) {
+            onError({
+              code: 2,
+              message: err?.message || 'GPS error',
+              PERMISSION_DENIED: 1,
+              POSITION_UNAVAILABLE: 2,
+              TIMEOUT: 3,
+            } as GeolocationPositionError);
+            return;
+          }
+          if (result && result.coords) {
+            onSuccess(capacitorPositionToGeolocation(result));
+          }
+        }
+      );
+      _capacitorWatchId = callbackId;
+      return -3; // iOS dual-mode: Capacitor foreground + native background
     } catch (error) {
-      console.debug('iOS BackgroundLocation plugin failed, falling back to Capacitor watchPosition', error);
+      console.debug('iOS Capacitor watchPosition failed', error);
+      return -3;
     }
   }
 
@@ -436,8 +462,15 @@ export async function clearGPSWatchAsync(watchId: number): Promise<void> {
     await stopAndroidBackgroundLocation();
     return;
   }
-  // iOS native background location
+  // iOS dual-mode: stop both Capacitor watchPosition and native background
   if (watchId === -3) {
+    if (_capacitorWatchId !== null) {
+      try {
+        const { Geolocation } = await import('@capacitor/geolocation');
+        await Geolocation.clearWatch({ id: _capacitorWatchId });
+      } catch {}
+      _capacitorWatchId = null;
+    }
     await removeNativeLocationListener();
     await stopIOSBackgroundLocation();
     return;
@@ -463,8 +496,14 @@ export function clearGPSWatch(watchId: number): void {
     stopAndroidBackgroundLocation().catch(() => {});
     return;
   }
-  // iOS native background location
+  // iOS dual-mode: stop both Capacitor watchPosition and native background
   if (watchId === -3) {
+    if (_capacitorWatchId !== null) {
+      import('@capacitor/geolocation').then(({ Geolocation }) => {
+        Geolocation.clearWatch({ id: _capacitorWatchId! }).catch(() => {});
+        _capacitorWatchId = null;
+      }).catch(() => {});
+    }
     removeNativeLocationListener().catch(() => {});
     stopIOSBackgroundLocation().catch(() => {});
     return;
