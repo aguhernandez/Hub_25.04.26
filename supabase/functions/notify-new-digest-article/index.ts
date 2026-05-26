@@ -20,10 +20,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { article_id, send_email = false }: RequestBody = await req.json();
 
@@ -55,7 +54,7 @@ Deno.serve(async (req: Request) => {
 
     let query = supabase
       .from('profiles')
-      .select('id, full_name, email, sport, role, notification_preferences');
+      .select('id, full_name, email, sport, role, language, notification_preferences');
 
     query = query.eq('sport', article.sport);
 
@@ -69,13 +68,14 @@ Deno.serve(async (req: Request) => {
 
     if (!targetUsers || targetUsers.length === 0) {
       return new Response(
-        JSON.stringify({ message: 'No target users found', notified: 0 }),
+        JSON.stringify({ message: 'No target users found', notified: 0, push_sent: 0 }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
       );
     }
 
+    // Create in-app notification records
     const notifications = targetUsers.map((user) => ({
       user_id: user.id,
       type: 'digest_article',
@@ -95,6 +95,59 @@ Deno.serve(async (req: Request) => {
       console.error('Error creating notifications:', notificationError);
     }
 
+    // Send PUSH notifications grouped by language
+    let pushResults: any[] = [];
+    try {
+      const usersByLang: Record<string, string[]> = { es: [], en: [] };
+      for (const user of targetUsers) {
+        const lang = user.language === 'es' ? 'es' : 'en';
+        usersByLang[lang].push(user.id);
+      }
+
+      const localizedMessages = {
+        es: {
+          title: 'Nueva Performance Pill',
+          body: article.title
+            ? `${article.title}`
+            : 'Hay un nuevo articulo disponible para ti',
+        },
+        en: {
+          title: 'New Performance Pill',
+          body: article.title
+            ? `${article.title}`
+            : 'There is a new article available for you',
+        },
+      };
+
+      const sendUrl = `${supabaseUrl}/functions/v1/send-push-notification`;
+
+      for (const lang of ['es', 'en'] as const) {
+        const ids = usersByLang[lang];
+        if (ids.length === 0) continue;
+
+        const msg = localizedMessages[lang];
+        const response = await fetch(sendUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_ids: ids,
+            title: msg.title,
+            body: msg.body,
+            data: { page: 'digest', article_id: article.id },
+            category: 'performance_pills',
+          }),
+        });
+
+        const result = await response.json();
+        pushResults.push({ lang, ...result });
+      }
+    } catch (pushError) {
+      console.error('Error sending push notifications:', pushError);
+    }
+
+    // Send emails if requested
     let emailsSent = 0;
     if (send_email) {
       const usersWithEmail = targetUsers.filter(
@@ -106,7 +159,7 @@ Deno.serve(async (req: Request) => {
       for (const user of usersWithEmail) {
         try {
           const emailResponse = await fetch(
-            `${Deno.env.get('SUPABASE_URL')}/functions/v1/brevo-send-email`,
+            `${supabaseUrl}/functions/v1/brevo-send-email`,
             {
               method: 'POST',
               headers: {
@@ -123,7 +176,7 @@ Deno.serve(async (req: Request) => {
                   <p><strong>Category:</strong> ${article.category}</p>
                   <p><strong>Reading time:</strong> ${article.reading_time_minutes} minutes</p>
                   <p>
-                    <a href="${Deno.env.get('SUPABASE_URL')}/digest/${article.id}" 
+                    <a href="${supabaseUrl}/digest/${article.id}"
                        style="background: #514163; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block; margin-top: 16px;">
                       Read Article
                     </a>
@@ -155,6 +208,7 @@ Deno.serve(async (req: Request) => {
         success: true,
         notified: targetUsers.length,
         emails_sent: emailsSent,
+        push_results: pushResults,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

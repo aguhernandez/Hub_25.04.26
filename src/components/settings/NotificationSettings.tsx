@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { supabase } from '../../lib/supabase';
-import { Bell, MessageSquare, Dumbbell, Apple, BookOpen, Target, Save, Smartphone } from 'lucide-react';
+import { Bell, MessageSquare, Dumbbell, Apple, BookOpen, Target, Save, Smartphone, Newspaper } from 'lucide-react';
 import { initPushNotifications } from '../../services/pushNotificationService';
 
 interface PushPreferences {
@@ -11,6 +11,7 @@ interface PushPreferences {
   new_nutrition_plan: boolean;
   new_academy_course: boolean;
   new_habit: boolean;
+  performance_pills: boolean;
 }
 
 const DEFAULT_PREFERENCES: PushPreferences = {
@@ -19,6 +20,7 @@ const DEFAULT_PREFERENCES: PushPreferences = {
   new_nutrition_plan: true,
   new_academy_course: true,
   new_habit: true,
+  performance_pills: true,
 };
 
 export default function NotificationSettings() {
@@ -69,6 +71,7 @@ export default function NotificationSettings() {
           new_nutrition_plan: data.new_nutrition_plan,
           new_academy_course: data.new_academy_course,
           new_habit: data.new_habit,
+          performance_pills: data.performance_pills ?? true,
         });
       }
     } catch (err) {
@@ -164,6 +167,14 @@ export default function NotificationSettings() {
       label_en: 'New habits',
       desc_es: 'Aviso cuando se te asigne un nuevo habito',
       desc_en: 'Get notified when a new habit is assigned to you',
+    },
+    {
+      key: 'performance_pills',
+      icon: Newspaper,
+      label_es: 'Performance Pills',
+      label_en: 'Performance Pills',
+      desc_es: 'Aviso cuando se publique una nueva Performance Pill',
+      desc_en: 'Get notified when a new Performance Pill is published',
     },
   ];
 

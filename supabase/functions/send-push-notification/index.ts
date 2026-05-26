@@ -19,7 +19,8 @@ interface PushPayload {
     | "new_training_plan"
     | "new_nutrition_plan"
     | "new_academy_course"
-    | "new_habit";
+    | "new_habit"
+    | "performance_pills";
 }
 
 async function getAccessToken(serviceAccount: any): Promise<string> {
