@@ -260,14 +260,14 @@ async function getNativePlatform(): Promise<'ios' | 'android' | 'web'> {
 
 // ── CAPGO BACKGROUND GEOLOCATION ─────────────────────────────────────────────
 
-let _bgGeoWatcherId: string | null = null;
+let _bgGeoStarted = false;
 
 async function startCapgoBackgroundGeolocation(
   onLocation: (position: GeolocationPosition) => void,
 ): Promise<void> {
   const { BackgroundGeolocation } = await import('@capgo/background-geolocation');
 
-  await BackgroundGeolocation.addWatcher(
+  await BackgroundGeolocation.start(
     {
       backgroundMessage: 'Asciende está registrando tu actividad',
       backgroundTitle: 'Asciende GPS',
@@ -297,24 +297,24 @@ async function startCapgoBackgroundGeolocation(
             heading: location.bearing ?? null,
             speed: location.speed ?? null,
           },
-          timestamp: location.time ? new Date(location.time).getTime() : Date.now(),
+          timestamp: location.time ?? Date.now(),
           toJSON() { return this; },
         } as GeolocationPosition;
         onLocation(position);
       }
     }
-  ).then((id) => {
-    _bgGeoWatcherId = id;
-  });
+  );
+
+  _bgGeoStarted = true;
 }
 
 async function stopCapgoBackgroundGeolocation(): Promise<void> {
-  if (_bgGeoWatcherId) {
+  if (_bgGeoStarted) {
     try {
       const { BackgroundGeolocation } = await import('@capgo/background-geolocation');
-      await BackgroundGeolocation.removeWatcher({ id: _bgGeoWatcherId });
+      await BackgroundGeolocation.stop();
     } catch {}
-    _bgGeoWatcherId = null;
+    _bgGeoStarted = false;
   }
 }
 
