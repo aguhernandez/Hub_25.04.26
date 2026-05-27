@@ -286,12 +286,6 @@ async function startCapgoBackgroundGeolocation(
 ): Promise<void> {
   const { BackgroundGeolocation } = await import('@capgo/background-geolocation');
 
-  // Prevent ALREADY_STARTED error on pause/resume cycles
-  if (_bgGeoStarted) {
-    try { await BackgroundGeolocation.stop(); } catch {}
-    _bgGeoStarted = false;
-  }
-
   gpsDebug.startedAt = Date.now();
   gpsDebug.totalCallbacks = 0;
   gpsDebug.lastError = null;
@@ -304,8 +298,8 @@ async function startCapgoBackgroundGeolocation(
       backgroundMessage: 'Asciende está registrando tu actividad',
       backgroundTitle: 'Asciende GPS',
       requestPermissions: true,
-      stale: false,
-      distanceFilter: 5,
+      stale: true,
+      distanceFilter: 0,
     },
     (location, error) => {
       if (error) {
