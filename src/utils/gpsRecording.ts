@@ -286,6 +286,12 @@ async function startCapgoBackgroundGeolocation(
 ): Promise<void> {
   const { BackgroundGeolocation } = await import('@capgo/background-geolocation');
 
+  // Prevent ALREADY_STARTED error on pause/resume cycles
+  if (_bgGeoStarted) {
+    try { await BackgroundGeolocation.stop(); } catch {}
+    _bgGeoStarted = false;
+  }
+
   gpsDebug.startedAt = Date.now();
   gpsDebug.totalCallbacks = 0;
   gpsDebug.lastError = null;
