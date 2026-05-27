@@ -24,7 +24,6 @@ import {
   loadPersistedSession,
   clearPersistedSession,
   stopNativeBackgroundLocation,
-  gpsDebug,
 } from '../../utils/gpsRecording';
 import { useLanguage } from '../../contexts/LanguageContext';
 import ActivityShareCard from './ActivityShareCard';
@@ -1138,12 +1137,6 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
                 {language === 'es' ? 'GRABANDO' : 'RECORDING'}
               </span>
             )}
-            {wakeLockActive && (
-              <span className="flex items-center gap-1 px-2 py-0.5 bg-green-600/80 text-white text-xs font-semibold rounded-full shadow-md backdrop-blur-sm">
-                <BatteryCharging className="w-3 h-3" />
-                {language === 'es' ? 'GPS ACTIVO EN BACKGROUND' : 'GPS BACKGROUND ACTIVE'}
-              </span>
-            )}
             {!wakeLockActive && phase === 'recording' && (
               <span className="flex items-center gap-1 px-2 py-0.5 bg-orange-500/80 text-white text-xs font-semibold rounded-full shadow-md backdrop-blur-sm">
                 <WifiOff className="w-3 h-3" />
@@ -1582,23 +1575,6 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
           </div>
         )}
 
-        {/* GPS DEBUG OVERLAY */}
-        {phase === 'recording' && (
-          <div
-            className="absolute left-2 right-2 rounded-xl px-3 py-2 font-mono text-[10px] leading-tight"
-            style={{ top: `calc(${safeTop} + 52px)`, zIndex: 9999, backgroundColor: 'rgba(0,0,0,0.85)', color: '#0f0' }}
-          >
-            <p>GPS DEBUG (capgo 7.2.8)</p>
-            <p>Started: {gpsDebug.startedAt ? new Date(gpsDebug.startedAt).toLocaleTimeString() : 'N/A'}</p>
-            <p>Callbacks: {gpsDebug.totalCallbacks}</p>
-            <p>Last: {gpsDebug.lastTimestamp ? new Date(gpsDebug.lastTimestamp).toLocaleTimeString() : 'none'}</p>
-            <p>Lat/Lng: {gpsDebug.lastLat?.toFixed(6) ?? '-'}, {gpsDebug.lastLng?.toFixed(6) ?? '-'}</p>
-            <p>Filtered pts: {gpsPoints.length}</p>
-            <p style={{ color: gpsDebug.lastError ? '#f00' : '#0f0' }}>
-              Error: {gpsDebug.lastError ?? 'none'}
-            </p>
-          </div>
-        )}
       </div>
     );
   }

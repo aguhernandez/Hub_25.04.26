@@ -298,8 +298,8 @@ async function startCapgoBackgroundGeolocation(
       backgroundMessage: 'Asciende está registrando tu actividad',
       backgroundTitle: 'Asciende GPS',
       requestPermissions: true,
-      stale: true,
-      distanceFilter: 0,
+      stale: false,
+      distanceFilter: 5,
     },
     (location, error) => {
       if (error) {
