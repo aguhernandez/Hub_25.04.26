@@ -75,14 +75,7 @@
 
         </activity>
 
-        <!-- GPS Tracking Foreground Service -->
-        <service
-            android:name="pro.asciende.app.LocationForegroundService"
-            android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="location" />
-
-        <!-- Provider for file sharing (camera, file export) -->
+<!-- Provider for file sharing (camera, file export) -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

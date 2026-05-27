@@ -91,45 +91,12 @@ export function formatDuration(seconds: number): string {
 
 // ── GPS FILTERING ─────────────────────────────────────────────────────────────
 
-/**
- * Hard accuracy ceiling (meters). Points worse than this are always dropped.
- * Tighter than before — 50m is enough for running precision.
- */
 const MAX_ACCURACY_M = 50;
-
-/**
- * Absolute max speed in km/h for any supported sport.
- */
 const ABS_MAX_SPEED_KMH = 150;
-
-/**
- * Minimum movement in metres required before a point is added.
- * 2m is fine for running where each stride is ~1.5-2.5m.
- */
 const MIN_DISTANCE_M = 2;
-
-/**
- * EMA smoothing alpha. 0.7 = 70% new value, 30% historical.
- * More smoothing than before to suppress per-step GPS jitter.
- */
 const SMOOTHING_ALPHA = 0.7;
-
-/**
- * Number of initial "stabilisation" raw positions to collect before
- * committing the first track point. We pick the most accurate one.
- */
 const STABILISATION_COUNT = 5;
-
-/**
- * After this many seconds without an accepted point (pause/tunnel),
- * re-enter stabilisation mode. Longer gap for running (underpass, etc).
- */
 const RESET_AFTER_GAP_S = 20;
-
-/**
- * Consecutive outlier rejections before we force-accept a point.
- * Prevents lock-out if phone is moving but GPS is consistently drifting.
- */
 const MAX_CONSECUTIVE_REJECTS = 8;
 
 interface RawCandidate {
@@ -142,15 +109,11 @@ interface RawCandidate {
 
 export class GPSFilter {
   private sportMaxSpeedKmh: number;
-
   private stabilBuffer: RawCandidate[] = [];
   private stabilised = false;
-
   private lastAccepted: GPSPoint | null = null;
-
   private smoothLat: number | null = null;
   private smoothLon: number | null = null;
-
   private consecutiveRejects = 0;
 
   constructor(sportMaxSpeedKmh = ABS_MAX_SPEED_KMH) {
@@ -162,13 +125,11 @@ export class GPSFilter {
     const timestamp = position.timestamp;
     const acc = accuracy ?? 999;
 
-    // Hard accuracy gate
     if (acc > MAX_ACCURACY_M) {
       this.consecutiveRejects++;
       return null;
     }
 
-    // ── Phase 1: Stabilisation ───────────────────────────────────────────────
     if (!this.stabilised) {
       this.stabilBuffer.push({ latitude, longitude, altitude, accuracy: acc, timestamp });
 
@@ -176,7 +137,6 @@ export class GPSFilter {
         return null;
       }
 
-      // Pick the candidate with the best (lowest) accuracy value
       const best = this.stabilBuffer.reduce((a, b) => a.accuracy < b.accuracy ? a : b);
       this.stabilBuffer = [];
       this.stabilised = true;
@@ -195,12 +155,9 @@ export class GPSFilter {
       return point;
     }
 
-    // ── Phase 2: Normal tracking ─────────────────────────────────────────────
-
     const last = this.lastAccepted!;
     const dtSeconds = (timestamp - last.timestamp) / 1000;
 
-    // Long gap → re-enter stabilisation
     if (dtSeconds > RESET_AFTER_GAP_S) {
       this.stabilised = false;
       this.stabilBuffer = [{ latitude, longitude, altitude, accuracy: acc, timestamp }];
@@ -211,7 +168,6 @@ export class GPSFilter {
       return null;
     }
 
-    // Speed gate
     if (dtSeconds > 0) {
       const distKm = calculateDistance(last.latitude, last.longitude, latitude, longitude);
       const speedKmh = (distKm / dtSeconds) * 3600;
@@ -220,39 +176,25 @@ export class GPSFilter {
         this.consecutiveRejects++;
 
         if (this.consecutiveRejects >= MAX_CONSECUTIVE_REJECTS) {
-          // Force-accept to avoid lock-out after too many consecutive rejects
           this.consecutiveRejects = 0;
           this.lastAccepted = { latitude, longitude, altitude: altitude ?? undefined, timestamp, accuracy: acc };
           this.smoothLat = latitude;
           this.smoothLon = longitude;
-          // Fall through — return the point so track doesn't freeze
-          const point: GPSPoint = {
-            latitude, longitude,
-            altitude: altitude ?? undefined,
-            timestamp,
-            accuracy: acc,
-          };
-          return point;
+          return { latitude, longitude, altitude: altitude ?? undefined, timestamp, accuracy: acc };
         }
 
-        // Update timestamp reference so next point's dt is computed correctly,
-        // but do NOT commit this bad coordinate to the track
         this.lastAccepted = { ...last, timestamp };
         return null;
       }
     }
 
-    // Minimum distance gate
     const distM = calculateDistance(last.latitude, last.longitude, latitude, longitude) * 1000;
     if (distM < MIN_DISTANCE_M) {
       return null;
     }
 
-    // Reset reject counter on good point
     this.consecutiveRejects = 0;
 
-    // EMA smoothing — adaptive alpha based on accuracy
-    // Better accuracy = trust the new point more
     const adaptiveAlpha = acc <= 10
       ? 0.85
       : acc <= 20
@@ -291,7 +233,7 @@ export class GPSFilter {
   }
 }
 
-// ── WATCH POSITION ────────────────────────────────────────────────────────────
+// ── PLATFORM DETECTION ───────────────────────────────────────────────────────
 
 let _isNativeCapacitor: boolean | null = null;
 
@@ -306,23 +248,77 @@ async function checkNativeCapacitor(): Promise<boolean> {
   return _isNativeCapacitor;
 }
 
-function capacitorPositionToGeolocation(pos: any): GeolocationPosition {
-  return {
-    coords: {
-      latitude: pos.coords.latitude,
-      longitude: pos.coords.longitude,
-      altitude: pos.coords.altitude ?? null,
-      accuracy: pos.coords.accuracy,
-      altitudeAccuracy: pos.coords.altitudeAccuracy ?? null,
-      heading: pos.coords.heading ?? null,
-      speed: pos.coords.speed ?? null,
-    },
-    timestamp: pos.timestamp,
-    toJSON() { return this; },
-  } as GeolocationPosition;
+async function getNativePlatform(): Promise<'ios' | 'android' | 'web'> {
+  try {
+    const { Capacitor } = await import('@capacitor/core');
+    if (!Capacitor.isNativePlatform()) return 'web';
+    return Capacitor.getPlatform() as 'ios' | 'android';
+  } catch {
+    return 'web';
+  }
 }
 
-let _capacitorWatchId: string | null = null;
+// ── CAPGO BACKGROUND GEOLOCATION ─────────────────────────────────────────────
+
+let _bgGeoWatcherId: string | null = null;
+
+async function startCapgoBackgroundGeolocation(
+  onLocation: (position: GeolocationPosition) => void,
+): Promise<void> {
+  const { BackgroundGeolocation } = await import('@capgo/background-geolocation');
+
+  await BackgroundGeolocation.addWatcher(
+    {
+      backgroundMessage: 'Asciende está registrando tu actividad',
+      backgroundTitle: 'Asciende GPS',
+      requestPermissions: true,
+      stale: false,
+      distanceFilter: 5,
+    },
+    (location, error) => {
+      if (error) {
+        if (error.code === 'NOT_AUTHORIZED') {
+          if (window.confirm(
+            'Asciende necesita acceso a tu ubicación en segundo plano para registrar la actividad. ¿Abrir configuración?'
+          )) {
+            BackgroundGeolocation.openSettings();
+          }
+        }
+        return;
+      }
+      if (location) {
+        const position: GeolocationPosition = {
+          coords: {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            altitude: location.altitude ?? null,
+            accuracy: location.accuracy,
+            altitudeAccuracy: location.altitudeAccuracy ?? null,
+            heading: location.bearing ?? null,
+            speed: location.speed ?? null,
+          },
+          timestamp: location.time ? new Date(location.time).getTime() : Date.now(),
+          toJSON() { return this; },
+        } as GeolocationPosition;
+        onLocation(position);
+      }
+    }
+  ).then((id) => {
+    _bgGeoWatcherId = id;
+  });
+}
+
+async function stopCapgoBackgroundGeolocation(): Promise<void> {
+  if (_bgGeoWatcherId) {
+    try {
+      const { BackgroundGeolocation } = await import('@capgo/background-geolocation');
+      await BackgroundGeolocation.removeWatcher({ id: _bgGeoWatcherId });
+    } catch {}
+    _bgGeoWatcherId = null;
+  }
+}
+
+// ── WATCH POSITION ────────────────────────────────────────────────────────────
 
 export async function getGPSWatchPositionAsync(
   onSuccess: (position: GeolocationPosition) => void,
@@ -331,104 +327,13 @@ export async function getGPSWatchPositionAsync(
   const isNative = await checkNativeCapacitor();
   const platform = await getNativePlatform();
 
-  const nativeLocationToPosition = (data: any): GeolocationPosition => ({
-    coords: {
-      latitude: data.latitude,
-      longitude: data.longitude,
-      altitude: data.altitude ?? null,
-      accuracy: data.accuracy,
-      altitudeAccuracy: null,
-      heading: data.heading ?? null,
-      speed: data.speed ?? null,
-    },
-    timestamp: data.timestamp,
-    toJSON() { return this; },
-  } as GeolocationPosition);
-
-  // Android: use native foreground service for reliable background GPS
-  if (platform === 'android') {
+  // Native (iOS & Android): use @capgo/background-geolocation for both foreground and background
+  if (isNative && (platform === 'ios' || platform === 'android')) {
     try {
-      await startAndroidBackgroundLocation();
-      await addNativeLocationListener((data) => {
-        onSuccess(nativeLocationToPosition(data));
-      });
-      return -2; // Special value indicating Android native service
+      await startCapgoBackgroundGeolocation(onSuccess);
+      return -2;
     } catch (error) {
-      console.debug('Android foreground service failed, falling back to Capacitor watchPosition', error);
-    }
-  }
-
-  // iOS: use Capacitor watchPosition for foreground + native plugin for background
-  // Both run simultaneously so GPS works in all app states
-  if (platform === 'ios') {
-    // Start native background location (CLLocationManager with allowsBackgroundLocationUpdates)
-    startIOSBackgroundLocation().then(() => {
-      addNativeLocationListener((data) => {
-        onSuccess(nativeLocationToPosition(data));
-      });
-    }).catch(() => {});
-
-    // Also start Capacitor watchPosition for reliable foreground GPS
-    try {
-      const { Geolocation } = await import('@capacitor/geolocation');
-      const callbackId = await Geolocation.watchPosition(
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-        (result, err) => {
-          if (err) {
-            onError({
-              code: 2,
-              message: err?.message || 'GPS error',
-              PERMISSION_DENIED: 1,
-              POSITION_UNAVAILABLE: 2,
-              TIMEOUT: 3,
-            } as GeolocationPositionError);
-            return;
-          }
-          if (result && result.coords) {
-            onSuccess(capacitorPositionToGeolocation(result));
-          }
-        }
-      );
-      _capacitorWatchId = callbackId;
-      return -3; // iOS dual-mode: Capacitor foreground + native background
-    } catch (error) {
-      console.debug('iOS Capacitor watchPosition failed', error);
-      return -3;
-    }
-  }
-
-  if (isNative) {
-    try {
-      const { Geolocation } = await import('@capacitor/geolocation');
-
-      // Capacitor v7: watchPosition returns a string CallbackID
-      const callbackId = await Geolocation.watchPosition(
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
-        },
-        (result, err) => {
-          if (err) {
-            onError({
-              code: 2,
-              message: err?.message || 'GPS error',
-              PERMISSION_DENIED: 1,
-              POSITION_UNAVAILABLE: 2,
-              TIMEOUT: 3,
-            } as GeolocationPositionError);
-            return;
-          }
-          if (result && result.coords) {
-            onSuccess(capacitorPositionToGeolocation(result));
-          }
-        }
-      );
-
-      _capacitorWatchId = callbackId;
-      return -1; // Special value indicating Capacitor watch
-    } catch (error) {
-      console.debug('Capacitor watchPosition failed, using web geolocation', error);
+      console.debug('Capgo BackgroundGeolocation failed, using web fallback', error);
     }
   }
 
@@ -456,32 +361,20 @@ export function getGPSWatchPosition(
 }
 
 export async function clearGPSWatchAsync(watchId: number): Promise<void> {
-  // Android native foreground service
+  // Native (Capgo BackgroundGeolocation)
   if (watchId === -2) {
-    await removeNativeLocationListener();
-    await stopAndroidBackgroundLocation();
+    await stopCapgoBackgroundGeolocation();
     return;
   }
-  // iOS dual-mode: stop both Capacitor watchPosition and native background
-  if (watchId === -3) {
-    if (_capacitorWatchId !== null) {
-      try {
-        const { Geolocation } = await import('@capacitor/geolocation');
-        await Geolocation.clearWatch({ id: _capacitorWatchId });
-      } catch {}
-      _capacitorWatchId = null;
-    }
-    await removeNativeLocationListener();
-    await stopIOSBackgroundLocation();
-    return;
+  // Web
+  if (watchId >= 0) {
+    navigator.geolocation.clearWatch(watchId);
   }
-  // Capacitor watchPosition
-  if (_capacitorWatchId !== null) {
-    try {
-      const { Geolocation } = await import('@capacitor/geolocation');
-      await Geolocation.clearWatch({ id: _capacitorWatchId });
-    } catch {}
-    _capacitorWatchId = null;
+}
+
+export function clearGPSWatch(watchId: number): void {
+  if (watchId === -2) {
+    stopCapgoBackgroundGeolocation().catch(() => {});
     return;
   }
   if (watchId >= 0) {
@@ -489,37 +382,12 @@ export async function clearGPSWatchAsync(watchId: number): Promise<void> {
   }
 }
 
-export function clearGPSWatch(watchId: number): void {
-  // Android native foreground service
-  if (watchId === -2) {
-    removeNativeLocationListener().catch(() => {});
-    stopAndroidBackgroundLocation().catch(() => {});
-    return;
-  }
-  // iOS dual-mode: stop both Capacitor watchPosition and native background
-  if (watchId === -3) {
-    if (_capacitorWatchId !== null) {
-      import('@capacitor/geolocation').then(({ Geolocation }) => {
-        Geolocation.clearWatch({ id: _capacitorWatchId! }).catch(() => {});
-        _capacitorWatchId = null;
-      }).catch(() => {});
-    }
-    removeNativeLocationListener().catch(() => {});
-    stopIOSBackgroundLocation().catch(() => {});
-    return;
-  }
-  // Capacitor watchPosition
-  if (_capacitorWatchId !== null) {
-    import('@capacitor/geolocation').then(({ Geolocation }) => {
-      Geolocation.clearWatch({ id: _capacitorWatchId! }).catch(() => {});
-      _capacitorWatchId = null;
-    }).catch(() => {});
-    return;
-  }
-  navigator.geolocation.clearWatch(watchId);
+// Legacy export kept for backward compatibility with ActivityRecorder
+export async function stopNativeBackgroundLocation(): Promise<void> {
+  await stopCapgoBackgroundGeolocation();
 }
 
-// ── WAKE LOCK + BACKGROUND GPS ────────────────────────────────────────────────
+// ── WAKE LOCK ────────────────────────────────────────────────────────────────
 
 type WakeLockSentinel = { released: boolean; release: () => Promise<void> };
 
@@ -599,127 +467,6 @@ export async function releaseWakeLock(): Promise<void> {
   destroySilentAudioContext();
 }
 
-// ── NATIVE BACKGROUND LOCATION PLUGIN ────────────────────────────────────────
-// On iOS: activates BackgroundLocationPlugin.swift (CLLocationManager with background mode)
-// On Android: starts LocationForegroundService (persistent notification + FusedLocationProvider)
-
-async function getNativePlatform(): Promise<'ios' | 'android' | 'web'> {
-  try {
-    const { Capacitor } = await import('@capacitor/core');
-    if (!Capacitor.isNativePlatform()) return 'web';
-    return Capacitor.getPlatform() as 'ios' | 'android';
-  } catch {
-    return 'web';
-  }
-}
-
-async function isIOSNative(): Promise<boolean> {
-  return (await getNativePlatform()) === 'ios';
-}
-
-async function isAndroidNative(): Promise<boolean> {
-  return (await getNativePlatform()) === 'android';
-}
-
-export async function startIOSBackgroundLocation(): Promise<void> {
-  if (!(await isIOSNative())) return;
-  try {
-    const { Plugins } = await import('@capacitor/core');
-    const plugin = (Plugins as any).BackgroundLocation;
-    if (plugin?.startBackgroundLocation) {
-      await plugin.startBackgroundLocation();
-    }
-  } catch {
-    // Plugin not registered yet — GPS works in foreground only
-  }
-}
-
-export async function stopIOSBackgroundLocation(): Promise<void> {
-  if (!(await isIOSNative())) return;
-  try {
-    const { Plugins } = await import('@capacitor/core');
-    const plugin = (Plugins as any).BackgroundLocation;
-    if (plugin?.stopBackgroundLocation) {
-      await plugin.stopBackgroundLocation();
-    }
-  } catch {}
-}
-
-export async function startAndroidBackgroundLocation(): Promise<void> {
-  if (!(await isAndroidNative())) return;
-  try {
-    const { Plugins } = await import('@capacitor/core');
-    const plugin = (Plugins as any).BackgroundLocation;
-    if (plugin?.startBackgroundLocation) {
-      await plugin.startBackgroundLocation();
-    }
-  } catch {
-    console.debug('Android BackgroundLocation plugin not available');
-  }
-}
-
-export async function stopAndroidBackgroundLocation(): Promise<void> {
-  if (!(await isAndroidNative())) return;
-  try {
-    const { Plugins } = await import('@capacitor/core');
-    const plugin = (Plugins as any).BackgroundLocation;
-    if (plugin?.stopBackgroundLocation) {
-      await plugin.stopBackgroundLocation();
-    }
-  } catch {}
-}
-
-// Unified start/stop that handles both platforms
-export async function startNativeBackgroundLocation(): Promise<void> {
-  const platform = await getNativePlatform();
-  if (platform === 'ios') {
-    await startIOSBackgroundLocation();
-  } else if (platform === 'android') {
-    await startAndroidBackgroundLocation();
-  }
-}
-
-export async function stopNativeBackgroundLocation(): Promise<void> {
-  const platform = await getNativePlatform();
-  if (platform === 'ios') {
-    await stopIOSBackgroundLocation();
-  } else if (platform === 'android') {
-    await stopAndroidBackgroundLocation();
-  }
-}
-
-// Listen to native background location events (both iOS and Android emit "backgroundLocationUpdate")
-type NativeLocationCallback = (data: {
-  latitude: number;
-  longitude: number;
-  altitude: number;
-  accuracy: number;
-  speed: number;
-  heading: number;
-  timestamp: number;
-}) => void;
-
-let _nativeLocationListenerHandle: any = null;
-
-export async function addNativeLocationListener(callback: NativeLocationCallback): Promise<void> {
-  try {
-    const { Plugins } = await import('@capacitor/core');
-    const plugin = (Plugins as any).BackgroundLocation;
-    if (plugin?.addListener) {
-      _nativeLocationListenerHandle = await plugin.addListener('backgroundLocationUpdate', callback);
-    }
-  } catch {}
-}
-
-export async function removeNativeLocationListener(): Promise<void> {
-  if (_nativeLocationListenerHandle) {
-    try {
-      await _nativeLocationListenerHandle.remove();
-    } catch {}
-    _nativeLocationListenerHandle = null;
-  }
-}
-
 // ── GPS BACKGROUND RECONNECT ──────────────────────────────────────────────────
 
 type GPSReconnectCallback = (watchId: number) => void;
@@ -730,7 +477,6 @@ export function registerGPSBackgroundReconnect(
   onReconnect: GPSReconnectCallback,
   onPoint: (position: GeolocationPosition) => void,
   onError: (err: GeolocationPositionError) => void,
-  options?: PositionOptions
 ): void {
   if (gpsVisibilityHandler) {
     document.removeEventListener('visibilitychange', gpsVisibilityHandler);
@@ -739,11 +485,9 @@ export function registerGPSBackgroundReconnect(
 
   gpsVisibilityHandler = () => {
     if (document.visibilityState === 'visible') {
-      // On native platforms, the background service keeps running - no need to reconnect GPS
-      // Only reconnect on web where the browser pauses geolocation in background
       getNativePlatform().then((platform) => {
         if (platform === 'ios' || platform === 'android') {
-          // Native service still active, just resume audio keep-alive
+          // Capgo handles background natively, no reconnection needed
           if (noSleepAudio && noSleepAudio.state === 'suspended') {
             noSleepAudio.resume().catch(() => {});
           }

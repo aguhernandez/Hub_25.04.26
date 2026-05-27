@@ -34,7 +34,6 @@
 		"CAPBrowserPlugin",
 		"CAPCameraPlugin",
 		"GeolocationPlugin",
-		"PushNotificationsPlugin",
-		"BackgroundLocationPlugin"
+		"PushNotificationsPlugin"
 	]
 }
