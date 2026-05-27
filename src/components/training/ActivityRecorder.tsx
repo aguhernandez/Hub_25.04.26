@@ -24,6 +24,7 @@ import {
   loadPersistedSession,
   clearPersistedSession,
   stopNativeBackgroundLocation,
+  gpsDebug,
 } from '../../utils/gpsRecording';
 import { useLanguage } from '../../contexts/LanguageContext';
 import ActivityShareCard from './ActivityShareCard';
@@ -1578,6 +1579,24 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
                 {`±${Math.round(gpsAccuracy)}m`}
               </p>
             )}
+          </div>
+        )}
+
+        {/* GPS DEBUG OVERLAY */}
+        {phase === 'recording' && (
+          <div
+            className="absolute left-2 right-2 rounded-xl px-3 py-2 font-mono text-[10px] leading-tight"
+            style={{ top: `calc(${safeTop} + 52px)`, zIndex: 9999, backgroundColor: 'rgba(0,0,0,0.85)', color: '#0f0' }}
+          >
+            <p>GPS DEBUG (capgo 7.2.8)</p>
+            <p>Started: {gpsDebug.startedAt ? new Date(gpsDebug.startedAt).toLocaleTimeString() : 'N/A'}</p>
+            <p>Callbacks: {gpsDebug.totalCallbacks}</p>
+            <p>Last: {gpsDebug.lastTimestamp ? new Date(gpsDebug.lastTimestamp).toLocaleTimeString() : 'none'}</p>
+            <p>Lat/Lng: {gpsDebug.lastLat?.toFixed(6) ?? '-'}, {gpsDebug.lastLng?.toFixed(6) ?? '-'}</p>
+            <p>Filtered pts: {gpsPoints.length}</p>
+            <p style={{ color: gpsDebug.lastError ? '#f00' : '#0f0' }}>
+              Error: {gpsDebug.lastError ?? 'none'}
+            </p>
           </div>
         )}
       </div>

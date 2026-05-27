@@ -262,21 +262,48 @@ async function getNativePlatform(): Promise<'ios' | 'android' | 'web'> {
 
 let _bgGeoStarted = false;
 
+// Debug state exposed to UI
+export interface GPSDebugState {
+  lastTimestamp: number | null;
+  lastLat: number | null;
+  lastLng: number | null;
+  totalCallbacks: number;
+  lastError: string | null;
+  startedAt: number | null;
+}
+
+export const gpsDebug: GPSDebugState = {
+  lastTimestamp: null,
+  lastLat: null,
+  lastLng: null,
+  totalCallbacks: 0,
+  lastError: null,
+  startedAt: null,
+};
+
 async function startCapgoBackgroundGeolocation(
   onLocation: (position: GeolocationPosition) => void,
 ): Promise<void> {
   const { BackgroundGeolocation } = await import('@capgo/background-geolocation');
+
+  gpsDebug.startedAt = Date.now();
+  gpsDebug.totalCallbacks = 0;
+  gpsDebug.lastError = null;
+  gpsDebug.lastTimestamp = null;
+  gpsDebug.lastLat = null;
+  gpsDebug.lastLng = null;
 
   await BackgroundGeolocation.start(
     {
       backgroundMessage: 'Asciende está registrando tu actividad',
       backgroundTitle: 'Asciende GPS',
       requestPermissions: true,
-      stale: false,
-      distanceFilter: 5,
+      stale: true,
+      distanceFilter: 0,
     },
     (location, error) => {
       if (error) {
+        gpsDebug.lastError = `[${error.code ?? 'UNKNOWN'}] ${error.message}`;
         if (error.code === 'NOT_AUTHORIZED') {
           if (window.confirm(
             'Asciende necesita acceso a tu ubicación en segundo plano para registrar la actividad. ¿Abrir configuración?'
@@ -287,6 +314,11 @@ async function startCapgoBackgroundGeolocation(
         return;
       }
       if (location) {
+        gpsDebug.totalCallbacks++;
+        gpsDebug.lastTimestamp = location.time ?? Date.now();
+        gpsDebug.lastLat = location.latitude;
+        gpsDebug.lastLng = location.longitude;
+
         const position: GeolocationPosition = {
           coords: {
             latitude: location.latitude,
