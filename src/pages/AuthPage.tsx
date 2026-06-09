@@ -767,7 +767,7 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoB
                         fontSize: '12px',
                       }}
                     >
-                      {language === 'es' ? 'Ingresar al Hub' : 'Enter Hub'}
+                      {'Sign In Hub'}
                       <ChevronRight style={{ width: '13px', height: '13px' }} />
                     </button>
                   </div>

@@ -441,7 +441,7 @@ export default function SplashScreen({ onLoadComplete, onSatelliteSelect, minima
                     className="w-full flex items-center justify-center gap-1.5 rounded-2xl font-bold"
                     style={{ padding: '13px 14px', background: 'linear-gradient(135deg,#fdda36 0%,#f5c400 100%)', color: '#1a1428', fontSize: '12px', letterSpacing: '0.03em' }}
                   >
-                    {language === 'es' ? 'Ingresar al Hub' : 'Enter Hub'}
+                    {'Sign In Hub'}
                     <ChevronRight style={{ width: '12px', height: '12px' }} />
                   </button>
                 </div>
