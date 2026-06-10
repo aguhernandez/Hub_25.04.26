@@ -228,7 +228,11 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoB
           const data = await response.json();
 
           if (!response.ok) {
-            setError(data.error || 'Login failed');
+            const rawErr = (data.error || '').toLowerCase();
+            const friendlyErr = rawErr.includes('invalid') || rawErr.includes('not found') || rawErr.includes('credentials')
+              ? 'No account found with those credentials. Check your email and password.'
+              : data.error || 'Login failed';
+            setError(friendlyErr);
             setLoading(false);
             return;
           }
@@ -247,7 +251,18 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoB
 
       const { error } = await signIn(email, password);
       if (error) {
-        setError(error.message);
+        const msg = error.message?.toLowerCase() ?? '';
+        if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('network request failed')) {
+          setError('Connection error. Please check your internet and try again.');
+        } else if (msg.includes('invalid login credentials') || msg.includes('invalid credentials') || msg.includes('user not found') || msg.includes('no user found')) {
+          setError('No account found with those credentials. Check your email and password.');
+        } else if (msg.includes('email not confirmed')) {
+          setError('Please confirm your email before signing in.');
+        } else if (msg.includes('too many requests')) {
+          setError('Too many attempts. Please wait a moment and try again.');
+        } else {
+          setError(error.message);
+        }
         return;
       }
 
