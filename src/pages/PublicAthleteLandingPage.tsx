@@ -366,7 +366,7 @@ export default function PublicAthleteLandingPage() {
   };
 
   const shareProject = (project: SupportProject) => {
-    const url = `${window.location.origin}/athlete/@${athleteSlug}/project/${project.slug}`;
+    const url = `https://hub.asciende.pro/athlete/@${athleteSlug}/project/${project.slug}`;
     if (navigator.share) {
       navigator.share({ title: project.title, text: project.short_phrase, url });
     } else {

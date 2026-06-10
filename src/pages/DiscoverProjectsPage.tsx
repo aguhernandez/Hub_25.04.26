@@ -180,7 +180,7 @@ export default function DiscoverProjectsPage() {
   const shareProject = async () => {
     if (!selectedProject) return;
 
-    const projectUrl = `${window.location.origin}/discover/${selectedProject.id}`;
+    const projectUrl = `https://hub.asciende.pro/discover/${selectedProject.id}`;
 
     if (navigator.share) {
       try {

@@ -445,7 +445,7 @@ export default function ProjectShareCard({ project, onClose }: ProjectShareCardP
 
   const getShareUrl = () => {
     const projectSlug = project.slug || project.id;
-    return `${window.location.origin}/discover/${projectSlug}`;
+    return `https://hub.asciende.pro/discover/${projectSlug}`;
   };
 
   const handleDownload = () => {

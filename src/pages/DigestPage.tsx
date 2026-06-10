@@ -365,7 +365,7 @@ const [loading, setLoading] = useState(true);
   };
 
   const handleShare = async (article: Article) => {
-    const shareUrl = `${window.location.origin}/digest/${article.id}`;
+    const shareUrl = `https://hub.asciende.pro/digest/${article.id}`;
 
     if (navigator.share) {
       try {

@@ -1184,7 +1184,7 @@ export default function SettingsPage() {
                         {language === 'es' ? 'Tu perfil estará disponible en:' : 'Your profile will be available at:'}
                       </p>
                       <p className="text-sm font-mono text-blue-900 dark:text-blue-200 mt-1">
-                        {window.location.origin}/athlete/{publicProfileSlug}
+                        https://hub.asciende.pro/athlete/{publicProfileSlug}
                       </p>
                     </div>
                   )}

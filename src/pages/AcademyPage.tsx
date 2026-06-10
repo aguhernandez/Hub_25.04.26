@@ -1124,7 +1124,7 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
   };
 
   const handleShare = async (article: Article) => {
-    const shareUrl = `${window.location.origin}/digest/${article.id}`;
+    const shareUrl = `https://hub.asciende.pro/digest/${article.id}`;
     if (navigator.share) {
       try { await navigator.share({ title: article.title, text: article.subtitle || article.title, url: shareUrl }); } catch {}
     } else { navigator.clipboard.writeText(shareUrl); alert(language === 'es' ? 'Enlace copiado!' : 'Link copied!'); }

@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Share2, Download, X, Camera, CheckCircle, MapPin, Clock, Zap, Mountain, Link, Moon, Sun, Map } from 'lucide-react';
+import { Share2, Download, X, CheckCircle, MapPin, Clock, Zap, Mountain, Link, Map } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+
+const PRODUCTION_URL = 'https://hub.asciende.pro';
 
 const SPORT_META: Record<string, { label: string; labelEs: string; color: string; emoji: string }> = {
   run:              { label: 'Run',              labelEs: 'Carrera',                color: '#22c55e', emoji: '🏃' },
@@ -94,7 +96,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const logoImgRef = useRef<HTMLImageElement | null>(null);
   const [activeProject, setActiveProject] = useState<any>(null);
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [shareMode, setShareMode] = useState<'profile' | 'project'>('profile');
   const [theme, setTheme] = useState<Theme>('dark');
   const [format, setFormat] = useState<Format>('square');
@@ -103,7 +104,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   const [copied, setCopied] = useState(false);
   const [projectLoaded, setProjectLoaded] = useState(false);
   const [logoLoaded, setLogoLoaded] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sport = SPORT_META[activityData.sportType] ?? SPORT_META['run'];
 
@@ -208,23 +208,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
         }
       }
       ctx.restore();
-    }
-
-    if (uploadedImage) {
-      try {
-        const img = new Image();
-        await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; img.src = uploadedImage; });
-        ctx.save();
-        ctx.globalAlpha = 0.13;
-        ctx.drawImage(img, 0, 0, W, H);
-        ctx.restore();
-        const overlay = ctx.createLinearGradient(0, 0, 0, H);
-        overlay.addColorStop(0, T.bg[0] + 'f0');
-        overlay.addColorStop(0.5, T.bg[0] + 'bb');
-        overlay.addColorStop(1, T.bg[0] + 'f5');
-        ctx.fillStyle = overlay;
-        ctx.fillRect(0, 0, W, H);
-      } catch {}
     }
 
     // ── TOP ACCENT BAR ───────────────────────────────────────────────────────
@@ -465,7 +448,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     // Bottom bar
     ctx.fillStyle = barG;
     ctx.fillRect(0, H - 8, W, 8);
-  }, [profile, activityData, uploadedImage, shareMode, theme, format, activeProject, language, sport, getPace]);
+  }, [profile, activityData, shareMode, theme, format, activeProject, language, sport, getPace]);
 
   useEffect(() => {
     if (!projectLoaded || !logoLoaded) return;
@@ -473,34 +456,41 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     return () => cancelAnimationFrame(raf);
   }, [projectLoaded, logoLoaded, generateCard]);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => setUploadedImage(ev.target?.result as string);
-    reader.readAsDataURL(file);
-  };
-
   const getShareUrl = () => {
     const slug = (profile as any)?.public_profile_slug || profile?.id || '';
     return (shareMode === 'project' && activeProject)
-      ? `${window.location.origin}/athlete/${slug}/project/${activeProject.slug}`
-      : `${window.location.origin}/athlete/${slug}`;
+      ? `${PRODUCTION_URL}/athlete/${slug}/project/${activeProject.slug}`
+      : `${PRODUCTION_URL}/athlete/${slug}`;
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const dateStr = (activityData.date || new Date().toISOString().split('T')[0]);
-      a.download = `activity-${format}-${activityData.sportType}-${dateStr}.png`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }, 'image/png');
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
+    if (!blob) return;
+    const dateStr = activityData.date || new Date().toISOString().split('T')[0];
+    const fileName = `activity-${format}-${activityData.sportType}-${dateStr}.png`;
+
+    // Try native share (works in Capacitor and mobile browsers) to save the image
+    if (navigator.share) {
+      try {
+        const file = new File([blob], fileName, { type: 'image/png' });
+        if (navigator.canShare?.({ files: [file] })) {
+          await navigator.share({ files: [file] });
+          return;
+        }
+      } catch (e: any) {
+        if (e?.name === 'AbortError') return;
+      }
+    }
+
+    // Fallback: anchor download (works in desktop browsers)
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleCopyLink = async () => {
@@ -686,18 +676,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
               </div>
             </div>
           )}
-
-          {/* Photo upload */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-neutral-300 dark:border-neutral-600 rounded-xl hover:border-amber-400 transition-colors text-xs text-neutral-500 dark:text-neutral-400 hover:text-amber-600 dark:hover:text-amber-400"
-          >
-            <Camera className="w-4 h-4" />
-            {uploadedImage
-              ? (language === 'es' ? 'Cambiar foto de fondo' : 'Change background photo')
-              : (language === 'es' ? 'Agregar foto de fondo (opcional)' : 'Add background photo (optional)')}
-          </button>
-          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
 
           {/* Canvas preview */}
           <div className="rounded-xl overflow-hidden bg-neutral-100 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600">

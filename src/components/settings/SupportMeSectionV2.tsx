@@ -99,7 +99,7 @@ export default function SupportMeSectionV2() {
 
   const shareProfile = async () => {
     const slug = profile?.public_profile_slug || profile?.id;
-    const profileUrl = `${window.location.origin}/athlete/@${slug}`;
+    const profileUrl = `https://hub.asciende.pro/athlete/@${slug}`;
 
     if (navigator.share) {
       try {

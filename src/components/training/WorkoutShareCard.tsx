@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 
+const PRODUCTION_URL = 'https://hub.asciende.pro';
+
 interface WorkoutShareCardProps {
   workoutData: {
     date: string;
@@ -395,8 +397,8 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
   const getShareUrl = () => {
     const slug = (profile as any)?.public_profile_slug || profile?.id || '';
     return (shareMode === 'project' && activeProject)
-      ? `${window.location.origin}/athlete/${slug}/project/${activeProject.slug}`
-      : `${window.location.origin}/athlete/${slug}`;
+      ? `${PRODUCTION_URL}/athlete/${slug}/project/${activeProject.slug}`
+      : `${PRODUCTION_URL}/athlete/${slug}`;
   };
 
   const handleDownload = () => {
