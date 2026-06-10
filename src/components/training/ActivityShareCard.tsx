@@ -6,16 +6,20 @@ import { useLanguage } from '../../contexts/LanguageContext';
 
 const PRODUCTION_URL = 'https://hub.asciende.pro';
 
-const SPORT_META: Record<string, { label: string; labelEs: string; color: string; emoji: string }> = {
-  run:              { label: 'Run',              labelEs: 'Carrera',                color: '#22c55e', emoji: '🏃' },
-  trail_run:        { label: 'Trail Run',        labelEs: 'Trail Run',              color: '#84cc16', emoji: '⛰️' },
-  road_bike:        { label: 'Road Bike',        labelEs: 'Bicicleta Ruta',         color: '#3b82f6', emoji: '🚴' },
-  mountain_bike:    { label: 'Mountain Bike',    labelEs: 'Bicicleta MTB',          color: '#f97316', emoji: '🚵' },
-  gravel_bike:      { label: 'Gravel Bike',      labelEs: 'Gravel',                 color: '#a3e635', emoji: '🚴' },
-  open_water_swim:  { label: 'Open Water Swim',  labelEs: 'Aguas Abiertas',         color: '#06b6d4', emoji: '🏊' },
-  swim:             { label: 'Swimming',         labelEs: 'Natación',               color: '#06b6d4', emoji: '🏊' },
-  hike:             { label: 'Hike',             labelEs: 'Senderismo',             color: '#d97706', emoji: '🥾' },
-  nordic_ski:       { label: 'Nordic Ski',       labelEs: 'Esquí Nórdico',          color: '#7dd3fc', emoji: '⛷️' },
+const KRONA_ONE_URL = 'https://fonts.gstatic.com/s/kronaone/v14/jAnEgHdjHcjgfIb1ZcUCMY-h.woff2';
+const FONT_NAME = 'Krona One';
+const FONT_FALLBACK = 'sans-serif';
+
+const SPORT_META: Record<string, { label: string; labelEs: string; color: string }> = {
+  run:             { label: 'Run',             labelEs: 'Carrera',          color: '#f5c400' },
+  trail_run:       { label: 'Trail Run',       labelEs: 'Trail Run',        color: '#84cc16' },
+  road_bike:       { label: 'Road Bike',       labelEs: 'Bicicleta Ruta',   color: '#3b82f6' },
+  mountain_bike:   { label: 'Mountain Bike',   labelEs: 'Bicicleta MTB',    color: '#f97316' },
+  gravel_bike:     { label: 'Gravel Bike',     labelEs: 'Gravel',           color: '#a3e635' },
+  open_water_swim: { label: 'Open Water Swim', labelEs: 'Aguas Abiertas',   color: '#06b6d4' },
+  swim:            { label: 'Swimming',        labelEs: 'Natación',         color: '#06b6d4' },
+  hike:            { label: 'Hike',            labelEs: 'Senderismo',       color: '#d97706' },
+  nordic_ski:      { label: 'Nordic Ski',      labelEs: 'Esquí Nórdico',    color: '#7dd3fc' },
 };
 
 export interface ActivityShareData {
@@ -33,14 +37,7 @@ interface ActivityShareCardProps {
   onClose: () => void;
 }
 
-type Theme = 'dark' | 'terrain' | 'minimal';
-type Format = 'square' | 'story';
-
-const THEMES: { id: Theme; label: string; labelEs: string }[] = [
-  { id: 'dark',    label: 'Dark',    labelEs: 'Oscuro'  },
-  { id: 'terrain', label: 'Terrain', labelEs: 'Terreno' },
-  { id: 'minimal', label: 'Minimal', labelEs: 'Minimal' },
-];
+type CardType = 'map' | 'transparent' | 'story';
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   r = Math.min(r, w / 2, h / 2);
@@ -59,8 +56,7 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 
 function projectPoints(
   points: Array<{ latitude: number; longitude: number }>,
-  x: number, y: number, w: number, h: number,
-  pad = 40
+  x: number, y: number, w: number, h: number, pad = 40
 ): Array<[number, number]> {
   if (points.length < 2) return [];
   const lats = points.map((p) => p.latitude);
@@ -71,9 +67,7 @@ function projectPoints(
   const dLon = maxLon - minLon || 0.0001;
   const availW = w - pad * 2;
   const availH = h - pad * 2;
-  const scaleX = availW / dLon;
-  const scaleY = availH / dLat;
-  const scale = Math.min(scaleX, scaleY);
+  const scale = Math.min(availW / dLon, availH / dLat);
   const usedW = dLon * scale;
   const usedH = dLat * scale;
   const offX = x + pad + (availW - usedW) / 2;
@@ -90,6 +84,132 @@ function samplePoints<T>(arr: T[], maxPoints: number): T[] {
   return Array.from({ length: maxPoints }, (_, i) => arr[Math.round(i * step)]);
 }
 
+function drawRoute(
+  ctx: CanvasRenderingContext2D,
+  projected: Array<[number, number]>,
+  color: string,
+  lineWidth = 4,
+  glowSize = 20
+) {
+  if (projected.length < 2) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  ctx.shadowColor = color + '88';
+  ctx.shadowBlur = glowSize;
+  ctx.beginPath();
+  ctx.moveTo(projected[0][0], projected[0][1]);
+  for (let i = 1; i < projected.length; i++) ctx.lineTo(projected[i][0], projected[i][1]);
+  ctx.strokeStyle = color + '30';
+  ctx.lineWidth = lineWidth * 4;
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.moveTo(projected[0][0], projected[0][1]);
+  for (let i = 1; i < projected.length; i++) ctx.lineTo(projected[i][0], projected[i][1]);
+  ctx.strokeStyle = color + '55';
+  ctx.lineWidth = lineWidth * 2;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(projected[0][0], projected[0][1]);
+  for (let i = 1; i < projected.length; i++) ctx.lineTo(projected[i][0], projected[i][1]);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.stroke();
+
+  // Start dot
+  ctx.fillStyle = '#22c55e';
+  ctx.beginPath();
+  ctx.arc(projected[0][0], projected[0][1], lineWidth * 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // End dot
+  const last = projected[projected.length - 1];
+  ctx.fillStyle = '#ef4444';
+  ctx.beginPath();
+  ctx.arc(last[0], last[1], lineWidth * 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawIcon(ctx: CanvasRenderingContext2D, type: string, cx: number, cy: number, size: number, color: string) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = size * 0.15;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const r = size / 2;
+
+  if (type === 'distance') {
+    ctx.beginPath();
+    ctx.arc(cx, cy - r * 0.3, r * 0.5, Math.PI, 0);
+    ctx.lineTo(cx, cy + r * 0.7);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy - r * 0.3, r * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'time') {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r * 0.35);
+    ctx.lineTo(cx, cy);
+    ctx.lineTo(cx + r * 0.25, cy + r * 0.15);
+    ctx.stroke();
+  } else if (type === 'pace') {
+    ctx.beginPath();
+    ctx.moveTo(cx + r * 0.15, cy - r * 0.7);
+    ctx.lineTo(cx - r * 0.25, cy - r * 0.05);
+    ctx.lineTo(cx + r * 0.1, cy - r * 0.05);
+    ctx.lineTo(cx - r * 0.15, cy + r * 0.7);
+    ctx.stroke();
+  } else if (type === 'elevation') {
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.7, cy + r * 0.5);
+    ctx.lineTo(cx - r * 0.1, cy - r * 0.5);
+    ctx.lineTo(cx + r * 0.15, cy - r * 0.1);
+    ctx.lineTo(cx + r * 0.7, cy - r * 0.6);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawLogoOrText(
+  ctx: CanvasRenderingContext2D,
+  logoImg: HTMLImageElement | null,
+  cx: number, cy: number,
+  maxW: number, maxH: number,
+  fontFamily: string
+) {
+  if (logoImg && logoImg.naturalWidth > 0) {
+    const aspect = logoImg.naturalWidth / logoImg.naturalHeight;
+    let w = maxW;
+    let h = w / aspect;
+    if (h > maxH) { h = maxH; w = h * aspect; }
+    ctx.drawImage(logoImg, cx - w / 2, cy - h / 2, w, h);
+  } else {
+    ctx.fillStyle = '#fdda36';
+    ctx.font = `bold ${Math.min(maxH * 0.6, 36)}px ${fontFamily}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ASCIENDE', cx, cy);
+    ctx.textBaseline = 'alphabetic';
+  }
+}
+
 export default function ActivityShareCard({ activityData, onClose }: ActivityShareCardProps) {
   const { profile } = useAuth();
   const { language } = useLanguage();
@@ -97,25 +217,37 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   const logoImgRef = useRef<HTMLImageElement | null>(null);
   const [activeProject, setActiveProject] = useState<any>(null);
   const [shareMode, setShareMode] = useState<'profile' | 'project'>('profile');
-  const [theme, setTheme] = useState<Theme>('dark');
-  const [format, setFormat] = useState<Format>('square');
+  const [cardType, setCardType] = useState<CardType>('map');
   const [sharing, setSharing] = useState(false);
   const [shared, setShared] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [projectLoaded, setProjectLoaded] = useState(false);
-  const [logoLoaded, setLogoLoaded] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [fontLoaded, setFontLoaded] = useState(false);
 
   const sport = SPORT_META[activityData.sportType] ?? SPORT_META['run'];
+  const f = (w: string) => `${w} ${FONT_NAME}, ${FONT_FALLBACK}`;
 
+  // Load Krona One font
   useEffect(() => {
-    const img = new Image();
-    img.onload = () => { logoImgRef.current = img; setLogoLoaded(true); };
-    img.onerror = () => { setLogoLoaded(true); };
-    img.src = '/Asciende_logo_blanco.png';
+    const font = new FontFace(FONT_NAME, `url(${KRONA_ONE_URL})`);
+    font.load().then((loaded) => {
+      document.fonts.add(loaded);
+      setFontLoaded(true);
+    }).catch(() => setFontLoaded(true));
   }, []);
 
+  // Load logo
   useEffect(() => {
-    if (!profile?.id) { setProjectLoaded(true); return; }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => { logoImgRef.current = img; };
+    img.onerror = () => {};
+    img.src = '/Asciendelogo.png';
+  }, []);
+
+  // Load active project
+  useEffect(() => {
+    if (!profile?.id) { setReady(true); return; }
     supabase
       .from('athlete_support_projects')
       .select('id, title, short_phrase, slug')
@@ -127,7 +259,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       .maybeSingle()
       .then(({ data }) => {
         if (data) { setActiveProject(data); setShareMode('project'); }
-        setProjectLoaded(true);
+        setReady(true);
       });
   }, [profile?.id]);
 
@@ -135,326 +267,29 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
-    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
     return `${m}:${String(s).padStart(2, '0')}`;
+  };
+
+  const fmtDate = () => {
+    const d = activityData.date ? new Date(activityData.date + 'T12:00:00') : new Date();
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yy = d.getFullYear();
+    return `${dd}/${mm}/${yy}`;
   };
 
   const getPace = useCallback(() => {
     if (!activityData.distanceKm || !activityData.durationSeconds) return null;
     const isBike = ['road_bike', 'mountain_bike', 'gravel_bike'].includes(activityData.sportType);
     if (isBike) {
-      const kmh = (activityData.distanceKm / activityData.durationSeconds) * 3600;
-      return { value: kmh.toFixed(1), unit: 'km/h' };
+      return { value: ((activityData.distanceKm / activityData.durationSeconds) * 3600).toFixed(1), unit: 'km/h' };
     }
     const minPerKm = activityData.durationSeconds / 60 / activityData.distanceKm;
     const mins = Math.floor(minPerKm);
     const secs = Math.round((minPerKm - mins) * 60);
     return { value: `${mins}:${String(secs).padStart(2, '0')}`, unit: 'min/km' };
   }, [activityData]);
-
-  const generateCard = useCallback(async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const W = 1080;
-    const H = format === 'story' ? 1920 : 1080;
-    canvas.width = W;
-    canvas.height = H;
-
-    const T = {
-      dark:    {
-        bg: ['#07090d', '#0c1420', '#07090d'],
-        text: '#ffffff', sub: 'rgba(255,255,255,0.45)',
-        mapBg: 'rgba(255,255,255,0.05)', mapBorder: 'rgba(255,255,255,0.12)',
-        ctaBg: '#fdda36', ctaText: '#07090d',
-        box: 'rgba(255,255,255,0.06)', boxBorder: 'rgba(255,255,255,0.1)',
-      },
-      terrain: {
-        bg: ['#0a0f04', '#131a06', '#0a0f04'],
-        text: '#f0fdf4', sub: 'rgba(240,253,244,0.5)',
-        mapBg: 'rgba(255,255,255,0.06)', mapBorder: 'rgba(255,255,255,0.14)',
-        ctaBg: sport.color, ctaText: '#ffffff',
-        box: 'rgba(255,255,255,0.06)', boxBorder: `${sport.color}44`,
-      },
-      minimal: {
-        bg: ['#f8fafc', '#ffffff', '#f0f4f8'],
-        text: '#0f172a', sub: 'rgba(15,23,42,0.5)',
-        mapBg: 'rgba(0,0,0,0.04)', mapBorder: 'rgba(0,0,0,0.1)',
-        ctaBg: '#0f172a', ctaText: '#ffffff',
-        box: 'rgba(0,0,0,0.04)', boxBorder: 'rgba(0,0,0,0.1)',
-      },
-    }[theme];
-
-    // ── BACKGROUND ──────────────────────────────────────────────────────────
-    const bgG = ctx.createLinearGradient(0, 0, W, H);
-    bgG.addColorStop(0, T.bg[0]);
-    bgG.addColorStop(0.5, T.bg[1]);
-    bgG.addColorStop(1, T.bg[2]);
-    ctx.fillStyle = bgG;
-    ctx.fillRect(0, 0, W, H);
-
-    // Subtle dot grid pattern
-    if (theme !== 'minimal') {
-      ctx.save();
-      ctx.globalAlpha = 0.04;
-      ctx.fillStyle = sport.color;
-      for (let gx = 80; gx < W - 80; gx += 50) {
-        for (let gy = 80; gy < H - 80; gy += 50) {
-          ctx.beginPath();
-          ctx.arc(gx, gy, 1.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-      ctx.restore();
-    }
-
-    // ── TOP ACCENT BAR ───────────────────────────────────────────────────────
-    const barG = ctx.createLinearGradient(0, 0, W, 0);
-    barG.addColorStop(0, 'transparent');
-    barG.addColorStop(0.15, '#fdda36');
-    barG.addColorStop(0.85, '#fdda36');
-    barG.addColorStop(1, 'transparent');
-    ctx.fillStyle = barG;
-    ctx.fillRect(0, 0, W, 8);
-
-    // ── BRAND ────────────────────────────────────────────────────────────────
-    const BRAND = '#fdda36';
-    const topY = format === 'story' ? 100 : 64;
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${format === 'story' ? 32 : 26}px sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.fillText('ASCIENDE', 72, topY);
-
-    // Sport badge
-    const sportLabel = (language === 'es' ? sport.labelEs : sport.label).toUpperCase();
-    const badgeW = Math.min(260, ctx.measureText(sportLabel).width + 56);
-    ctx.fillStyle = BRAND + '22';
-    roundRect(ctx, W - badgeW - 72, topY - 28, badgeW, 48, 24);
-    ctx.fill();
-    ctx.strokeStyle = BRAND + '88';
-    ctx.lineWidth = 1.5;
-    roundRect(ctx, W - badgeW - 72, topY - 28, badgeW, 48, 24);
-    ctx.stroke();
-    ctx.fillStyle = BRAND;
-    ctx.font = 'bold 20px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(sportLabel.length > 18 ? sportLabel.slice(0, 16) + '…' : sportLabel, W - badgeW / 2 - 72, topY + 4);
-
-    // ── ATHLETE NAME ──────────────────────────────────────────────────────────
-    const nameY = format === 'story' ? 200 : 170;
-    ctx.fillStyle = T.text;
-    ctx.font = `bold ${format === 'story' ? 68 : 60}px sans-serif`;
-    ctx.textAlign = 'center';
-    const name = profile?.full_name || (language === 'es' ? 'Atleta' : 'Athlete');
-    ctx.fillText(name.length > 24 ? name.slice(0, 22) + '…' : name, W / 2, nameY);
-
-    if (activityData.title) {
-      ctx.fillStyle = T.sub;
-      ctx.font = `${format === 'story' ? 30 : 26}px sans-serif`;
-      const t = activityData.title;
-      ctx.fillText(t.length > 44 ? t.slice(0, 42) + '…' : t, W / 2, nameY + (format === 'story' ? 52 : 44));
-    }
-
-    const rawDate = activityData.date ? new Date(activityData.date + 'T12:00:00') : new Date();
-    const dateStr = rawDate.toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-    });
-    const dateY = nameY + (format === 'story' ? 104 : 88);
-    ctx.fillStyle = BRAND + 'cc';
-    ctx.font = `${format === 'story' ? 26 : 22}px sans-serif`;
-    ctx.fillText(dateStr.charAt(0).toUpperCase() + dateStr.slice(1), W / 2, dateY);
-
-    // Divider
-    ctx.strokeStyle = BRAND + '44';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(80, dateY + 24);
-    ctx.lineTo(W - 80, dateY + 24);
-    ctx.stroke();
-
-    // ── DISTANCE HERO ──────────────────────────────────────────────────────────
-    const heroY = dateY + (format === 'story' ? 140 : 110);
-    ctx.fillStyle = T.text;
-    ctx.font = `bold ${format === 'story' ? 180 : 144}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText(activityData.distanceKm.toFixed(2), W / 2, heroY);
-    ctx.fillStyle = BRAND;
-    ctx.font = `bold ${format === 'story' ? 44 : 36}px sans-serif`;
-    ctx.fillText('km', W / 2, heroY + (format === 'story' ? 58 : 48));
-
-    // ── GPS MAP PANEL ─────────────────────────────────────────────────────────
-    const mapPad = 80;
-    const mapY = heroY + (format === 'story' ? 130 : 100);
-    const mapH = format === 'story' ? 520 : 320;
-    const mapW = W - mapPad * 2;
-    const mapX = mapPad;
-
-    ctx.fillStyle = T.mapBg;
-    roundRect(ctx, mapX, mapY, mapW, mapH, 24);
-    ctx.fill();
-    ctx.strokeStyle = T.mapBorder;
-    ctx.lineWidth = 1.5;
-    roundRect(ctx, mapX, mapY, mapW, mapH, 24);
-    ctx.stroke();
-
-    const pts = activityData.gpsPoints;
-    if (pts && pts.length >= 2) {
-      const sampled = samplePoints(pts, 1500);
-      const projected = projectPoints(sampled, mapX, mapY, mapW, mapH, 44);
-
-      if (projected.length >= 2) {
-        // Glow effect under route
-        ctx.save();
-        ctx.shadowColor = sport.color + '88';
-        ctx.shadowBlur = 24;
-
-        // Thick glow pass
-        ctx.beginPath();
-        ctx.moveTo(projected[0][0], projected[0][1]);
-        for (let i = 1; i < projected.length; i++) ctx.lineTo(projected[i][0], projected[i][1]);
-        ctx.strokeStyle = sport.color + '35';
-        ctx.lineWidth = 14;
-        ctx.lineJoin = 'round';
-        ctx.lineCap = 'round';
-        ctx.stroke();
-
-        // Medium glow pass
-        ctx.beginPath();
-        ctx.moveTo(projected[0][0], projected[0][1]);
-        for (let i = 1; i < projected.length; i++) ctx.lineTo(projected[i][0], projected[i][1]);
-        ctx.strokeStyle = sport.color + '60';
-        ctx.lineWidth = 7;
-        ctx.stroke();
-
-        // Main route line
-        ctx.beginPath();
-        ctx.moveTo(projected[0][0], projected[0][1]);
-        for (let i = 1; i < projected.length; i++) ctx.lineTo(projected[i][0], projected[i][1]);
-        ctx.strokeStyle = sport.color;
-        ctx.lineWidth = 3.5;
-        ctx.stroke();
-
-        ctx.restore();
-
-        // Start dot
-        ctx.fillStyle = '#22c55e';
-        ctx.beginPath();
-        ctx.arc(projected[0][0], projected[0][1], 10, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.arc(projected[0][0], projected[0][1], 10, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Finish dot
-        const last = projected[projected.length - 1];
-        ctx.fillStyle = '#ef4444';
-        ctx.beginPath();
-        ctx.arc(last[0], last[1], 10, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.arc(last[0], last[1], 10, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    } else {
-      ctx.fillStyle = T.sub;
-      ctx.font = `${format === 'story' ? 26 : 22}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText(
-        language === 'es' ? 'Sin datos de ruta GPS' : 'No GPS route data',
-        mapX + mapW / 2,
-        mapY + mapH / 2 + 8
-      );
-    }
-
-    // ── STATS ROW ─────────────────────────────────────────────────────────────
-    const pace = getPace();
-    const statsData = [
-      { v: fmtDuration(activityData.durationSeconds), l: language === 'es' ? 'Duración' : 'Duration' },
-      { v: pace?.value || '—', l: pace?.unit || (language === 'es' ? 'Ritmo' : 'Pace') },
-      { v: activityData.elevationGainM > 0 ? `${Math.round(activityData.elevationGainM)}m` : '—', l: language === 'es' ? 'Desnivel +' : 'Elevation +' },
-    ];
-
-    const sH = format === 'story' ? 120 : 104;
-    const sGap = 20;
-    const sW = (W - mapPad * 2 - sGap * (statsData.length - 1)) / statsData.length;
-    const sY = mapY + mapH + (format === 'story' ? 28 : 20);
-
-    statsData.forEach(({ v, l }, i) => {
-      const sx = mapPad + i * (sW + sGap);
-      ctx.fillStyle = T.box;
-      roundRect(ctx, sx, sY, sW, sH, 16);
-      ctx.fill();
-      ctx.strokeStyle = BRAND + '55';
-      ctx.lineWidth = 1.5;
-      roundRect(ctx, sx, sY, sW, sH, 16);
-      ctx.stroke();
-
-      // Accent top bar
-      const lineG = ctx.createLinearGradient(sx, sY, sx + sW, sY);
-      lineG.addColorStop(0, 'transparent');
-      lineG.addColorStop(0.5, BRAND + '77');
-      lineG.addColorStop(1, 'transparent');
-      ctx.fillStyle = lineG;
-      roundRect(ctx, sx, sY, sW, 3, 1.5);
-      ctx.fill();
-
-      ctx.fillStyle = T.text;
-      ctx.font = `bold ${format === 'story' ? 38 : 34}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText(v, sx + sW / 2, sY + sH / 2 + (format === 'story' ? 10 : 8));
-      ctx.fillStyle = BRAND + 'cc';
-      ctx.font = `bold ${format === 'story' ? 20 : 18}px sans-serif`;
-      ctx.fillText(l, sx + sW / 2, sY + sH / 2 + (format === 'story' ? 46 : 40));
-    });
-
-    // ── CTA BANNER ────────────────────────────────────────────────────────────
-    const ctaH = format === 'story' ? 180 : 164;
-    const ctaY = H - ctaH - 80;
-    ctx.fillStyle = T.ctaBg;
-    roundRect(ctx, mapPad, ctaY, W - mapPad * 2, ctaH, 24);
-    ctx.fill();
-
-    const slug = (profile as any)?.public_profile_slug || profile?.id || '';
-    ctx.fillStyle = T.ctaText;
-    if (shareMode === 'project' && activeProject) {
-      ctx.font = `bold ${format === 'story' ? 40 : 34}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText(language === 'es' ? 'Apoya Mi Proyecto' : 'Support My Project', W / 2, ctaY + (format === 'story' ? 58 : 50));
-      ctx.font = `${format === 'story' ? 28 : 24}px sans-serif`;
-      const phrase = activeProject.short_phrase || activeProject.title;
-      ctx.fillText(phrase.length > 54 ? phrase.slice(0, 51) + '…' : phrase, W / 2, ctaY + (format === 'story' ? 106 : 96));
-      ctx.globalAlpha = 0.6;
-      ctx.font = `bold ${format === 'story' ? 20 : 18}px monospace`;
-      ctx.fillText(`hub.asciende.pro/athlete/${slug}/project/${activeProject.slug}`, W / 2, ctaY + (format === 'story' ? 152 : 140));
-      ctx.globalAlpha = 1;
-    } else {
-      ctx.font = `bold ${format === 'story' ? 40 : 34}px sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.fillText(language === 'es' ? 'Sigue Mi Progreso' : 'Follow My Journey', W / 2, ctaY + (format === 'story' ? 58 : 50));
-      ctx.font = `${format === 'story' ? 28 : 24}px sans-serif`;
-      ctx.fillText(language === 'es' ? 'Cada kilómetro, un paso más cerca' : 'Every km, one step further', W / 2, ctaY + (format === 'story' ? 106 : 96));
-      ctx.globalAlpha = 0.6;
-      ctx.font = `bold ${format === 'story' ? 20 : 18}px monospace`;
-      ctx.fillText(`hub.asciende.pro/athlete/${slug}`, W / 2, ctaY + (format === 'story' ? 152 : 140));
-      ctx.globalAlpha = 1;
-    }
-
-    // Bottom bar
-    ctx.fillStyle = barG;
-    ctx.fillRect(0, H - 8, W, 8);
-  }, [profile, activityData, shareMode, theme, format, activeProject, language, sport, getPace]);
-
-  useEffect(() => {
-    if (!projectLoaded || !logoLoaded) return;
-    const raf = requestAnimationFrame(() => generateCard());
-    return () => cancelAnimationFrame(raf);
-  }, [projectLoaded, logoLoaded, generateCard]);
 
   const getShareUrl = () => {
     const slug = (profile as any)?.public_profile_slug || profile?.id || '';
@@ -463,15 +298,325 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       : `${PRODUCTION_URL}/athlete/${slug}`;
   };
 
+  const getShareUrlShort = () => {
+    const slug = (profile as any)?.public_profile_slug || profile?.id || '';
+    return (shareMode === 'project' && activeProject)
+      ? `hub.asciende.pro/athlete/${slug}/project/${activeProject.slug}`
+      : `hub.asciende.pro/athlete/${slug}`;
+  };
+
+  const getCtaTitle = () => {
+    if (shareMode === 'project' && activeProject) {
+      return language === 'es' ? 'Apoya Mi Proyecto' : 'Support My Project';
+    }
+    return language === 'es' ? 'Sigue Mi Progreso' : 'Follow My Journey';
+  };
+
+  const getStatsArray = () => {
+    const pace = getPace();
+    return [
+      { icon: 'distance', value: activityData.distanceKm.toFixed(2), label: 'km' },
+      { icon: 'time', value: fmtDuration(activityData.durationSeconds), label: language === 'es' ? 'Tiempo' : 'Time' },
+      { icon: 'pace', value: pace?.value || '--', label: pace?.unit || 'min/km' },
+      { icon: 'elevation', value: activityData.elevationGainM > 0 ? `${Math.round(activityData.elevationGainM)}m` : '--', label: 'D+' },
+    ];
+  };
+
+  // ─── Card Type 1: MAP ───────────────────────────────────────────────
+  const drawMapCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    // Dark background
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#0a0c10');
+    bg.addColorStop(0.5, '#0e1218');
+    bg.addColorStop(1, '#08090d');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle grid
+    ctx.save();
+    ctx.globalAlpha = 0.03;
+    ctx.fillStyle = sport.color;
+    for (let gx = 60; gx < W; gx += 40) {
+      for (let gy = 60; gy < H; gy += 40) {
+        ctx.beginPath();
+        ctx.arc(gx, gy, 1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+
+    // Top accent line
+    const topBar = ctx.createLinearGradient(0, 0, W, 0);
+    topBar.addColorStop(0, 'transparent');
+    topBar.addColorStop(0.2, '#fdda36');
+    topBar.addColorStop(0.8, '#fdda36');
+    topBar.addColorStop(1, 'transparent');
+    ctx.fillStyle = topBar;
+    ctx.fillRect(0, 0, W, 6);
+
+    // Date top-left
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = f('400 26px');
+    ctx.textAlign = 'left';
+    ctx.fillText(fmtDate(), 72, 80);
+
+    // Sport type top-right
+    const sportLabel = (language === 'es' ? sport.labelEs : sport.label).toUpperCase();
+    ctx.fillStyle = sport.color;
+    ctx.font = f('700 22px');
+    ctx.textAlign = 'right';
+    ctx.fillText(sportLabel, W - 72, 80);
+
+    // GPS Map area (upper portion)
+    const mapX = 60, mapY = 120;
+    const mapW = W - 120, mapH = H * 0.52;
+
+    // Map background panel
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    roundRect(ctx, mapX, mapY, mapW, mapH, 28);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    roundRect(ctx, mapX, mapY, mapW, mapH, 28);
+    ctx.stroke();
+
+    const pts = activityData.gpsPoints;
+    if (pts && pts.length >= 2) {
+      const sampled = samplePoints(pts, 1500);
+      const projected = projectPoints(sampled, mapX, mapY, mapW, mapH, 50);
+      drawRoute(ctx, projected, sport.color, 4.5, 24);
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.font = f('400 24px');
+      ctx.textAlign = 'center';
+      ctx.fillText(language === 'es' ? 'Sin ruta GPS' : 'No GPS route', mapX + mapW / 2, mapY + mapH / 2);
+    }
+
+    // Bottom section: two columns
+    const bottomY = mapY + mapH + 40;
+    const colW = (W - 120 - 40) / 2;
+    const leftX = 60;
+    const rightX = leftX + colW + 40;
+
+    // Left column: 4 stats
+    const stats = getStatsArray();
+    const statSpacing = 110;
+
+    stats.forEach((s, i) => {
+      const sy = bottomY + i * statSpacing;
+      drawIcon(ctx, s.icon, leftX + 24, sy + 20, 28, sport.color);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = f('700 42px');
+      ctx.textAlign = 'left';
+      ctx.fillText(s.value, leftX + 56, sy + 16);
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.font = f('400 20px');
+      ctx.fillText(s.label, leftX + 56, sy + 46);
+    });
+
+    // Right column: CTA + Logo
+    const ctaTitle = getCtaTitle();
+    const ctaUrl = getShareUrlShort();
+
+    ctx.fillStyle = '#fdda36';
+    ctx.font = f('700 28px');
+    ctx.textAlign = 'left';
+    const ctaTitleLines = wrapText(ctx, ctaTitle, colW);
+    let ctaTextY = bottomY + 20;
+    ctaTitleLines.forEach((line) => {
+      ctx.fillText(line, rightX, ctaTextY);
+      ctaTextY += 38;
+    });
+
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = `400 18px ${FONT_FALLBACK}`;
+    const urlLines = wrapText(ctx, ctaUrl, colW);
+    ctaTextY += 8;
+    urlLines.forEach((line) => {
+      ctx.fillText(line, rightX, ctaTextY);
+      ctaTextY += 26;
+    });
+
+    // Logo
+    drawLogoOrText(ctx, logoImgRef.current, rightX + colW / 2, H - 140, colW * 0.7, 80, f('700 36px'));
+
+    // Bottom accent line
+    ctx.fillStyle = topBar;
+    ctx.fillRect(0, H - 6, W, 6);
+  }, [activityData, language, sport, shareMode, activeProject, profile]);
+
+  // ─── Card Type 2: TRANSPARENT ───────────────────────────────────────
+  const drawTransparentCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    ctx.clearRect(0, 0, W, H);
+
+    // Sport type at top
+    const sportLabel = (language === 'es' ? sport.labelEs : sport.label).toUpperCase();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = f('700 30px');
+    ctx.textAlign = 'center';
+    ctx.fillText(sportLabel, W / 2, 100);
+
+    // Thin divider
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(W * 0.3, 130);
+    ctx.lineTo(W * 0.7, 130);
+    ctx.stroke();
+
+    // 4 stats stacked vertically
+    const stats = getStatsArray();
+    let statY = 220;
+    const statGap = 170;
+
+    stats.forEach((s) => {
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = f('400 22px');
+      ctx.textAlign = 'center';
+      ctx.fillText(s.label, W / 2, statY);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = f('700 64px');
+      ctx.fillText(s.value, W / 2, statY + 72);
+
+      statY += statGap;
+    });
+
+    // GPS route line (just the line, no background)
+    const routeY = statY + 20;
+    const routeH = 380;
+    const pts = activityData.gpsPoints;
+    if (pts && pts.length >= 2) {
+      const sampled = samplePoints(pts, 1200);
+      const projected = projectPoints(sampled, 80, routeY, W - 160, routeH, 30);
+      drawRoute(ctx, projected, sport.color, 5, 28);
+    }
+
+    // CTA
+    const ctaY = routeY + routeH + 80;
+    ctx.fillStyle = '#fdda36';
+    ctx.font = f('700 28px');
+    ctx.textAlign = 'center';
+    ctx.fillText(getCtaTitle(), W / 2, ctaY);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.font = `400 20px ${FONT_FALLBACK}`;
+    ctx.fillText(getShareUrlShort(), W / 2, ctaY + 40);
+
+    // Logo
+    drawLogoOrText(ctx, logoImgRef.current, W / 2, H - 120, W * 0.35, 70, f('700 32px'));
+  }, [activityData, language, sport, shareMode, activeProject, profile]);
+
+  // ─── Card Type 3: STORY ─────────────────────────────────────────────
+  const drawStoryCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    ctx.clearRect(0, 0, W, H);
+
+    // Rounded map card at top
+    const cardPad = 60;
+    const cardX = cardPad;
+    const cardY = 100;
+    const cardW = W - cardPad * 2;
+    const cardH = 700;
+    const cardR = 36;
+
+    // Card background with subtle fill
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    roundRect(ctx, cardX, cardY, cardW, cardH, cardR);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, cardX, cardY, cardW, cardH, cardR);
+    ctx.stroke();
+
+    // GPS route inside card
+    const pts = activityData.gpsPoints;
+    if (pts && pts.length >= 2) {
+      const sampled = samplePoints(pts, 1500);
+      const mapArea = { x: cardX + 20, y: cardY + 20, w: cardW - 40, h: cardH - 120 };
+      const projected = projectPoints(sampled, mapArea.x, mapArea.y, mapArea.w, mapArea.h, 40);
+      drawRoute(ctx, projected, sport.color, 4, 20);
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.font = f('400 24px');
+      ctx.textAlign = 'center';
+      ctx.fillText(language === 'es' ? 'Sin ruta GPS' : 'No GPS route', cardX + cardW / 2, cardY + cardH / 2 - 40);
+    }
+
+    // Stats row at bottom of card
+    const stats = getStatsArray();
+    const rowY = cardY + cardH - 80;
+    const colW = cardW / stats.length;
+
+    stats.forEach((s, i) => {
+      const cx = cardX + colW * i + colW / 2;
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.font = f('400 16px');
+      ctx.textAlign = 'center';
+      ctx.fillText(s.label, cx, rowY);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = f('700 28px');
+      ctx.fillText(s.value, cx, rowY + 36);
+    });
+
+    // Sport type + date below card
+    const infoY = cardY + cardH + 60;
+    const sportLabel = (language === 'es' ? sport.labelEs : sport.label);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = f('700 36px');
+    ctx.textAlign = 'center';
+    ctx.fillText(sportLabel, W / 2, infoY);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = f('400 22px');
+    ctx.fillText(fmtDate(), W / 2, infoY + 44);
+
+    // CTA section
+    const ctaY = infoY + 120;
+    ctx.fillStyle = '#fdda36';
+    ctx.font = f('700 28px');
+    ctx.fillText(getCtaTitle(), W / 2, ctaY);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = `400 20px ${FONT_FALLBACK}`;
+    ctx.fillText(getShareUrlShort(), W / 2, ctaY + 42);
+
+    // Logo
+    drawLogoOrText(ctx, logoImgRef.current, W / 2, H - 140, W * 0.35, 70, f('700 32px'));
+  }, [activityData, language, sport, shareMode, activeProject, profile]);
+
+  // Generate card on canvas
+  const generateCard = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const W = 1080;
+    const H = 1920;
+    canvas.width = W;
+    canvas.height = H;
+
+    if (cardType === 'map') drawMapCard(ctx, W, H);
+    else if (cardType === 'transparent') drawTransparentCard(ctx, W, H);
+    else drawStoryCard(ctx, W, H);
+  }, [cardType, drawMapCard, drawTransparentCard, drawStoryCard]);
+
+  useEffect(() => {
+    if (!ready || !fontLoaded) return;
+    const raf = requestAnimationFrame(() => generateCard());
+    return () => cancelAnimationFrame(raf);
+  }, [ready, fontLoaded, generateCard]);
+
+  // ─── Share Handlers ─────────────────────────────────────────────────
   const handleDownload = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
     if (!blob) return;
     const dateStr = activityData.date || new Date().toISOString().split('T')[0];
-    const fileName = `activity-${format}-${activityData.sportType}-${dateStr}.png`;
+    const fileName = `asciende-${cardType}-${activityData.sportType}-${dateStr}.png`;
 
-    // Try native share (works in Capacitor and mobile browsers) to save the image
     if (navigator.share) {
       try {
         const file = new File([blob], fileName, { type: 'image/png' });
@@ -484,7 +629,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       }
     }
 
-    // Fallback: anchor download (works in desktop browsers)
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -505,39 +649,44 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     setSharing(true);
     try {
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
-      if (!blob) { handleDownload(); return; }
-      const file = new File([blob], `activity-${Date.now()}.png`, { type: 'image/png' });
+      if (!blob) return;
+
+      const dateStr = activityData.date || new Date().toISOString().split('T')[0];
+      const file = new File([blob], `asciende-${cardType}-${dateStr}.png`, { type: 'image/png' });
       const shareUrl = getShareUrl();
       const sportName = language === 'es' ? sport.labelEs : sport.label;
       const distStr = activityData.distanceKm.toFixed(2);
+
       const text = (shareMode === 'project' && activeProject)
         ? (language === 'es'
           ? `${distStr}km de ${sportName}. Apoya mi proyecto: ${activeProject.title}`
           : `${distStr}km ${sportName}. Support my project: ${activeProject.title}`)
         : (language === 'es'
-          ? `${distStr}km de ${sportName} completados. Sigue mi progreso en Asciende!`
-          : `${distStr}km ${sportName} done. Follow my progress on Asciende!`);
+          ? `${distStr}km de ${sportName}. Sigue mi progreso en Asciende!`
+          : `${distStr}km ${sportName}. Follow my progress on Asciende!`);
 
-      let didShare = false;
       if (navigator.share) {
-        try {
-          const shareData: ShareData = {
-            title: `${profile?.full_name || 'Athlete'} — ${sportName}`,
-            text,
-            url: shareUrl,
-          };
-          if (navigator.canShare?.({ files: [file] })) shareData.files = [file];
-          await navigator.share(shareData);
-          didShare = true;
-        } catch (e: any) {
-          if (e?.name !== 'AbortError') { handleDownload(); didShare = true; }
+        const shareData: ShareData = {
+          title: `${profile?.full_name || 'Athlete'} — ${sportName}`,
+          text,
+          url: shareUrl,
+        };
+        if (navigator.canShare?.({ files: [file] })) {
+          shareData.files = [file];
         }
+        await navigator.share(shareData);
+        setShared(true);
+        setTimeout(() => setShared(false), 3000);
+      } else {
+        await handleDownload();
+        await navigator.clipboard.writeText(shareUrl).catch(() => {});
+        setShared(true);
+        setTimeout(() => setShared(false), 3000);
       }
-      if (!didShare) { handleDownload(); await navigator.clipboard.writeText(shareUrl).catch(() => {}); }
-      setShared(true);
-      setTimeout(() => setShared(false), 3000);
-    } catch {
-      handleDownload();
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        await handleDownload();
+      }
     } finally {
       setSharing(false);
     }
@@ -545,22 +694,28 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
 
   const pace = getPace();
 
+  const CARD_TYPES: { id: CardType; label: string; labelEs: string; desc: string; descEs: string }[] = [
+    { id: 'map', label: 'Map', labelEs: 'Mapa', desc: 'Dark with GPS route', descEs: 'Oscuro con ruta GPS' },
+    { id: 'transparent', label: 'Transparent', labelEs: 'Transparente', desc: 'Overlay on photos', descEs: 'Para pegar en fotos' },
+    { id: 'story', label: 'Story', labelEs: 'Story', desc: 'Card with map', descEs: 'Tarjeta con mapa' },
+  ];
+
   return (
-    <div className="fixed inset-0 bg-neutral-950/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-neutral-800 rounded-2xl max-w-xl w-full my-4 shadow-2xl border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+    <div className="fixed inset-0 bg-neutral-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-3 overflow-y-auto">
+      <div className="bg-white dark:bg-neutral-800 rounded-2xl max-w-lg w-full my-4 shadow-2xl border border-neutral-200 dark:border-neutral-700 overflow-hidden">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg" style={{ backgroundColor: sport.color + '22', boxShadow: `0 4px 14px ${sport.color}33` }}>
-              <MapPin className="w-5 h-5" style={{ color: sport.color }} />
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: sport.color + '22' }}>
+              <Share2 className="w-4.5 h-4.5" style={{ color: sport.color }} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-neutral-900 dark:text-white">
+              <h2 className="text-sm font-bold text-neutral-900 dark:text-white">
                 {language === 'es' ? 'Compartir Actividad' : 'Share Activity'}
               </h2>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                {language === 'es' ? sport.labelEs : sport.label} · {language === 'es' ? 'Imagen lista para compartir' : 'Ready to share'}
+              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                {language === 'es' ? sport.labelEs : sport.label} · {activityData.distanceKm.toFixed(2)} km
               </p>
             </div>
           </div>
@@ -569,127 +724,89 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
           </button>
         </div>
 
-        <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+        <div className="p-4 space-y-3 max-h-[82vh] overflow-y-auto">
 
-          {/* Stats strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {/* Quick Stats */}
+          <div className="grid grid-cols-4 gap-1.5">
             {[
-              { icon: MapPin,    v: activityData.distanceKm.toFixed(2), l: 'km' },
-              { icon: Clock,     v: fmtDuration(activityData.durationSeconds), l: language === 'es' ? 'Tiempo' : 'Time' },
-              ...(pace ? [{ icon: Zap,      v: pace.value, l: pace.unit }] : []),
+              { icon: MapPin,   v: activityData.distanceKm.toFixed(2), l: 'km' },
+              { icon: Clock,    v: fmtDuration(activityData.durationSeconds), l: language === 'es' ? 'Tiempo' : 'Time' },
+              ...(pace ? [{ icon: Zap, v: pace.value, l: pace.unit }] : []),
               ...(activityData.elevationGainM > 0 ? [{ icon: Mountain, v: `${Math.round(activityData.elevationGainM)}m`, l: 'D+' }] : []),
-            ].map(({ icon: Icon, v, l }) => (
-              <div key={l} className="bg-neutral-50 dark:bg-neutral-800 rounded-xl p-3 text-center border border-neutral-200 dark:border-neutral-700">
-                <Icon className="w-3.5 h-3.5 text-neutral-400 mx-auto mb-1" />
-                <p className="text-sm font-bold text-neutral-900 dark:text-white leading-none">{v}</p>
-                <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-1">{l}</p>
+            ].slice(0, 4).map(({ icon: Icon, v, l }) => (
+              <div key={l} className="bg-neutral-50 dark:bg-neutral-700/50 rounded-lg p-2 text-center">
+                <Icon className="w-3 h-3 text-neutral-400 mx-auto mb-0.5" />
+                <p className="text-xs font-bold text-neutral-900 dark:text-white leading-none">{v}</p>
+                <p className="text-[9px] text-neutral-500 dark:text-neutral-400 mt-0.5">{l}</p>
               </div>
             ))}
           </div>
 
-          {/* GPS indicator */}
-          {activityData.gpsPoints && activityData.gpsPoints.length >= 2 ? (
-            <div className="flex items-center gap-2 text-xs bg-green-50 dark:bg-green-900/20 rounded-xl px-3 py-2 border border-green-200 dark:border-green-700/50">
-              <Map className="w-3.5 h-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
-              <span className="text-green-700 dark:text-green-400 font-medium">
-                {language === 'es'
-                  ? `Ruta GPS incluida · ${activityData.gpsPoints.length.toLocaleString()} puntos`
-                  : `GPS route included · ${activityData.gpsPoints.length.toLocaleString()} points`}
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-800 rounded-xl px-3 py-2 border border-neutral-200 dark:border-neutral-700">
-              <Map className="w-3.5 h-3.5 flex-shrink-0" />
-              {language === 'es' ? 'Sin datos de ruta GPS' : 'No GPS route data available'}
-            </div>
-          )}
-
-          {/* Format */}
+          {/* Card Type Selector */}
           <div>
-            <p className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-widest mb-2">
-              {language === 'es' ? 'Formato' : 'Format'}
+            <p className="text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-widest mb-1.5">
+              {language === 'es' ? 'Estilo' : 'Style'}
             </p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { id: 'square' as Format, label: language === 'es' ? 'Cuadrado (Feed)' : 'Square (Feed)', sub: '1080 × 1080' },
-                { id: 'story'  as Format, label: language === 'es' ? 'Vertical (Stories)' : 'Vertical (Stories)', sub: '1080 × 1920' },
-              ].map(({ id, label, sub }) => (
+            <div className="flex gap-1.5">
+              {CARD_TYPES.map((ct) => (
                 <button
-                  key={id}
-                  onClick={() => setFormat(id)}
-                  className={`py-2.5 px-3 rounded-xl text-left border-2 transition-all ${
-                    format === id
+                  key={ct.id}
+                  onClick={() => setCardType(ct.id)}
+                  className={`flex-1 py-2 px-2 rounded-xl text-left border-2 transition-all ${
+                    cardType === ct.id
                       ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20'
                       : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300'
                   }`}
                 >
-                  <p className={`text-xs font-bold ${format === id ? 'text-amber-700 dark:text-amber-400' : 'text-neutral-700 dark:text-neutral-300'}`}>{label}</p>
-                  <p className="text-[10px] text-neutral-400 mt-0.5">{sub}</p>
+                  <p className={`text-[11px] font-bold ${cardType === ct.id ? 'text-amber-700 dark:text-amber-400' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                    {language === 'es' ? ct.labelEs : ct.label}
+                  </p>
+                  <p className="text-[9px] text-neutral-400 mt-0.5">{language === 'es' ? ct.descEs : ct.desc}</p>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Theme */}
-          <div>
-            <p className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-widest mb-2">
-              {language === 'es' ? 'Estilo' : 'Style'}
-            </p>
-            <div className="flex gap-2">
-              {THEMES.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTheme(t.id)}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
-                    theme === t.id
-                      ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400'
-                      : 'border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:border-neutral-300'
-                  }`}
-                >
-                  {language === 'es' ? t.labelEs : t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Share mode */}
+          {/* Share Mode */}
           {activeProject && (
             <div>
-              <p className="text-[11px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-widest mb-2">
+              <p className="text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-widest mb-1.5">
                 {language === 'es' ? 'Mensaje' : 'Message'}
               </p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5">
                 {[
-                  { mode: 'profile' as const, title: language === 'es' ? 'Sigue mi Progreso' : 'Follow My Journey', sub: language === 'es' ? 'Enlaza a tu perfil' : 'Links to your profile' },
+                  { mode: 'profile' as const, title: language === 'es' ? 'Sigue mi Progreso' : 'Follow My Journey', sub: language === 'es' ? 'Enlaza a tu perfil' : 'Links to profile' },
                   { mode: 'project' as const, title: language === 'es' ? 'Apoya mi Proyecto' : 'Support My Project', sub: activeProject.title },
                 ].map(({ mode, title, sub }) => (
                   <button key={mode} onClick={() => setShareMode(mode)}
-                    className={`p-3 rounded-xl border-2 transition-all text-left ${
+                    className={`p-2.5 rounded-xl border-2 transition-all text-left ${
                       shareMode === mode
                         ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20'
                         : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300'
                     }`}>
-                    <p className={`font-bold text-xs ${shareMode === mode ? 'text-amber-700 dark:text-amber-400' : 'text-neutral-900 dark:text-white'}`}>{title}</p>
-                    <p className="text-[10px] text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">{sub}</p>
+                    <p className={`font-bold text-[11px] ${shareMode === mode ? 'text-amber-700 dark:text-amber-400' : 'text-neutral-900 dark:text-white'}`}>{title}</p>
+                    <p className="text-[9px] text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">{sub}</p>
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Canvas preview */}
-          <div className="rounded-xl overflow-hidden bg-neutral-100 dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600">
-            {!projectLoaded ? (
-              <div className="h-48 flex items-center justify-center">
-                <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+          {/* Canvas Preview */}
+          <div
+            className="rounded-xl overflow-hidden border border-neutral-200 dark:border-neutral-600"
+            style={
+              cardType !== 'map'
+                ? { backgroundImage: 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)', backgroundSize: '20px 20px', backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px' }
+                : { backgroundColor: '#1a1a1a' }
+            }
+          >
+            {!ready || !fontLoaded ? (
+              <div className="h-48 flex items-center justify-center bg-neutral-100 dark:bg-neutral-700">
+                <div className="w-7 h-7 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
               </div>
             ) : (
-              <>
-                <canvas ref={canvasRef} className="w-full h-auto block" style={{ maxWidth: '100%' }} />
-                <p className="text-[10px] text-center text-neutral-500 py-1.5">
-                  {format === 'story' ? '1080 × 1920' : '1080 × 1080'} px
-                </p>
-              </>
+              <canvas ref={canvasRef} className="w-full h-auto block" style={{ maxWidth: '100%' }} />
             )}
           </div>
 
@@ -697,26 +814,26 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
           <div className="flex gap-2">
             <button
               onClick={handleDownload}
-              className="flex items-center gap-1.5 px-4 py-2.5 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 text-sm font-medium rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2.5 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 text-xs font-medium rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
             >
               <Download className="w-4 h-4" />
               {language === 'es' ? 'Guardar' : 'Save'}
             </button>
             <button
               onClick={handleCopyLink}
-              className={`flex items-center gap-1.5 px-4 py-2.5 border text-sm font-medium rounded-xl transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-2.5 border text-xs font-medium rounded-xl transition-all ${
                 copied
                   ? 'border-green-400 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
                   : 'border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
               }`}
             >
               {copied ? <CheckCircle className="w-4 h-4" /> : <Link className="w-4 h-4" />}
-              {copied ? (language === 'es' ? 'Copiado' : 'Copied') : (language === 'es' ? 'Copiar link' : 'Copy link')}
+              {copied ? (language === 'es' ? 'Copiado' : 'Copied') : 'Link'}
             </button>
             <button
               onClick={handleShare}
               disabled={sharing}
-              className={`flex-1 flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl transition-all disabled:opacity-60 shadow-lg ${
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl transition-all disabled:opacity-60 shadow-lg ${
                 shared
                   ? 'bg-green-500 text-white shadow-green-500/25'
                   : 'bg-[#fdda36] text-[#060810] hover:bg-[#ffd01a] shadow-amber-400/25'
@@ -724,20 +841,37 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
             >
               {shared ? <CheckCircle className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
               {sharing
-                ? (language === 'es' ? 'Compartiendo...' : 'Sharing…')
+                ? (language === 'es' ? 'Abriendo...' : 'Opening...')
                 : shared
-                ? (language === 'es' ? '¡Compartido!' : 'Shared!')
+                ? (language === 'es' ? 'Listo!' : 'Done!')
                 : (language === 'es' ? 'Compartir' : 'Share')}
             </button>
           </div>
 
-          <p className="text-[10px] text-center text-neutral-400 dark:text-neutral-500">
+          <p className="text-[9px] text-center text-neutral-400 dark:text-neutral-500">
             {language === 'es'
-              ? 'Guarda la imagen y compártela en Instagram, Stories, WhatsApp y más'
-              : 'Save the image and share it on Instagram, Stories, WhatsApp and more'}
+              ? 'Comparte en Instagram Stories, WhatsApp, y mas'
+              : 'Share on Instagram Stories, WhatsApp, and more'}
           </p>
         </div>
       </div>
     </div>
   );
+}
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const test = current ? `${current} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length ? lines : [text];
 }
