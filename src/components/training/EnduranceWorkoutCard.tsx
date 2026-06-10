@@ -346,12 +346,6 @@ export default function EnduranceWorkoutCard({ workout, language, initialExpande
               {stepCount} {language === 'es' ? 'pasos' : 'steps'}
             </span>
           )}
-          {workout.estimated_impulse != null && (
-            <span className="flex items-center gap-1 text-xs text-orange-500 font-medium">
-              <Target className="w-3 h-3" />
-              ~{workout.estimated_impulse} TSS
-            </span>
-          )}
           {workout.session_type && (
             <SessionTypeBadge type={workout.session_type} language={language} />
           )}

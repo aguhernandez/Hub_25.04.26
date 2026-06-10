@@ -342,18 +342,14 @@ function EnduranceTab({ plans, expandedId, setExpandedId, formatWeek, language, 
                 {plan.summary?.total_hours != null && (
                   <span className="text-xs text-blue-500 font-medium">{plan.summary.total_hours}h</span>
                 )}
-                {plan.summary?.total_tss != null && (
-                  <span className="text-xs text-gray-400">TSS {plan.summary.total_tss}</span>
-                )}
                 {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
               </div>
             </button>
 
             {isExpanded && (
               <div className="px-4 pb-3 pt-1 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700">
-                <div className="grid grid-cols-3 gap-2 py-2 mb-3">
+                <div className="grid grid-cols-2 gap-2 py-2 mb-3">
                   <SummaryCell label={language === 'es' ? 'Horas' : 'Hours'} value={plan.summary?.total_hours?.toFixed(1)} unit="h" color="text-blue-500" />
-                  <SummaryCell label="TSS" value={plan.summary?.total_tss} unit="" color="text-orange-500" />
                   <SummaryCell label={language === 'es' ? 'Sesiones' : 'Sessions'} value={plan.summary?.sessions} unit="" color="text-emerald-500" />
                 </div>
 
@@ -368,7 +364,6 @@ function EnduranceTab({ plans, expandedId, setExpandedId, formatWeek, language, 
                         <span className="text-xs text-gray-600 dark:text-gray-400 flex-shrink-0">{w.date}</span>
                         <span className="text-xs text-gray-900 dark:text-white flex-1 truncate font-medium">{w.name}</span>
                         {w.duration_min && <span className="text-xs text-gray-400 flex-shrink-0">{w.duration_min}min</span>}
-                        {w.tss && <span className="text-xs text-orange-400 flex-shrink-0">TSS {w.tss}</span>}
                       </div>
                     ))}
                   </div>

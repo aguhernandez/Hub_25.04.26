@@ -376,7 +376,8 @@ export default function TrainingPage() {
             id,
             name,
             description,
-            duration_minutes
+            duration_minutes,
+            workout_exercises (id)
           )
         `)
         .eq('athlete_id', effectiveAthleteId)
@@ -420,6 +421,9 @@ export default function TrainingPage() {
         .select(`
           id,
           athlete_workout_id,
+          workout_exercise_id,
+          weight_used,
+          reps_completed,
           logged_at,
           athlete_workouts (
             id,
@@ -438,6 +442,7 @@ export default function TrainingPage() {
       // Group training logs by date and workout
       const logsByDate = new Map<string, Set<string>>();
       const workoutDetailsMap = new Map<string, any>();
+      const workoutStatsMap = new Map<string, { totalVolume: number; exerciseIds: Set<string> }>();
 
       completedLogsData?.forEach((log: any) => {
         const logDate = String(log.logged_at).substring(0, 10);
@@ -457,6 +462,18 @@ export default function TrainingPage() {
               date: logDate
             });
           }
+
+          // Accumulate volume and exercise count per workout
+          if (!workoutStatsMap.has(workoutId)) {
+            workoutStatsMap.set(workoutId, { totalVolume: 0, exerciseIds: new Set() });
+          }
+          const stats = workoutStatsMap.get(workoutId)!;
+          const weight = Number(log.weight_used) || 0;
+          const reps = Number(log.reps_completed) || 0;
+          stats.totalVolume += weight * reps;
+          if (log.workout_exercise_id) {
+            stats.exerciseIds.add(log.workout_exercise_id);
+          }
         }
       });
 
@@ -464,6 +481,8 @@ export default function TrainingPage() {
       const programmedWorkoutIds = new Set<string>();
       const formattedWorkouts = athleteWorkoutsData?.map((aw: any) => {
         programmedWorkoutIds.add(aw.id);
+        const stats = workoutStatsMap.get(aw.id);
+        const plannedExerciseCount = aw.workouts?.workout_exercises?.length || 0;
         return {
           id: aw.id,
           workout_id: aw.workouts?.id,
@@ -474,7 +493,9 @@ export default function TrainingPage() {
           source: aw.source || 'asciende',
           external_id: aw.external_id,
           exercises: [],
-          type: 'workout'
+          type: 'workout',
+          totalVolume: stats?.totalVolume || 0,
+          exerciseCount: stats?.exerciseIds.size || plannedExerciseCount,
         };
       }) || [];
 
@@ -482,6 +503,7 @@ export default function TrainingPage() {
       const formattedCompletedWorkouts: any[] = [];
       workoutDetailsMap.forEach((workout) => {
         if (!programmedWorkoutIds.has(workout.id)) {
+          const stats = workoutStatsMap.get(workout.id);
           formattedCompletedWorkouts.push({
             id: workout.id,
             workout_id: workout.workout_id,
@@ -491,7 +513,9 @@ export default function TrainingPage() {
             status: 'completed',
             source: 'asciende',
             exercises: [],
-            type: 'workout'
+            type: 'workout',
+            totalVolume: stats?.totalVolume || 0,
+            exerciseCount: stats?.exerciseIds.size || 0,
           });
         }
       });
@@ -538,7 +562,7 @@ export default function TrainingPage() {
       const formattedEndurancePlans: any[] = (enduranceWorkoutsData || []).map((ew: any) => ({
         id: `endurance-workout-${ew.id}`,
         name: ew.name || (language === 'es' ? 'Sesión Endurance' : 'Endurance Session'),
-        description: ew.description || `${ew.planner_source}${ew.estimated_duration_minutes ? ` · ${ew.estimated_duration_minutes}min` : ''}${ew.estimated_impulse ? ` · TSS ${ew.estimated_impulse}` : ''}`,
+        description: ew.description || `${ew.planner_source}${ew.estimated_duration_minutes ? ` · ${ew.estimated_duration_minutes}min` : ''}`,
         scheduled_date: String(ew.scheduled_date).substring(0, 10),
         status: ew.status || 'planned',
         source: 'endurance_planner',
@@ -962,9 +986,6 @@ export default function TrainingPage() {
                             <span>{(workout as any).estimated_duration_minutes >= 60
                               ? `${Math.floor((workout as any).estimated_duration_minutes / 60)}h${(workout as any).estimated_duration_minutes % 60 > 0 ? `${(workout as any).estimated_duration_minutes % 60}m` : ''}`
                               : `${(workout as any).estimated_duration_minutes}min`}</span>
-                          )}
-                          {(workout as any).estimated_impulse > 0 && (
-                            <span>· {(workout as any).estimated_impulse} TSS</span>
                           )}
                           {(workout as any).target_zones?.length > 0 && (
                             <span>· {(workout as any).target_zones.join(' ')}</span>

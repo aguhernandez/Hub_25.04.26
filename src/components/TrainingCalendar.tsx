@@ -194,16 +194,109 @@ function cleanDescription(text?: string): string {
     .trim();
 }
 
+function isGymWorkout(workout: any): boolean {
+  const sport = (workout.sport || workout.type || '').toLowerCase();
+  return sport === 'workout' || sport === 'strength' || sport === 'gym' ||
+    (!sport && workout.type !== 'endurance_plan' && workout.type !== 'external' && workout.source !== 'strava');
+}
+
+function isEnduranceType(workout: any): boolean {
+  const sport = (workout.sport || '').toLowerCase();
+  return workout.type === 'endurance_plan' || workout.type === 'external' ||
+    workout.source === 'strava' || workout.source === 'asciende_gps' ||
+    ['run', 'trail_run', 'road_bike', 'mountain_bike', 'gravel_bike', 'cycling', 'swim', 'hike'].some(s => sport.includes(s));
+}
+
 function WorkoutDetailCard({
-  workout, language, onClick,
-}: { workout: any; language: string; onClick: () => void }) {
+  workout, language, onClick, wellnessScore,
+}: { workout: any; language: string; onClick: () => void; wellnessScore?: number }) {
+  const t = (es: string, en: string) => language === 'es' ? es : en;
   const dotColor = getWorkoutDotColor(workout);
   const sport = workout.sport || workout.type;
-  const name = workout.name || workout.external_title || (language === 'es' ? 'Entrenamiento' : 'Workout');
-  const duration = workout.estimated_duration_minutes;
-  const tss = workout.estimated_impulse;
+  const name = workout.name || workout.external_title || t('Entrenamiento', 'Workout');
   const steps = workout.steps || workout.parsed_steps || [];
   const description = cleanDescription(workout.description);
+  const isCompleted = workout.status === 'completed';
+  const isGym = isGymWorkout(workout);
+  const isEndurance = isEnduranceType(workout);
+
+  const renderMetrics = () => {
+    if (isCompleted && isEndurance) {
+      const raw = workout.raw_data;
+      const distKm = workout.distance || (raw?.distance_meters ? (raw.distance_meters / 1000).toFixed(2) : null);
+      const durationSec = raw?.duration_seconds;
+      const elevGain = raw?.elevation_gain_meters;
+      const paceStr = (distKm && durationSec && distKm > 0)
+        ? (() => { const minPerKm = (durationSec / 60) / distKm; return `${Math.floor(minPerKm)}:${String(Math.round((minPerKm - Math.floor(minPerKm)) * 60)).padStart(2, '0')}/km`; })()
+        : null;
+      const durStr = durationSec
+        ? `${Math.floor(durationSec / 3600)}:${String(Math.floor((durationSec % 3600) / 60)).padStart(2, '0')}:${String(durationSec % 60).padStart(2, '0')}`
+        : (workout.duration || (workout.estimated_duration_minutes ? formatMinutes(workout.estimated_duration_minutes) : null));
+
+      return (
+        <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
+          {durStr && <span className="font-mono font-semibold text-gray-800 dark:text-gray-200">{durStr}</span>}
+          {distKm && <span className="font-semibold text-gray-800 dark:text-gray-200">{distKm} km</span>}
+          {paceStr && <span>{paceStr}</span>}
+          {elevGain != null && elevGain > 0 && <span>+{Math.round(elevGain)}m</span>}
+          {wellnessScore != null && (
+            <span className={`font-semibold ${getWellnessColor(wellnessScore).text}`}>
+              <Heart className="w-3 h-3 inline mr-0.5" />{Math.round(wellnessScore)}
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    if (isCompleted && isGym) {
+      const exerciseCount = workout.exerciseCount || workout.exercises?.length || null;
+      const totalVolume = workout.totalVolume;
+      return (
+        <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
+          {totalVolume != null && totalVolume > 0 && (
+            <span className="font-semibold text-gray-800 dark:text-gray-200">{Math.round(totalVolume).toLocaleString()} kg</span>
+          )}
+          {exerciseCount != null && exerciseCount > 0 && (
+            <span>{exerciseCount} {t('ejercicios', 'exercises')}</span>
+          )}
+          {wellnessScore != null && (
+            <span className={`font-semibold ${getWellnessColor(wellnessScore).text}`}>
+              <Heart className="w-3 h-3 inline mr-0.5" />{Math.round(wellnessScore)}
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    // Planned endurance
+    if (!isCompleted && isEndurance) {
+      const duration = workout.estimated_duration_minutes;
+      return (
+        <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+          <span className="font-mono font-semibold text-gray-800 dark:text-gray-200">
+            {duration ? formatMinutes(duration) : '--:--:--'}
+          </span>
+        </div>
+      );
+    }
+
+    // Planned gym
+    if (!isCompleted && isGym) {
+      const exerciseCount = workout.exerciseCount || workout.exercises?.length || null;
+      return (
+        <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+          {exerciseCount != null && exerciseCount > 0 && (
+            <span>{exerciseCount} {t('ejercicios', 'exercises')}</span>
+          )}
+          {(!exerciseCount || exerciseCount === 0) && (
+            <span className="italic">{t('Planificado', 'Planned')}</span>
+          )}
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <button
@@ -218,16 +311,7 @@ function WorkoutDetailCard({
         <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1" style={{ backgroundColor: dotColor }} />
       </div>
 
-      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-        <span className="font-mono font-semibold text-gray-800 dark:text-gray-200">
-          {duration ? formatMinutes(duration) : '--:--:--'}
-        </span>
-        <span>- km</span>
-        {tss != null
-          ? <span className="font-semibold text-gray-800 dark:text-gray-200">{Math.round(tss)} TSS</span>
-          : <span>- TSS</span>
-        }
-      </div>
+      {renderMetrics()}
 
       {steps.length > 0 && <StepIntensityChart steps={steps} />}
 
@@ -505,12 +589,15 @@ export default function TrainingCalendar({
                     </button>
                   );
                 }
+                const wellnessEntry = wellnessEntries.find(e => e.checkin_date === selectedDateStr);
+                const wScore = wellnessEntry ? (wellnessEntry.wellness_score_100 ?? (wellnessEntry.overall_score ? wellnessEntry.overall_score * 20 : undefined)) : undefined;
                 return (
                   <WorkoutDetailCard
                     key={workout.id || idx}
                     workout={workout}
                     language={language}
                     onClick={() => { if (onWorkoutClick) onWorkoutClick(workout); }}
+                    wellnessScore={wScore}
                   />
                 );
               })}

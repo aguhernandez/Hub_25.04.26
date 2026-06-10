@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, ArrowLeftRight, Calendar, Clock, Zap, Search, ChevronRight } from 'lucide-react';
+import { X, ArrowLeftRight, Calendar, Clock, Search, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { type EnduranceWorkout } from './EnduranceWorkoutCard';
 
@@ -217,7 +217,6 @@ export default function WorkoutReassignModal({
               ? `${originalWorkout.estimated_duration_minutes} min`
               : ''
             }
-            {originalWorkout.estimated_impulse ? ` · TSS ${originalWorkout.estimated_impulse}` : ''}
           </p>
         </div>
 
@@ -295,12 +294,6 @@ export default function WorkoutReassignModal({
                           <span className="flex items-center gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
                             <Clock className="w-3 h-3" />
                             {w.estimated_duration_minutes} min
-                          </span>
-                        )}
-                        {w.estimated_impulse && (
-                          <span className="flex items-center gap-1 text-[11px] text-neutral-500 dark:text-neutral-400">
-                            <Zap className="w-3 h-3" />
-                            TSS {w.estimated_impulse}
                           </span>
                         )}
                       </div>
