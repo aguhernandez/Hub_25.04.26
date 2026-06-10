@@ -326,58 +326,30 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
 
   // ─── Card Type 1: MAP ───────────────────────────────────────────────
   const drawMapCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    // Dark background
-    const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, '#0a0c10');
-    bg.addColorStop(0.5, '#0e1218');
-    bg.addColorStop(1, '#08090d');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, W, H);
-
-    // Subtle grid
-    ctx.save();
-    ctx.globalAlpha = 0.03;
-    ctx.fillStyle = sport.color;
-    for (let gx = 60; gx < W; gx += 40) {
-      for (let gy = 60; gy < H; gy += 40) {
-        ctx.beginPath();
-        ctx.arc(gx, gy, 1, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    ctx.restore();
-
-    // Top accent line
-    const topBar = ctx.createLinearGradient(0, 0, W, 0);
-    topBar.addColorStop(0, 'transparent');
-    topBar.addColorStop(0.2, '#fdda36');
-    topBar.addColorStop(0.8, '#fdda36');
-    topBar.addColorStop(1, 'transparent');
-    ctx.fillStyle = topBar;
-    ctx.fillRect(0, 0, W, 6);
+    ctx.clearRect(0, 0, W, H);
 
     // Date top-left
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
     ctx.font = f('400 26px');
     ctx.textAlign = 'left';
-    ctx.fillText(fmtDate(), 72, 80);
+    ctx.fillText(fmtDate(), 72, 70);
 
     // Sport type top-right
     const sportLabel = (language === 'es' ? sport.labelEs : sport.label).toUpperCase();
     ctx.fillStyle = sport.color;
     ctx.font = f('700 22px');
     ctx.textAlign = 'right';
-    ctx.fillText(sportLabel, W - 72, 80);
+    ctx.fillText(sportLabel, W - 72, 70);
 
     // GPS Map area (upper portion)
-    const mapX = 60, mapY = 120;
+    const mapX = 60, mapY = 110;
     const mapW = W - 120, mapH = H * 0.52;
 
     // Map background panel
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
     roundRect(ctx, mapX, mapY, mapW, mapH, 28);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
     ctx.lineWidth = 1;
     roundRect(ctx, mapX, mapY, mapW, mapH, 28);
     ctx.stroke();
@@ -388,7 +360,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       const projected = projectPoints(sampled, mapX, mapY, mapW, mapH, 50);
       drawRoute(ctx, projected, sport.color, 4.5, 24);
     } else {
-      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.font = f('400 24px');
       ctx.textAlign = 'center';
       ctx.fillText(language === 'es' ? 'Sin ruta GPS' : 'No GPS route', mapX + mapW / 2, mapY + mapH / 2);
@@ -411,12 +383,12 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       ctx.font = f('700 56px');
       ctx.textAlign = 'left';
       ctx.fillText(s.value, leftX + 56, sy + 24);
-      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
       ctx.font = f('400 28px');
       ctx.fillText(s.label, leftX + 56, sy + 64);
     });
 
-    // Right column: CTA + Logo
+    // Right column: CTA + Logo (tight spacing)
     const ctaTitle = getCtaTitle();
     const ctaUrl = getShareUrlShort();
 
@@ -430,60 +402,46 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       ctaTextY += 48;
     });
 
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = `400 24px ${FONT_FALLBACK}`;
     const urlLines = wrapText(ctx, ctaUrl, colW);
-    ctaTextY += 12;
+    ctaTextY += 8;
     urlLines.forEach((line) => {
       ctx.fillText(line, rightX, ctaTextY);
       ctaTextY += 32;
     });
 
-    // Logo - bigger
-    drawLogoOrText(ctx, logoImgRef.current, rightX + colW / 2, H - 120, colW * 0.85, 110, f('700 48px'));
-
-    // Bottom accent line
-    ctx.fillStyle = topBar;
-    ctx.fillRect(0, H - 6, W, 6);
+    // Logo immediately after URL
+    const logoY = ctaTextY + 60;
+    drawLogoOrText(ctx, logoImgRef.current, rightX + colW / 2, logoY, colW * 0.85, 100, f('700 48px'));
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
   // ─── Card Type 2: TRANSPARENT ───────────────────────────────────────
   const drawTransparentCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
     ctx.clearRect(0, 0, W, H);
 
-    // Dark background
-    const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, '#111111');
-    grad.addColorStop(1, '#1e1e1e');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
-
-    // Accent top bar
-    ctx.fillStyle = '#fdda36';
-    ctx.fillRect(0, 0, W, 8);
-
     // Sport type at top
     const sportLabel = (language === 'es' ? sport.labelEs : sport.label).toUpperCase();
     ctx.fillStyle = '#ffffff';
     ctx.font = f('700 44px');
     ctx.textAlign = 'center';
-    ctx.fillText(sportLabel, W / 2, 120);
+    ctx.fillText(sportLabel, W / 2, 100);
 
     // Thin divider
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(W * 0.2, 155);
-    ctx.lineTo(W * 0.8, 155);
+    ctx.moveTo(W * 0.2, 135);
+    ctx.lineTo(W * 0.8, 135);
     ctx.stroke();
 
     // 4 stats stacked vertically - bigger
     const stats = getStatsArray();
-    let statY = 260;
+    let statY = 240;
     const statGap = 210;
 
     stats.forEach((s) => {
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
       ctx.font = f('400 30px');
       ctx.textAlign = 'center';
       ctx.fillText(s.label, W / 2, statY);
@@ -505,40 +463,29 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       drawRoute(ctx, projected, sport.color, 5, 28);
     }
 
-    // CTA
+    // CTA + Logo (tight spacing)
     const ctaY = routeY + routeH + 80;
     ctx.fillStyle = '#fdda36';
     ctx.font = f('700 38px');
     ctx.textAlign = 'center';
     ctx.fillText(getCtaTitle(), W / 2, ctaY);
 
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.font = `400 26px ${FONT_FALLBACK}`;
-    ctx.fillText(getShareUrlShort(), W / 2, ctaY + 52);
+    ctx.fillText(getShareUrlShort(), W / 2, ctaY + 46);
 
-    // Logo - bigger
-    drawLogoOrText(ctx, logoImgRef.current, W / 2, H - 110, W * 0.45, 100, f('700 44px'));
+    // Logo immediately after
+    drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 120, W * 0.45, 100, f('700 44px'));
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
   // ─── Card Type 3: STORY ─────────────────────────────────────────────
   const drawStoryCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
     ctx.clearRect(0, 0, W, H);
 
-    // Dark background
-    const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, '#0d0d0d');
-    grad.addColorStop(1, '#1a1a1a');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
-
-    // Accent top bar
-    ctx.fillStyle = '#fdda36';
-    ctx.fillRect(0, 0, W, 8);
-
     // Rounded map card at top
     const cardPad = 60;
     const cardX = cardPad;
-    const cardY = 100;
+    const cardY = 80;
     const cardW = W - cardPad * 2;
     const cardH = 700;
     const cardR = 36;
@@ -547,7 +494,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
     roundRect(ctx, cardX, cardY, cardW, cardH, cardR);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
     ctx.lineWidth = 1.5;
     roundRect(ctx, cardX, cardY, cardW, cardH, cardR);
     ctx.stroke();
@@ -560,7 +507,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       const projected = projectPoints(sampled, mapArea.x, mapArea.y, mapArea.w, mapArea.h, 40);
       drawRoute(ctx, projected, sport.color, 4, 20);
     } else {
-      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.font = f('400 24px');
       ctx.textAlign = 'center';
       ctx.fillText(language === 'es' ? 'Sin ruta GPS' : 'No GPS route', cardX + cardW / 2, cardY + cardH / 2 - 40);
@@ -573,7 +520,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
 
     stats.forEach((s, i) => {
       const cx = cardX + colW * i + colW / 2;
-      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
       ctx.font = f('400 22px');
       ctx.textAlign = 'center';
       ctx.fillText(s.label, cx, rowY);
@@ -591,22 +538,22 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     ctx.textAlign = 'center';
     ctx.fillText(sportLabel, W / 2, infoY);
 
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = f('400 30px');
     ctx.fillText(fmtDate(), W / 2, infoY + 56);
 
-    // CTA section
-    const ctaY = infoY + 140;
+    // CTA section (tight spacing with logo)
+    const ctaY = infoY + 130;
     ctx.fillStyle = '#fdda36';
     ctx.font = f('700 38px');
     ctx.fillText(getCtaTitle(), W / 2, ctaY);
 
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = `400 26px ${FONT_FALLBACK}`;
-    ctx.fillText(getShareUrlShort(), W / 2, ctaY + 52);
+    ctx.fillText(getShareUrlShort(), W / 2, ctaY + 46);
 
-    // Logo - bigger
-    drawLogoOrText(ctx, logoImgRef.current, W / 2, H - 110, W * 0.45, 100, f('700 44px'));
+    // Logo immediately after
+    drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 120, W * 0.45, 100, f('700 44px'));
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
   // Generate card on canvas
@@ -819,11 +766,11 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
           {/* Canvas Preview */}
           <div
             className="rounded-xl overflow-hidden border border-neutral-200 dark:border-neutral-600"
-            style={
-              cardType !== 'map'
-                ? { backgroundImage: 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)', backgroundSize: '20px 20px', backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px' }
-                : { backgroundColor: '#1a1a1a' }
-            }
+            style={{
+              backgroundImage: 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)',
+              backgroundSize: '20px 20px',
+              backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
+            }}
           >
             {!ready || !fontLoaded || !logoLoaded ? (
               <div className="h-48 flex items-center justify-center bg-neutral-100 dark:bg-neutral-700">

@@ -213,43 +213,32 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
   const drawTransparentCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
     ctx.clearRect(0, 0, W, H);
 
-    // Dark background
-    const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, '#111111');
-    grad.addColorStop(1, '#1e1e1e');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, H);
-
-    // Subtle yellow top bar
-    ctx.fillStyle = '#fdda36';
-    ctx.fillRect(0, 0, W, 8);
-
     // Sport label at top center
     ctx.fillStyle = '#ffffff';
     ctx.font = f('700 44px');
     ctx.textAlign = 'center';
-    ctx.fillText(t('ENTRENAMIENTO', 'WORKOUT'), W / 2, 120);
+    ctx.fillText(t('ENTRENAMIENTO', 'WORKOUT'), W / 2, 100);
 
     // Thin divider
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(W * 0.2, 155);
-    ctx.lineTo(W * 0.8, 155);
+    ctx.moveTo(W * 0.2, 135);
+    ctx.lineTo(W * 0.8, 135);
     ctx.stroke();
 
     // Date + duration at top-left
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.font = f('400 34px');
     ctx.textAlign = 'left';
-    ctx.fillText(fmtDate(), 80, 240);
+    ctx.fillText(fmtDate(), 80, 220);
 
     ctx.fillStyle = '#ffffff';
     ctx.font = f('700 72px');
-    ctx.fillText(formatDuration(workoutData.duration), 80, 340);
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillText(formatDuration(workoutData.duration), 80, 320);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = f('400 30px');
-    ctx.fillText(t('Duracion', 'Duration'), 80, 390);
+    ctx.fillText(t('Duracion', 'Duration'), 80, 370);
 
     // Two-column layout
     const bottomY = H - 700;
@@ -283,12 +272,12 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
         ctx.fillText(s.value, leftX + 72, sy + 20);
       }
 
-      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
       ctx.font = f('400 28px');
       ctx.fillText(s.label, leftX + 72, sy + 66);
     });
 
-    // Right column: CTA + URL + Logo
+    // Right column: CTA + URL + Logo (tight spacing)
     const ctaTitle = getCtaTitle();
     const ctaUrl = getShareUrlShort();
 
@@ -302,16 +291,18 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
       ctaTextY += 48;
     });
 
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = `400 24px ${FONT_FALLBACK}`;
     const urlLines = wrapText(ctx, ctaUrl, colW);
-    ctaTextY += 12;
+    ctaTextY += 8;
     urlLines.forEach((line) => {
       ctx.fillText(line, rightX, ctaTextY);
       ctaTextY += 32;
     });
 
-    drawLogoOrText(ctx, logoImgRef.current, rightX + colW / 2, H - 120, colW * 0.85, 110, f('700 48px'));
+    // Logo immediately after URL text
+    const logoY = ctaTextY + 60;
+    drawLogoOrText(ctx, logoImgRef.current, rightX + colW / 2, logoY, colW * 0.85, 100, f('700 48px'));
   }, [workoutData, t, shareMode, activeProject, profile]);
 
   const generateCard = useCallback(() => {
