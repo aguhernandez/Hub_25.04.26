@@ -3,6 +3,7 @@ import { Share2, Download, X, CheckCircle, MapPin, Clock, Zap, Mountain, Link, M
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import asciendeLogoSrc from '../../assets/Asciendelogo.png';
 
 const PRODUCTION_URL = 'https://hub.asciende.pro';
 
@@ -223,6 +224,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false);
   const [fontLoaded, setFontLoaded] = useState(false);
+  const [logoLoaded, setLogoLoaded] = useState(false);
 
   const sport = SPORT_META[activityData.sportType] ?? SPORT_META['run'];
   const f = (w: string) => `${w} ${FONT_NAME}, ${FONT_FALLBACK}`;
@@ -240,9 +242,9 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   useEffect(() => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => { logoImgRef.current = img; };
-    img.onerror = () => {};
-    img.src = '/Asciendelogo.png';
+    img.onload = () => { logoImgRef.current = img; setLogoLoaded(true); };
+    img.onerror = () => { setLogoLoaded(true); };
+    img.src = asciendeLogoSrc;
   }, []);
 
   // Load active project
@@ -603,10 +605,10 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   }, [cardType, drawMapCard, drawTransparentCard, drawStoryCard]);
 
   useEffect(() => {
-    if (!ready || !fontLoaded) return;
+    if (!ready || !fontLoaded || !logoLoaded) return;
     const raf = requestAnimationFrame(() => generateCard());
     return () => cancelAnimationFrame(raf);
-  }, [ready, fontLoaded, generateCard]);
+  }, [ready, fontLoaded, logoLoaded, generateCard]);
 
   // ─── Share Handlers ─────────────────────────────────────────────────
   const handleDownload = async () => {
@@ -801,7 +803,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
                 : { backgroundColor: '#1a1a1a' }
             }
           >
-            {!ready || !fontLoaded ? (
+            {!ready || !fontLoaded || !logoLoaded ? (
               <div className="h-48 flex items-center justify-center bg-neutral-100 dark:bg-neutral-700">
                 <div className="w-7 h-7 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
               </div>

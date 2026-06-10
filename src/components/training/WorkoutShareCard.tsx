@@ -3,6 +3,7 @@ import { Share2, Download, X, CheckCircle, Dumbbell, Link } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import asciendeLogoSrc from '../../assets/Asciendelogo.png';
 
 const PRODUCTION_URL = 'https://hub.asciende.pro';
 const KRONA_ONE_URL = 'https://fonts.gstatic.com/s/kronaone/v14/jAnEgHdjHcjgfIb1ZcUCMY-h.woff2';
@@ -140,6 +141,7 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
   const [copied, setCopied] = useState(false);
   const [ready, setReady] = useState(false);
   const [fontLoaded, setFontLoaded] = useState(false);
+  const [logoLoaded, setLogoLoaded] = useState(false);
 
   const t = useCallback((es: string, en: string) => language === 'es' ? es : en, [language]);
   const f = (w: string) => `${w} ${FONT_NAME}, ${FONT_FALLBACK}`;
@@ -155,9 +157,9 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
   useEffect(() => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = () => { logoImgRef.current = img; };
-    img.onerror = () => {};
-    img.src = '/Asciendelogo.png';
+    img.onload = () => { logoImgRef.current = img; setLogoLoaded(true); };
+    img.onerror = () => { setLogoLoaded(true); };
+    img.src = asciendeLogoSrc;
   }, []);
 
   useEffect(() => {
@@ -312,10 +314,10 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
   }, [drawTransparentCard]);
 
   useEffect(() => {
-    if (!ready || !fontLoaded) return;
+    if (!ready || !fontLoaded || !logoLoaded) return;
     const raf = requestAnimationFrame(() => generateCard());
     return () => cancelAnimationFrame(raf);
-  }, [ready, fontLoaded, generateCard]);
+  }, [ready, fontLoaded, logoLoaded, generateCard]);
 
   const handleDownload = async () => {
     const canvas = canvasRef.current;
@@ -463,7 +465,7 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
               backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
             }}
           >
-            {!ready || !fontLoaded ? (
+            {!ready || !fontLoaded || !logoLoaded ? (
               <div className="h-48 flex items-center justify-center bg-neutral-100 dark:bg-neutral-700">
                 <div className="w-7 h-7 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
               </div>
