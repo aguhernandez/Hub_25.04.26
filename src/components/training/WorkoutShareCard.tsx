@@ -47,7 +47,7 @@ function drawIcon(ctx: CanvasRenderingContext2D, type: string, cx: number, cy: n
   ctx.lineJoin = 'round';
   const r = size / 2;
 
-  if (type === 'tonnage') {
+  if (type === 'kg') {
     // Dumbbell icon
     ctx.beginPath();
     ctx.moveTo(cx - r * 0.7, cy);
@@ -57,16 +57,8 @@ function drawIcon(ctx: CanvasRenderingContext2D, type: string, cx: number, cy: n
     ctx.fill();
     roundRect(ctx, cx + r * 0.5, cy - r * 0.4, r * 0.4, r * 0.8, 2);
     ctx.fill();
-  } else if (type === 'kg') {
-    // Weight plate icon
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(cx, cy, r * 0.3, 0, Math.PI * 2);
-    ctx.fill();
   } else if (type === 'exercises') {
-    // List/layers icon
+    // List icon
     ctx.beginPath();
     ctx.moveTo(cx - r * 0.5, cy - r * 0.4);
     ctx.lineTo(cx + r * 0.5, cy - r * 0.4);
@@ -78,6 +70,19 @@ function drawIcon(ctx: CanvasRenderingContext2D, type: string, cx: number, cy: n
     ctx.beginPath();
     ctx.moveTo(cx - r * 0.5, cy + r * 0.4);
     ctx.lineTo(cx + r * 0.5, cy + r * 0.4);
+    ctx.stroke();
+  } else if (type === 'sets') {
+    // Stack icon
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.6, cy - r * 0.1);
+    ctx.lineTo(cx, cy - r * 0.5);
+    ctx.lineTo(cx + r * 0.6, cy - r * 0.1);
+    ctx.lineTo(cx, cy + r * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.6, cy + r * 0.4);
+    ctx.lineTo(cx + r * 0.6, cy + r * 0.4);
     ctx.stroke();
   }
   ctx.restore();
@@ -136,6 +141,7 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
   const [ready, setReady] = useState(false);
   const [fontLoaded, setFontLoaded] = useState(false);
 
+  const t = useCallback((es: string, en: string) => language === 'es' ? es : en, [language]);
   const f = (w: string) => `${w} ${FONT_NAME}, ${FONT_FALLBACK}`;
 
   useEffect(() => {
@@ -173,10 +179,7 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
 
   const fmtDate = () => {
     const d = workoutData.date ? new Date(workoutData.date + 'T12:00:00') : new Date();
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const yy = d.getFullYear();
-    return `${dd}/${mm}/${yy}`;
+    return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
   };
 
   const formatDuration = (minutes: number) => {
@@ -201,21 +204,18 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
   };
 
   const getCtaTitle = () => {
-    if (shareMode === 'project' && activeProject) {
-      return language === 'es' ? 'Apoya Mi Proyecto' : 'Support My Project';
-    }
-    return language === 'es' ? 'Sigue Mi Progreso' : 'Follow My Journey';
+    if (shareMode === 'project' && activeProject) return t('Apoya Mi Proyecto', 'Support My Project');
+    return t('Sigue Mi Progreso', 'Follow My Journey');
   };
 
   const drawTransparentCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
     ctx.clearRect(0, 0, W, H);
 
-    // Sport type at top center
-    const sportLabel = language === 'es' ? 'ENTRENAMIENTO' : 'WORKOUT';
+    // Sport label at top center
     ctx.fillStyle = '#ffffff';
     ctx.font = f('700 30px');
     ctx.textAlign = 'center';
-    ctx.fillText(sportLabel, W / 2, 100);
+    ctx.fillText(t('ENTRENAMIENTO', 'WORKOUT'), W / 2, 100);
 
     // Thin divider
     ctx.strokeStyle = 'rgba(255,255,255,0.3)';
@@ -225,20 +225,18 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
     ctx.lineTo(W * 0.7, 130);
     ctx.stroke();
 
-    // Date top-left
+    // Date + duration at top-left
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.font = f('400 26px');
     ctx.textAlign = 'left';
     ctx.fillText(fmtDate(), 72, 200);
 
-    // Duration below date
     ctx.fillStyle = '#ffffff';
     ctx.font = f('700 48px');
-    ctx.textAlign = 'left';
     ctx.fillText(formatDuration(workoutData.duration), 72, 270);
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
     ctx.font = f('400 20px');
-    ctx.fillText(language === 'es' ? 'Duracion' : 'Duration', 72, 302);
+    ctx.fillText(t('Duracion', 'Duration'), 72, 302);
 
     // Two-column layout at bottom
     const bottomY = H - 560;
@@ -246,11 +244,11 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
     const leftX = 60;
     const rightX = leftX + colW + 40;
 
-    // Left column: 3 stats
+    // Left column: 3 distinct stats
     const stats = [
-      { icon: 'tonnage', value: `${Math.round(workoutData.totalVolume).toLocaleString()}`, unit: 'kg', label: language === 'es' ? 'Tonelaje' : 'Tonnage' },
-      { icon: 'kg', value: `${Math.round(workoutData.totalVolume).toLocaleString()}`, unit: '', label: language === 'es' ? 'Kg movidos' : 'Kg moved' },
-      { icon: 'exercises', value: String(workoutData.exerciseCount ?? 0), unit: '', label: language === 'es' ? 'Ejercicios' : 'Exercises' },
+      { icon: 'kg',        value: `${Math.round(workoutData.totalVolume).toLocaleString()}`, unit: 'kg', label: t('Kg movidos', 'Kg moved') },
+      { icon: 'exercises', value: String(workoutData.exerciseCount ?? 0),                   unit: '',   label: t('Ejercicios', 'Exercises') },
+      { icon: 'sets',      value: String(workoutData.setCount ?? 0),                        unit: '',   label: t('Series', 'Sets') },
     ];
 
     const statSpacing = 140;
@@ -263,19 +261,17 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
       ctx.textAlign = 'left';
 
       if (s.unit) {
-        const valText = s.value;
-        ctx.fillText(valText, leftX + 56, sy + 16);
-        const valWidth = ctx.measureText(valText).width;
+        ctx.fillText(s.value, leftX + 56, sy + 16);
+        const vw = ctx.measureText(s.value).width;
         ctx.fillStyle = '#fdda36';
         ctx.font = f('700 24px');
-        ctx.fillText(s.unit, leftX + 56 + valWidth + 8, sy + 16);
+        ctx.fillText(s.unit, leftX + 56 + vw + 8, sy + 16);
       } else {
         ctx.fillText(s.value, leftX + 56, sy + 16);
       }
 
       ctx.fillStyle = 'rgba(255,255,255,0.45)';
       ctx.font = f('400 20px');
-      ctx.textAlign = 'left';
       ctx.fillText(s.label, leftX + 56, sy + 50);
     });
 
@@ -302,22 +298,17 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
       ctaTextY += 26;
     });
 
-    // Logo in right column bottom
     drawLogoOrText(ctx, logoImgRef.current, rightX + colW / 2, H - 140, colW * 0.7, 80, f('700 36px'));
-  }, [workoutData, language, shareMode, activeProject, profile]);
+  }, [workoutData, t, shareMode, activeProject, profile]);
 
   const generateCard = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
-    const W = 1080;
-    const H = 1920;
-    canvas.width = W;
-    canvas.height = H;
-
-    drawTransparentCard(ctx, W, H);
+    canvas.width = 1080;
+    canvas.height = 1920;
+    drawTransparentCard(ctx, 1080, 1920);
   }, [drawTransparentCard]);
 
   useEffect(() => {
@@ -369,24 +360,19 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
 
       const file = new File([blob], `asciende-workout-${workoutData.date}.png`, { type: 'image/png' });
       const shareUrl = getShareUrl();
-
       const text = (shareMode === 'project' && activeProject)
-        ? (language === 'es'
-          ? `Entreno duro persiguiendo mi meta. Apoya mi proyecto: ${activeProject.title}`
-          : `Training hard chasing my goal. Support my project: ${activeProject.title}`)
-        : (language === 'es'
-          ? 'Entrenamiento completado. Sigue mi progreso en Asciende!'
-          : 'Workout done. Follow my progress on Asciende!');
+        ? t(`Entreno duro persiguiendo mi meta. Apoya mi proyecto: ${activeProject.title}`,
+            `Training hard chasing my goal. Support my project: ${activeProject.title}`)
+        : t('Entrenamiento completado. Sigue mi progreso en Asciende!',
+            'Workout done. Follow my progress on Asciende!');
 
       if (navigator.share) {
         const shareData: ShareData = {
-          title: `${profile?.full_name || 'Athlete'} — ${language === 'es' ? 'Entrenamiento' : 'Workout'}`,
+          title: `${profile?.full_name || 'Athlete'} — ${t('Entrenamiento', 'Workout')}`,
           text,
           url: shareUrl,
         };
-        if (navigator.canShare?.({ files: [file] })) {
-          shareData.files = [file];
-        }
+        if (navigator.canShare?.({ files: [file] })) shareData.files = [file];
         await navigator.share(shareData);
         setShared(true);
         setTimeout(() => setShared(false), 3000);
@@ -397,9 +383,7 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
         setTimeout(() => setShared(false), 3000);
       }
     } catch (e: any) {
-      if (e?.name !== 'AbortError') {
-        await handleDownload();
-      }
+      if (e?.name !== 'AbortError') await handleDownload();
     } finally {
       setSharing(false);
     }
@@ -417,10 +401,10 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
             </div>
             <div>
               <h2 className="text-sm font-bold text-neutral-900 dark:text-white">
-                {language === 'es' ? 'Compartir Entrenamiento' : 'Share Workout'}
+                {t('Compartir Entrenamiento', 'Share Workout')}
               </h2>
               <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
-                {language === 'es' ? 'PNG transparente para stories' : 'Transparent PNG for stories'}
+                {t('PNG transparente para stories', 'Transparent PNG for stories')}
               </p>
             </div>
           </div>
@@ -434,9 +418,9 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
           {/* Quick Stats */}
           <div className="grid grid-cols-3 gap-1.5">
             {[
-              { v: `${Math.round(workoutData.totalVolume).toLocaleString()} kg`, l: language === 'es' ? 'Tonelaje' : 'Tonnage' },
-              { v: formatDuration(workoutData.duration), l: language === 'es' ? 'Duracion' : 'Duration' },
-              { v: String(workoutData.exerciseCount ?? 0), l: language === 'es' ? 'Ejercicios' : 'Exercises' },
+              { v: `${Math.round(workoutData.totalVolume).toLocaleString()} kg`, l: t('Kg movidos', 'Kg moved') },
+              { v: formatDuration(workoutData.duration),                         l: t('Duracion', 'Duration') },
+              { v: String(workoutData.exerciseCount ?? 0),                       l: t('Ejercicios', 'Exercises') },
             ].map(({ v, l }) => (
               <div key={l} className="bg-neutral-50 dark:bg-neutral-700/50 rounded-lg p-2 text-center">
                 <p className="text-xs font-bold text-neutral-900 dark:text-white leading-none">{v}</p>
@@ -449,12 +433,12 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
           {activeProject && (
             <div>
               <p className="text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-widest mb-1.5">
-                {language === 'es' ? 'Mensaje' : 'Message'}
+                {t('Mensaje', 'Message')}
               </p>
               <div className="grid grid-cols-2 gap-1.5">
                 {[
-                  { mode: 'profile' as const, title: language === 'es' ? 'Sigue mi Progreso' : 'Follow My Journey', sub: language === 'es' ? 'Enlaza a tu perfil' : 'Links to profile' },
-                  { mode: 'project' as const, title: language === 'es' ? 'Apoya mi Proyecto' : 'Support My Project', sub: activeProject.title },
+                  { mode: 'profile' as const, title: t('Sigue mi Progreso', 'Follow My Journey'), sub: t('Enlaza a tu perfil', 'Links to profile') },
+                  { mode: 'project' as const, title: t('Apoya mi Proyecto', 'Support My Project'), sub: activeProject.title },
                 ].map(({ mode, title, sub }) => (
                   <button key={mode} onClick={() => setShareMode(mode)}
                     className={`p-2.5 rounded-xl border-2 transition-all text-left ${
@@ -495,7 +479,7 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
               className="flex items-center gap-1.5 px-3 py-2.5 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 text-xs font-medium rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
             >
               <Download className="w-4 h-4" />
-              {language === 'es' ? 'Guardar' : 'Save'}
+              {t('Guardar', 'Save')}
             </button>
             <button
               onClick={handleCopyLink}
@@ -506,7 +490,7 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
               }`}
             >
               {copied ? <CheckCircle className="w-4 h-4" /> : <Link className="w-4 h-4" />}
-              {copied ? (language === 'es' ? 'Copiado' : 'Copied') : 'Link'}
+              {copied ? t('Copiado', 'Copied') : 'Link'}
             </button>
             <button
               onClick={handleShare}
@@ -518,18 +502,12 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
               }`}
             >
               {shared ? <CheckCircle className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
-              {sharing
-                ? (language === 'es' ? 'Abriendo...' : 'Opening...')
-                : shared
-                ? (language === 'es' ? 'Listo!' : 'Done!')
-                : (language === 'es' ? 'Compartir' : 'Share')}
+              {sharing ? t('Abriendo...', 'Opening...') : shared ? t('Listo!', 'Done!') : t('Compartir', 'Share')}
             </button>
           </div>
 
           <p className="text-[9px] text-center text-neutral-400 dark:text-neutral-500">
-            {language === 'es'
-              ? 'Comparte en Instagram Stories, WhatsApp, y mas'
-              : 'Share on Instagram Stories, WhatsApp, and more'}
+            {t('Comparte en Instagram Stories, WhatsApp, y mas', 'Share on Instagram Stories, WhatsApp, and more')}
           </p>
         </div>
       </div>
