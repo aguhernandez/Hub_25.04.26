@@ -18,8 +18,14 @@ interface ActivitySummaryScreenProps {
   racePlanName?: string | null;
 }
 
+// Brand colors
+const BRAND_YELLOW = '#f5c400';
+const BRAND_YELLOW_LIGHT = '#fef9e0';
+const BRAND_VIOLET = '#7c3aed';
+const BRAND_VIOLET_LIGHT = '#ede9fe';
+
 const SPORT_META: Record<string, { color: string; isBike: boolean; isSwim: boolean }> = {
-  run:              { color: '#22c55e', isBike: false, isSwim: false },
+  run:              { color: '#f5c400', isBike: false, isSwim: false },
   trail_run:        { color: '#84cc16', isBike: false, isSwim: false },
   road_bike:        { color: '#3b82f6', isBike: true,  isSwim: false },
   mountain_bike:    { color: '#f97316', isBike: true,  isSwim: false },
@@ -48,7 +54,6 @@ function getPaceOrSpeed(distKm: number, durSecs: number, isBike: boolean) {
   return { value: `${mins}:${String(secs).padStart(2, '0')}`, unit: '/km' };
 }
 
-// Compute per-km splits from GPS points
 function computeSplits(points: Array<{ latitude: number; longitude: number; altitude: number | null; timestamp: string }>) {
   if (points.length < 2) return [];
 
@@ -99,7 +104,6 @@ function computeSplits(points: Array<{ latitude: number; longitude: number; alti
   return splits;
 }
 
-// Assign a pace zone (1-5) based on pace seconds per km
 function paceZone(paceSeconds: number, isBike: boolean) {
   if (isBike) {
     const kmh = 3600 / paceSeconds;
@@ -117,7 +121,6 @@ function paceZone(paceSeconds: number, isBike: boolean) {
   return 5;
 }
 
-// Compute zone distribution from splits
 function computeZones(splits: ReturnType<typeof computeSplits>, isBike: boolean) {
   if (splits.length === 0) return null;
   const totalTime = splits.reduce((s, x) => s + x.durationSeconds, 0);
@@ -135,7 +138,6 @@ function computeZones(splits: ReturnType<typeof computeSplits>, isBike: boolean)
   }));
 }
 
-// Generate a short insight string
 function generateInsight(
   splits: ReturnType<typeof computeSplits>,
   zones: ReturnType<typeof computeZones>,
@@ -172,7 +174,6 @@ function generateInsight(
   }
 }
 
-// Mini GPS canvas map
 function GPSMiniMap({ points, color }: { points: ActivityRecorderData['gpsPoints']; color: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -206,7 +207,6 @@ function GPSMiniMap({ points, color }: { points: ActivityRecorderData['gpsPoints
       offY + usedH - (p.latitude - minLat) * scale,
     ];
 
-    // Subsample for performance
     const step = Math.max(1, Math.floor(points.length / 300));
     const sampled = points.filter((_, i) => i % step === 0);
     if (sampled[sampled.length - 1] !== points[points.length - 1]) sampled.push(points[points.length - 1]);
@@ -215,13 +215,13 @@ function GPSMiniMap({ points, color }: { points: ActivityRecorderData['gpsPoints
 
     // Glow
     ctx.save();
-    ctx.shadowColor = color + '88';
-    ctx.shadowBlur = 8;
+    ctx.shadowColor = color + '66';
+    ctx.shadowBlur = 10;
     ctx.beginPath();
     ctx.moveTo(projected[0][0], projected[0][1]);
     for (let i = 1; i < projected.length; i++) ctx.lineTo(projected[i][0], projected[i][1]);
-    ctx.strokeStyle = color + '55';
-    ctx.lineWidth = 6;
+    ctx.strokeStyle = color + '44';
+    ctx.lineWidth = 7;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.stroke();
@@ -244,8 +244,6 @@ function GPSMiniMap({ points, color }: { points: ActivityRecorderData['gpsPoints
     ctx.fill();
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(projected[0][0], projected[0][1], 5, 0, Math.PI * 2);
     ctx.stroke();
 
     // End dot
@@ -256,8 +254,6 @@ function GPSMiniMap({ points, color }: { points: ActivityRecorderData['gpsPoints
     ctx.fill();
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(last[0], last[1], 5, 0, Math.PI * 2);
     ctx.stroke();
   }, [points, color]);
 
@@ -276,8 +272,6 @@ function GPSMiniMap({ points, color }: { points: ActivityRecorderData['gpsPoints
 const ZONE_COLORS = ['#60a5fa', '#34d399', '#fbbf24', '#f97316', '#ef4444'];
 const ZONE_NAMES_EN = ['Zone 1', 'Zone 2', 'Zone 3', 'Zone 4', 'Zone 5'];
 const ZONE_NAMES_ES = ['Zona 1', 'Zona 2', 'Zona 3', 'Zona 4', 'Zona 5'];
-const ZONE_DESC_EN = ['Recovery', 'Aerobic', 'Tempo', 'Threshold', 'VO2 Max'];
-const ZONE_DESC_ES = ['Recuperación', 'Aeróbico', 'Tempo', 'Umbral', 'VO2 Máx'];
 
 export default function ActivitySummaryScreen({ data, onShare, onClose, activityId, plannedWorkout, racePlanName }: ActivitySummaryScreenProps) {
   const { language } = useLanguage();
@@ -301,7 +295,6 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
     return `${m}:${String(s).padStart(2, '0')}`;
   }, [sport.isBike]);
 
-  // Fade in on mount
   useEffect(() => {
     const t = setTimeout(() => setVisible(true), 50);
     return () => clearTimeout(t);
@@ -313,7 +306,8 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
       value: data.distanceKm.toFixed(2),
       unit: 'km',
       icon: MapPin,
-      color: sport.color,
+      color: BRAND_YELLOW,
+      bgColor: BRAND_YELLOW_LIGHT,
       big: true,
     },
     {
@@ -321,7 +315,8 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
       value: fmtDuration(data.durationSeconds),
       unit: '',
       icon: Clock,
-      color: '#60a5fa',
+      color: BRAND_VIOLET,
+      bgColor: BRAND_VIOLET_LIGHT,
       big: true,
     },
     ...(pace ? [{
@@ -329,7 +324,8 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
       value: pace.value,
       unit: pace.unit,
       icon: Zap,
-      color: '#fbbf24',
+      color: BRAND_YELLOW,
+      bgColor: BRAND_YELLOW_LIGHT,
       big: false,
     }] : []),
     ...(data.elevationGainM > 0 ? [{
@@ -337,7 +333,8 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
       value: `${Math.round(data.elevationGainM)}`,
       unit: 'm',
       icon: Mountain,
-      color: '#a78bfa',
+      color: BRAND_VIOLET,
+      bgColor: BRAND_VIOLET_LIGHT,
       big: false,
     }] : []),
   ];
@@ -346,54 +343,51 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
 
   return (
     <div
-      className={`fixed inset-0 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`}
+      className={`fixed inset-0 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 transition-opacity duration-300 ${visible ? 'opacity-100' : 'opacity-0'}`}
     >
       <div
-        className={`bg-gray-950 w-full sm:max-w-lg sm:rounded-2xl shadow-2xl border border-white/10 overflow-hidden flex flex-col max-h-[95vh] transition-transform duration-300 ${visible ? 'translate-y-0' : 'translate-y-8'}`}
-        style={{ boxShadow: `0 0 60px ${sport.color}22, 0 25px 50px rgba(0,0,0,0.8)` }}
+        className={`bg-white w-full sm:max-w-lg sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] transition-transform duration-300 ${visible ? 'translate-y-0' : 'translate-y-8'}`}
+        style={{ boxShadow: '0 25px 60px rgba(0,0,0,0.25)' }}
       >
-        {/* Top accent bar */}
-        <div className="h-1 flex-shrink-0" style={{ background: `linear-gradient(90deg, transparent, ${sport.color}, transparent)` }} />
+        {/* Top accent bar — brand yellow */}
+        <div className="h-1 flex-shrink-0" style={{ background: `linear-gradient(90deg, ${BRAND_YELLOW}, ${BRAND_VIOLET})` }} />
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/8 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0 bg-white">
           <div className="flex items-center gap-3">
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ background: sport.color + '22', boxShadow: `0 0 16px ${sport.color}33` }}
+              style={{ background: BRAND_YELLOW_LIGHT }}
             >
-              <Trophy className="w-5 h-5" style={{ color: sport.color }} />
+              <Trophy className="w-5 h-5" style={{ color: BRAND_YELLOW }} />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white">
+              <h2 className="text-base font-bold text-gray-900">
                 {language === 'es' ? '¡Actividad Completada!' : 'Activity Complete!'}
               </h2>
-              <p className="text-xs text-white/50">{data.title}</p>
+              <p className="text-xs text-gray-400">{data.title}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-xl hover:bg-white/8 transition-colors text-white/40 hover:text-white/70"
+            className="p-2 rounded-xl hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Scrollable content */}
-        <div className="overflow-y-auto flex-1 p-5 space-y-5">
+        <div className="overflow-y-auto flex-1 p-5 space-y-4 bg-gray-50">
 
-          {/* GPS MAP */}
+          {/* GPS MAP — dark container so route is visible */}
           {hasGPS && (
-            <div
-              className="rounded-2xl overflow-hidden relative"
-              style={{ background: '#0a0f1a', border: `1px solid ${sport.color}33`, minHeight: '160px' }}
-            >
+            <div className="rounded-2xl overflow-hidden relative" style={{ background: '#111827', minHeight: '160px' }}>
               <div className="p-1">
-                <GPSMiniMap points={data.gpsPoints} color={sport.color} />
+                <GPSMiniMap points={data.gpsPoints} color={BRAND_YELLOW} />
               </div>
               <div
-                className="absolute bottom-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-bold"
-                style={{ background: sport.color + '22', color: sport.color }}
+                className="absolute bottom-2 left-2 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold"
+                style={{ background: BRAND_YELLOW + '22', color: BRAND_YELLOW, border: `1px solid ${BRAND_YELLOW}33` }}
               >
                 <MapPin className="w-3 h-3" />
                 {data.gpsPoints.length.toLocaleString()} {language === 'es' ? 'puntos GPS' : 'GPS points'}
@@ -408,16 +402,17 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
               {keyMetrics.filter(m => m.big).map((m) => (
                 <div
                   key={m.label}
-                  className="rounded-2xl p-4 border"
-                  style={{ background: m.color + '0d', borderColor: m.color + '33' }}
+                  className="rounded-2xl p-4 bg-white border border-gray-100 shadow-sm"
                 >
                   <div className="flex items-center gap-1.5 mb-2">
-                    <m.icon className="w-3.5 h-3.5" style={{ color: m.color }} />
-                    <span className="text-[11px] font-medium" style={{ color: m.color + 'cc' }}>{m.label}</span>
+                    <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: m.bgColor }}>
+                      <m.icon className="w-3.5 h-3.5" style={{ color: m.color }} />
+                    </div>
+                    <span className="text-[11px] font-semibold text-gray-400">{m.label}</span>
                   </div>
-                  <p className="text-3xl font-black text-white leading-none">
+                  <p className="text-3xl font-black text-gray-900 leading-none">
                     {m.value}
-                    {m.unit && <span className="text-sm font-medium text-white/40 ml-1">{m.unit}</span>}
+                    {m.unit && <span className="text-sm font-medium text-gray-400 ml-1">{m.unit}</span>}
                   </p>
                 </div>
               ))}
@@ -429,20 +424,19 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
                 {keyMetrics.filter(m => !m.big).map((m) => (
                   <div
                     key={m.label}
-                    className="rounded-xl p-3.5 border flex items-center gap-3"
-                    style={{ background: '#ffffff08', borderColor: '#ffffff12' }}
+                    className="rounded-xl p-3.5 bg-white border border-gray-100 shadow-sm flex items-center gap-3"
                   >
                     <div
                       className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: m.color + '20' }}
+                      style={{ background: m.bgColor }}
                     >
-                      <m.icon className="w-4.5 h-4.5" style={{ color: m.color }} />
+                      <m.icon className="w-4 h-4" style={{ color: m.color }} />
                     </div>
                     <div>
-                      <p className="text-xs text-white/40">{m.label}</p>
-                      <p className="text-lg font-bold text-white leading-tight">
+                      <p className="text-xs text-gray-400">{m.label}</p>
+                      <p className="text-lg font-bold text-gray-900 leading-tight">
                         {m.value}
-                        {m.unit && <span className="text-xs text-white/40 ml-0.5">{m.unit}</span>}
+                        {m.unit && <span className="text-xs text-gray-400 ml-0.5">{m.unit}</span>}
                       </p>
                     </div>
                   </div>
@@ -453,10 +447,12 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
 
           {/* PACE ZONE DISTRIBUTION */}
           {zones && splits.length >= 3 && (
-            <div className="rounded-2xl border border-white/8 p-4" style={{ background: '#ffffff06' }}>
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm p-4">
               <div className="flex items-center gap-2 mb-3">
-                <BarChart3 className="w-4 h-4 text-white/50" />
-                <h3 className="text-xs font-bold text-white/60 uppercase tracking-widest">
+                <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: BRAND_VIOLET_LIGHT }}>
+                  <BarChart3 className="w-3.5 h-3.5" style={{ color: BRAND_VIOLET }} />
+                </div>
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">
                   {language === 'es' ? 'Distribución de Zonas' : 'Zone Distribution'}
                 </h3>
               </div>
@@ -467,24 +463,24 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
                       <span className="text-[11px] font-bold w-12 flex-shrink-0" style={{ color: ZONE_COLORS[z.zone - 1] }}>
                         {language === 'es' ? ZONE_NAMES_ES[z.zone - 1] : ZONE_NAMES_EN[z.zone - 1]}
                       </span>
-                      <div className="flex-1 h-5 rounded-full overflow-hidden bg-white/8">
+                      <div className="flex-1 h-4 rounded-full overflow-hidden bg-gray-100">
                         <div
                           className="h-full rounded-full transition-all duration-700"
                           style={{
                             width: `${z.pct}%`,
-                            background: `linear-gradient(90deg, ${ZONE_COLORS[z.zone - 1]}cc, ${ZONE_COLORS[z.zone - 1]})`,
+                            background: `linear-gradient(90deg, ${ZONE_COLORS[z.zone - 1]}99, ${ZONE_COLORS[z.zone - 1]})`,
                           }}
                         />
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-[11px] font-bold text-white/80 w-8 text-right">{z.pct}%</span>
-                        <span className="text-[10px] text-white/30 w-12 text-right">{fmtDuration(z.seconds, true)}</span>
+                        <span className="text-[11px] font-bold text-gray-700 w-8 text-right">{z.pct}%</span>
+                        <span className="text-[10px] text-gray-400 w-12 text-right">{fmtDuration(z.seconds, true)}</span>
                       </div>
                     </div>
                   ) : null
                 ))}
               </div>
-              <p className="text-[10px] text-white/25 mt-2">
+              <p className="text-[10px] text-gray-300 mt-2">
                 {language === 'es' ? 'Basado en ritmo / velocidad' : 'Based on pace / speed'}
               </p>
             </div>
@@ -494,70 +490,71 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
           {insight && (
             <div
               className="rounded-2xl p-4 border flex items-start gap-3"
-              style={{ background: sport.color + '0d', borderColor: sport.color + '33' }}
+              style={{ background: BRAND_YELLOW_LIGHT, borderColor: BRAND_YELLOW + '66' }}
             >
               <div
                 className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5"
-                style={{ background: sport.color + '22' }}
+                style={{ background: BRAND_YELLOW + '33' }}
               >
-                <TrendingUp className="w-4 h-4" style={{ color: sport.color }} />
+                <TrendingUp className="w-4 h-4" style={{ color: BRAND_YELLOW }} />
               </div>
               <div>
-                <p className="text-[11px] font-bold uppercase tracking-widest mb-1" style={{ color: sport.color + 'bb' }}>
+                <p className="text-[11px] font-bold uppercase tracking-widest mb-1 text-gray-500">
                   {language === 'es' ? 'Insight' : 'Performance Insight'}
                 </p>
-                <p className="text-sm text-white/80 leading-relaxed">{insight}</p>
+                <p className="text-sm text-gray-700 leading-relaxed">{insight}</p>
               </div>
             </div>
           )}
 
           {/* SPLITS */}
           {splits.length >= 2 && (
-            <div className="rounded-2xl border border-white/8 overflow-hidden" style={{ background: '#ffffff06' }}>
+            <div className="rounded-2xl border border-gray-100 overflow-hidden bg-white shadow-sm">
               <button
                 onClick={() => setShowSplits(!showSplits)}
-                className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-white/5 transition-colors"
+                className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-center gap-2">
-                  <Flame className="w-4 h-4 text-white/40" />
-                  <span className="text-xs font-bold text-white/60 uppercase tracking-widest">
-                    {language === 'es' ? `Splits (${splits.length} km)` : `Splits (${splits.length} km)`}
+                  <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: BRAND_YELLOW_LIGHT }}>
+                    <Flame className="w-3.5 h-3.5" style={{ color: BRAND_YELLOW }} />
+                  </div>
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                    {`Splits (${splits.length} km)`}
                   </span>
                 </div>
                 {showSplits ? (
-                  <ChevronUp className="w-4 h-4 text-white/40" />
+                  <ChevronUp className="w-4 h-4 text-gray-400" />
                 ) : (
-                  <ChevronDown className="w-4 h-4 text-white/40" />
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
                 )}
               </button>
 
               {showSplits && (
-                <div className="border-t border-white/8">
-                  {/* Header */}
-                  <div className="grid grid-cols-4 px-4 py-2 bg-white/5">
-                    <span className="text-[10px] font-bold text-white/30 uppercase">{language === 'es' ? 'Km' : 'Km'}</span>
-                    <span className="text-[10px] font-bold text-white/30 uppercase text-right">
+                <div className="border-t border-gray-100">
+                  <div className="grid grid-cols-4 px-4 py-2 bg-gray-50">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Km</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase text-right">
                       {sport.isBike ? 'km/h' : (language === 'es' ? 'Ritmo' : 'Pace')}
                     </span>
-                    <span className="text-[10px] font-bold text-white/30 uppercase text-right">{language === 'es' ? 'Tiempo' : 'Time'}</span>
-                    <span className="text-[10px] font-bold text-white/30 uppercase text-right">D+</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase text-right">{language === 'es' ? 'Tiempo' : 'Time'}</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase text-right">D+</span>
                   </div>
                   {splits.map((s) => {
                     const z = paceZone(s.paceSeconds, sport.isBike);
                     return (
                       <div
                         key={s.km}
-                        className="grid grid-cols-4 px-4 py-2.5 border-t border-white/5 hover:bg-white/4 transition-colors"
+                        className="grid grid-cols-4 px-4 py-2.5 border-t border-gray-50 hover:bg-gray-50 transition-colors"
                       >
                         <div className="flex items-center gap-2">
                           <div className="w-1.5 h-5 rounded-full flex-shrink-0" style={{ background: ZONE_COLORS[z - 1] }} />
-                          <span className="text-sm font-bold text-white">{s.km}</span>
+                          <span className="text-sm font-bold text-gray-800">{s.km}</span>
                         </div>
                         <span className="text-sm font-bold text-right" style={{ color: ZONE_COLORS[z - 1] }}>
                           {fmtPace(s.paceSeconds)}
                         </span>
-                        <span className="text-sm text-white/60 text-right">{fmtDuration(s.durationSeconds)}</span>
-                        <span className="text-sm text-white/40 text-right">
+                        <span className="text-sm text-gray-500 text-right">{fmtDuration(s.durationSeconds)}</span>
+                        <span className="text-sm text-gray-400 text-right">
                           {s.elevGain > 0 ? `+${s.elevGain}m` : '—'}
                         </span>
                       </div>
@@ -568,59 +565,61 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
             </div>
           )}
 
-          {/* Wellness feedback summary */}
+          {/* Wellness feedback */}
           {data.feedback && (
-            <div className="rounded-2xl border border-white/8 p-4" style={{ background: '#ffffff06' }}>
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm p-4">
               <div className="flex items-center gap-2 mb-3">
-                <Heart className="w-4 h-4 text-white/40" />
-                <h3 className="text-xs font-bold text-white/60 uppercase tracking-widest">
+                <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: BRAND_VIOLET_LIGHT }}>
+                  <Heart className="w-3.5 h-3.5" style={{ color: BRAND_VIOLET }} />
+                </div>
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">
                   {language === 'es' ? 'Cómo te sentiste' : 'How You Felt'}
                 </h3>
               </div>
               <div className="grid grid-cols-3 gap-2">
-                <div className="text-center">
-                  <div className="text-2xl font-black text-white">{data.feedback.rpe}</div>
-                  <div className="text-[10px] text-white/40">RPE</div>
+                <div className="text-center p-2 rounded-xl" style={{ background: BRAND_YELLOW_LIGHT }}>
+                  <div className="text-2xl font-black text-gray-900">{data.feedback.rpe}</div>
+                  <div className="text-[10px] font-medium text-gray-500">RPE</div>
                 </div>
-                <div className="text-center">
-                  <div className="text-xs font-bold text-white capitalize">{data.feedback.energy_level.replace('_', ' ')}</div>
-                  <div className="text-[10px] text-white/40">{language === 'es' ? 'Energía' : 'Energy'}</div>
+                <div className="text-center p-2 rounded-xl bg-gray-50">
+                  <div className="text-xs font-bold text-gray-800 capitalize">{data.feedback.energy_level.replace('_', ' ')}</div>
+                  <div className="text-[10px] text-gray-400">{language === 'es' ? 'Energía' : 'Energy'}</div>
                 </div>
-                <div className="text-center">
-                  <div className="text-xs font-bold text-white capitalize">{data.feedback.mood.replace('_', ' ')}</div>
-                  <div className="text-[10px] text-white/40">{language === 'es' ? 'Ánimo' : 'Mood'}</div>
+                <div className="text-center p-2 rounded-xl bg-gray-50">
+                  <div className="text-xs font-bold text-gray-800 capitalize">{data.feedback.mood.replace('_', ' ')}</div>
+                  <div className="text-[10px] text-gray-400">{language === 'es' ? 'Ánimo' : 'Mood'}</div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Consumed fuel log (race plans) */}
+          {/* Consumed fuel log */}
           {data.consumedFuel && data.consumedFuel.length > 0 && (
-            <div className="rounded-2xl border border-white/8 p-4" style={{ background: '#ffffff06' }}>
+            <div className="rounded-2xl border border-gray-100 bg-white shadow-sm p-4">
               <div className="flex items-center gap-2 mb-3">
-                <Flag className="w-4 h-4 text-yellow-400" />
-                <h3 className="text-xs font-bold text-white/60 uppercase tracking-widest">
-                  {racePlanName ? racePlanName : (language === 'es' ? 'Plan de Carrera' : 'Race Plan')}
+                <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: BRAND_YELLOW_LIGHT }}>
+                  <Flag className="w-3.5 h-3.5" style={{ color: BRAND_YELLOW }} />
+                </div>
+                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                  {racePlanName ?? (language === 'es' ? 'Plan de Carrera' : 'Race Plan')}
                   {' — '}
-                  {language === 'es' ? 'Combustible consumido' : 'Fuel consumed'}
+                  {language === 'es' ? 'Combustible' : 'Fuel'}
                 </h3>
               </div>
-              {/* Totals row */}
               <div className="grid grid-cols-3 gap-2 mb-3">
-                <div className="text-center">
-                  <div className="text-lg font-black text-white">{data.consumedFuel.reduce((s, e) => s + e.carbs_g, 0)}g</div>
-                  <div className="text-[10px] text-white/40">{language === 'es' ? 'Carbos' : 'Carbs'}</div>
+                <div className="text-center p-2 rounded-xl" style={{ background: BRAND_YELLOW_LIGHT }}>
+                  <div className="text-lg font-black text-gray-900">{data.consumedFuel.reduce((s, e) => s + e.carbs_g, 0)}g</div>
+                  <div className="text-[10px] text-gray-500">{language === 'es' ? 'Carbos' : 'Carbs'}</div>
                 </div>
-                <div className="text-center">
-                  <div className="text-lg font-black text-white">{Math.round(data.consumedFuel.reduce((s, e) => s + e.fluid_ml, 0) / 100) / 10}L</div>
-                  <div className="text-[10px] text-white/40">{language === 'es' ? 'Líquido' : 'Fluid'}</div>
+                <div className="text-center p-2 rounded-xl bg-gray-50">
+                  <div className="text-lg font-black text-gray-900">{Math.round(data.consumedFuel.reduce((s, e) => s + e.fluid_ml, 0) / 100) / 10}L</div>
+                  <div className="text-[10px] text-gray-500">{language === 'es' ? 'Líquido' : 'Fluid'}</div>
                 </div>
-                <div className="text-center">
-                  <div className="text-lg font-black text-white">{data.consumedFuel.reduce((s, e) => s + e.caffeine_mg, 0)}mg</div>
-                  <div className="text-[10px] text-white/40">{language === 'es' ? 'Cafeína' : 'Caffeine'}</div>
+                <div className="text-center p-2 rounded-xl bg-gray-50">
+                  <div className="text-lg font-black text-gray-900">{data.consumedFuel.reduce((s, e) => s + e.caffeine_mg, 0)}mg</div>
+                  <div className="text-[10px] text-gray-500">{language === 'es' ? 'Cafeína' : 'Caffeine'}</div>
                 </div>
               </div>
-              {/* Timeline list */}
               <div className="space-y-1.5">
                 {data.consumedFuel.map((entry, i) => {
                   const h = Math.floor(entry.time_min / 60);
@@ -628,12 +627,12 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
                   const t = h > 0 ? `${h}h${String(m).padStart(2, '0')}` : `${m}min`;
                   return (
                     <div key={i} className="flex items-center gap-2 text-xs">
-                      <span className="text-white/30 font-mono w-10 flex-shrink-0">{t}</span>
-                      <span className="text-white/70 flex-1 truncate">{entry.label}</span>
+                      <span className="text-gray-400 font-mono w-10 flex-shrink-0">{t}</span>
+                      <span className="text-gray-700 flex-1 truncate">{entry.label}</span>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {entry.carbs_g > 0 && <span className="flex items-center gap-0.5 text-yellow-400/70"><Sandwich className="w-3 h-3" />{entry.carbs_g}g</span>}
-                        {entry.fluid_ml > 0 && <span className="flex items-center gap-0.5 text-blue-400/70"><Droplets className="w-3 h-3" />{entry.fluid_ml}ml</span>}
-                        {entry.caffeine_mg > 0 && <span className="flex items-center gap-0.5 text-orange-400/70"><Coffee className="w-3 h-3" />{entry.caffeine_mg}mg</span>}
+                        {entry.carbs_g > 0 && <span className="flex items-center gap-0.5 text-yellow-600"><Sandwich className="w-3 h-3" />{entry.carbs_g}g</span>}
+                        {entry.fluid_ml > 0 && <span className="flex items-center gap-0.5 text-blue-500"><Droplets className="w-3 h-3" />{entry.fluid_ml}ml</span>}
+                        {entry.caffeine_mg > 0 && <span className="flex items-center gap-0.5 text-orange-500"><Coffee className="w-3 h-3" />{entry.caffeine_mg}mg</span>}
                       </div>
                     </div>
                   );
@@ -642,7 +641,7 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
             </div>
           )}
 
-          {/* SESSION ANALYSIS - post-workout processing flow */}
+          {/* SESSION ANALYSIS */}
           <WorkoutAnalysisPanel
             activityData={data}
             activityId={activityId}
@@ -650,29 +649,29 @@ export default function ActivitySummaryScreen({ data, onShare, onClose, activity
           />
 
           {/* Attribution */}
-          <p className="text-center text-[10px] text-white/20">
+          <p className="text-center text-[10px] text-gray-300">
             {profile?.full_name && <span>{profile.full_name} · </span>}
             {new Date().toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
 
         {/* Action bar */}
-        <div className="flex-shrink-0 px-5 pb-5 pt-3 space-y-2.5 border-t border-white/8 bg-gray-950">
+        <div className="flex-shrink-0 px-5 pb-5 pt-3 space-y-2.5 border-t border-gray-100 bg-white">
           <button
             onClick={onShare}
             className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl font-bold text-sm transition-all hover:scale-[1.01] active:scale-[0.99]"
             style={{
-              background: `linear-gradient(135deg, ${sport.color}dd, ${sport.color})`,
-              color: '#060810',
-              boxShadow: `0 4px 20px ${sport.color}44`,
+              background: `linear-gradient(135deg, ${BRAND_YELLOW} 0%, #f5c400 100%)`,
+              color: '#1a1428',
+              boxShadow: `0 4px 16px ${BRAND_YELLOW}55`,
             }}
           >
-            <Share2 className="w-4.5 h-4.5" />
+            <Share2 className="w-4 h-4" />
             {language === 'es' ? 'Compartir Actividad' : 'Share Activity'}
           </button>
           <button
             onClick={onClose}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-medium text-white/50 hover:text-white/80 hover:bg-white/5 transition-all border border-white/8"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-all border border-gray-200"
           >
             <CheckCircle className="w-4 h-4" />
             {language === 'es' ? 'Listo' : 'Done'}
