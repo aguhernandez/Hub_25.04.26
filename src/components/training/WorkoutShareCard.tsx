@@ -213,68 +213,79 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
   const drawTransparentCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
     ctx.clearRect(0, 0, W, H);
 
+    // Dark background
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, '#111111');
+    grad.addColorStop(1, '#1e1e1e');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle yellow top bar
+    ctx.fillStyle = '#fdda36';
+    ctx.fillRect(0, 0, W, 8);
+
     // Sport label at top center
     ctx.fillStyle = '#ffffff';
-    ctx.font = f('700 30px');
+    ctx.font = f('700 44px');
     ctx.textAlign = 'center';
-    ctx.fillText(t('ENTRENAMIENTO', 'WORKOUT'), W / 2, 100);
+    ctx.fillText(t('ENTRENAMIENTO', 'WORKOUT'), W / 2, 120);
 
     // Thin divider
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(W * 0.3, 130);
-    ctx.lineTo(W * 0.7, 130);
+    ctx.moveTo(W * 0.2, 155);
+    ctx.lineTo(W * 0.8, 155);
     ctx.stroke();
 
     // Date + duration at top-left
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = f('400 26px');
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = f('400 34px');
     ctx.textAlign = 'left';
-    ctx.fillText(fmtDate(), 72, 200);
+    ctx.fillText(fmtDate(), 80, 240);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = f('700 48px');
-    ctx.fillText(formatDuration(workoutData.duration), 72, 270);
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.font = f('400 20px');
-    ctx.fillText(t('Duracion', 'Duration'), 72, 302);
+    ctx.font = f('700 72px');
+    ctx.fillText(formatDuration(workoutData.duration), 80, 340);
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = f('400 30px');
+    ctx.fillText(t('Duracion', 'Duration'), 80, 390);
 
-    // Two-column layout at bottom
-    const bottomY = H - 560;
+    // Two-column layout
+    const bottomY = H - 700;
     const colW = (W - 120 - 40) / 2;
     const leftX = 60;
     const rightX = leftX + colW + 40;
 
-    // Left column: 3 distinct stats
+    // Left column: 3 stats
     const stats = [
       { icon: 'kg',        value: `${Math.round(workoutData.totalVolume).toLocaleString()}`, unit: 'kg', label: t('Kg movidos', 'Kg moved') },
       { icon: 'exercises', value: String(workoutData.exerciseCount ?? 0),                   unit: '',   label: t('Ejercicios', 'Exercises') },
       { icon: 'sets',      value: String(workoutData.setCount ?? 0),                        unit: '',   label: t('Series', 'Sets') },
     ];
 
-    const statSpacing = 140;
+    const statSpacing = 180;
     stats.forEach((s, i) => {
       const sy = bottomY + i * statSpacing;
-      drawIcon(ctx, s.icon, leftX + 24, sy + 20, 28, '#fdda36');
+      drawIcon(ctx, s.icon, leftX + 24, sy + 20, 36, '#fdda36');
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = f('700 42px');
+      ctx.font = f('700 60px');
       ctx.textAlign = 'left';
 
       if (s.unit) {
-        ctx.fillText(s.value, leftX + 56, sy + 16);
+        ctx.fillText(s.value, leftX + 72, sy + 20);
         const vw = ctx.measureText(s.value).width;
         ctx.fillStyle = '#fdda36';
-        ctx.font = f('700 24px');
-        ctx.fillText(s.unit, leftX + 56 + vw + 8, sy + 16);
+        ctx.font = f('700 34px');
+        ctx.fillText(s.unit, leftX + 72 + vw + 10, sy + 20);
       } else {
-        ctx.fillText(s.value, leftX + 56, sy + 16);
+        ctx.fillText(s.value, leftX + 72, sy + 20);
       }
 
       ctx.fillStyle = 'rgba(255,255,255,0.45)';
-      ctx.font = f('400 20px');
-      ctx.fillText(s.label, leftX + 56, sy + 50);
+      ctx.font = f('400 28px');
+      ctx.fillText(s.label, leftX + 72, sy + 66);
     });
 
     // Right column: CTA + URL + Logo
@@ -282,25 +293,25 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
     const ctaUrl = getShareUrlShort();
 
     ctx.fillStyle = '#fdda36';
-    ctx.font = f('700 28px');
+    ctx.font = f('700 36px');
     ctx.textAlign = 'left';
     const ctaTitleLines = wrapText(ctx, ctaTitle, colW);
     let ctaTextY = bottomY + 20;
     ctaTitleLines.forEach((line) => {
       ctx.fillText(line, rightX, ctaTextY);
-      ctaTextY += 38;
+      ctaTextY += 48;
     });
 
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = `400 18px ${FONT_FALLBACK}`;
+    ctx.font = `400 24px ${FONT_FALLBACK}`;
     const urlLines = wrapText(ctx, ctaUrl, colW);
-    ctaTextY += 8;
+    ctaTextY += 12;
     urlLines.forEach((line) => {
       ctx.fillText(line, rightX, ctaTextY);
-      ctaTextY += 26;
+      ctaTextY += 32;
     });
 
-    drawLogoOrText(ctx, logoImgRef.current, rightX + colW / 2, H - 140, colW * 0.7, 80, f('700 36px'));
+    drawLogoOrText(ctx, logoImgRef.current, rightX + colW / 2, H - 120, colW * 0.85, 110, f('700 48px'));
   }, [workoutData, t, shareMode, activeProject, profile]);
 
   const generateCard = useCallback(() => {

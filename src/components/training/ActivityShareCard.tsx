@@ -408,12 +408,12 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       const sy = bottomY + i * statSpacing;
       drawIcon(ctx, s.icon, leftX + 24, sy + 20, 28, sport.color);
       ctx.fillStyle = '#ffffff';
-      ctx.font = f('700 42px');
+      ctx.font = f('700 56px');
       ctx.textAlign = 'left';
-      ctx.fillText(s.value, leftX + 56, sy + 16);
+      ctx.fillText(s.value, leftX + 56, sy + 24);
       ctx.fillStyle = 'rgba(255,255,255,0.45)';
-      ctx.font = f('400 20px');
-      ctx.fillText(s.label, leftX + 56, sy + 46);
+      ctx.font = f('400 28px');
+      ctx.fillText(s.label, leftX + 56, sy + 64);
     });
 
     // Right column: CTA + Logo
@@ -421,26 +421,26 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     const ctaUrl = getShareUrlShort();
 
     ctx.fillStyle = '#fdda36';
-    ctx.font = f('700 28px');
+    ctx.font = f('700 36px');
     ctx.textAlign = 'left';
     const ctaTitleLines = wrapText(ctx, ctaTitle, colW);
     let ctaTextY = bottomY + 20;
     ctaTitleLines.forEach((line) => {
       ctx.fillText(line, rightX, ctaTextY);
-      ctaTextY += 38;
+      ctaTextY += 48;
     });
 
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = `400 18px ${FONT_FALLBACK}`;
+    ctx.font = `400 24px ${FONT_FALLBACK}`;
     const urlLines = wrapText(ctx, ctaUrl, colW);
-    ctaTextY += 8;
+    ctaTextY += 12;
     urlLines.forEach((line) => {
       ctx.fillText(line, rightX, ctaTextY);
-      ctaTextY += 26;
+      ctaTextY += 32;
     });
 
-    // Logo
-    drawLogoOrText(ctx, logoImgRef.current, rightX + colW / 2, H - 140, colW * 0.7, 80, f('700 36px'));
+    // Logo - bigger
+    drawLogoOrText(ctx, logoImgRef.current, rightX + colW / 2, H - 120, colW * 0.85, 110, f('700 48px'));
 
     // Bottom accent line
     ctx.fillStyle = topBar;
@@ -451,42 +451,53 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   const drawTransparentCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
     ctx.clearRect(0, 0, W, H);
 
+    // Dark background
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, '#111111');
+    grad.addColorStop(1, '#1e1e1e');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Accent top bar
+    ctx.fillStyle = '#fdda36';
+    ctx.fillRect(0, 0, W, 8);
+
     // Sport type at top
     const sportLabel = (language === 'es' ? sport.labelEs : sport.label).toUpperCase();
     ctx.fillStyle = '#ffffff';
-    ctx.font = f('700 30px');
+    ctx.font = f('700 44px');
     ctx.textAlign = 'center';
-    ctx.fillText(sportLabel, W / 2, 100);
+    ctx.fillText(sportLabel, W / 2, 120);
 
     // Thin divider
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(W * 0.3, 130);
-    ctx.lineTo(W * 0.7, 130);
+    ctx.moveTo(W * 0.2, 155);
+    ctx.lineTo(W * 0.8, 155);
     ctx.stroke();
 
-    // 4 stats stacked vertically
+    // 4 stats stacked vertically - bigger
     const stats = getStatsArray();
-    let statY = 220;
-    const statGap = 170;
+    let statY = 260;
+    const statGap = 210;
 
     stats.forEach((s) => {
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.font = f('400 22px');
+      ctx.font = f('400 30px');
       ctx.textAlign = 'center';
       ctx.fillText(s.label, W / 2, statY);
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = f('700 64px');
-      ctx.fillText(s.value, W / 2, statY + 72);
+      ctx.font = f('700 84px');
+      ctx.fillText(s.value, W / 2, statY + 90);
 
       statY += statGap;
     });
 
-    // GPS route line (just the line, no background)
+    // GPS route line
     const routeY = statY + 20;
-    const routeH = 380;
+    const routeH = 320;
     const pts = activityData.gpsPoints;
     if (pts && pts.length >= 2) {
       const sampled = samplePoints(pts, 1200);
@@ -497,21 +508,32 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     // CTA
     const ctaY = routeY + routeH + 80;
     ctx.fillStyle = '#fdda36';
-    ctx.font = f('700 28px');
+    ctx.font = f('700 38px');
     ctx.textAlign = 'center';
     ctx.fillText(getCtaTitle(), W / 2, ctaY);
 
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.font = `400 20px ${FONT_FALLBACK}`;
-    ctx.fillText(getShareUrlShort(), W / 2, ctaY + 40);
+    ctx.font = `400 26px ${FONT_FALLBACK}`;
+    ctx.fillText(getShareUrlShort(), W / 2, ctaY + 52);
 
-    // Logo
-    drawLogoOrText(ctx, logoImgRef.current, W / 2, H - 120, W * 0.35, 70, f('700 32px'));
+    // Logo - bigger
+    drawLogoOrText(ctx, logoImgRef.current, W / 2, H - 110, W * 0.45, 100, f('700 44px'));
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
   // ─── Card Type 3: STORY ─────────────────────────────────────────────
   const drawStoryCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
     ctx.clearRect(0, 0, W, H);
+
+    // Dark background
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, '#0d0d0d');
+    grad.addColorStop(1, '#1a1a1a');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Accent top bar
+    ctx.fillStyle = '#fdda36';
+    ctx.fillRect(0, 0, W, 8);
 
     // Rounded map card at top
     const cardPad = 60;
@@ -546,45 +568,45 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
 
     // Stats row at bottom of card
     const stats = getStatsArray();
-    const rowY = cardY + cardH - 80;
+    const rowY = cardY + cardH - 90;
     const colW = cardW / stats.length;
 
     stats.forEach((s, i) => {
       const cx = cardX + colW * i + colW / 2;
       ctx.fillStyle = 'rgba(255,255,255,0.45)';
-      ctx.font = f('400 16px');
+      ctx.font = f('400 22px');
       ctx.textAlign = 'center';
       ctx.fillText(s.label, cx, rowY);
 
       ctx.fillStyle = '#ffffff';
-      ctx.font = f('700 28px');
-      ctx.fillText(s.value, cx, rowY + 36);
+      ctx.font = f('700 38px');
+      ctx.fillText(s.value, cx, rowY + 48);
     });
 
     // Sport type + date below card
-    const infoY = cardY + cardH + 60;
+    const infoY = cardY + cardH + 70;
     const sportLabel = (language === 'es' ? sport.labelEs : sport.label);
     ctx.fillStyle = '#ffffff';
-    ctx.font = f('700 36px');
+    ctx.font = f('700 48px');
     ctx.textAlign = 'center';
     ctx.fillText(sportLabel, W / 2, infoY);
 
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = f('400 22px');
-    ctx.fillText(fmtDate(), W / 2, infoY + 44);
+    ctx.font = f('400 30px');
+    ctx.fillText(fmtDate(), W / 2, infoY + 56);
 
     // CTA section
-    const ctaY = infoY + 120;
+    const ctaY = infoY + 140;
     ctx.fillStyle = '#fdda36';
-    ctx.font = f('700 28px');
+    ctx.font = f('700 38px');
     ctx.fillText(getCtaTitle(), W / 2, ctaY);
 
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = `400 20px ${FONT_FALLBACK}`;
-    ctx.fillText(getShareUrlShort(), W / 2, ctaY + 42);
+    ctx.font = `400 26px ${FONT_FALLBACK}`;
+    ctx.fillText(getShareUrlShort(), W / 2, ctaY + 52);
 
-    // Logo
-    drawLogoOrText(ctx, logoImgRef.current, W / 2, H - 140, W * 0.35, 70, f('700 32px'));
+    // Logo - bigger
+    drawLogoOrText(ctx, logoImgRef.current, W / 2, H - 110, W * 0.45, 100, f('700 44px'));
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
   // Generate card on canvas
