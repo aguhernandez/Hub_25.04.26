@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Check, Clock, Dumbbell, Play, X, ChevronDown, ChevronUp, Timer, Weight, Calendar, Trash2, Activity, Plus, CreditCard as Edit, Save, Calculator, Zap } from 'lucide-react';
+import { Check, Clock, Dumbbell, Play, X, ChevronDown, ChevronUp, Timer, Weight, Calendar, Trash2, Activity, Plus, CreditCard as Edit, Save, Calculator, Zap, Share2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
@@ -7,6 +7,7 @@ import { getExerciseName, getExerciseDescription } from '../utils/exerciseI18n';
 import PostTrainingFeedbackModal, { FeedbackData } from './PostTrainingFeedbackModal';
 import StrengthEstimator from './training/StrengthEstimator';
 import WorkoutSessionScreen from './training/WorkoutSessionScreen';
+import WorkoutShareCard from './training/WorkoutShareCard';
 import { updateATPComplianceForWorkout } from '../utils/atpIntegration';
 import Toast from './Toast';
 import { useToast } from '../hooks/useToast';
@@ -77,6 +78,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
   const [estimatorExerciseName, setEstimatorExerciseName] = useState<string>('');
   const [showSessionScreen, setShowSessionScreen] = useState(false);
   const [videoModal, setVideoModal] = useState<{ url: string; name: string; description?: string } | null>(null);
+  const [showShareCard, setShowShareCard] = useState(false);
 
   useEffect(() => {
     loadDailyWorkout();
@@ -1319,6 +1321,15 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
                 {language === 'es' ? 'Editar' : 'Edit'}
               </button>
             )}
+            {workout.status === 'completed' && (
+              <button
+                onClick={() => setShowShareCard(true)}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-500 text-white rounded-lg hover:from-cyan-600 hover:to-teal-600 transition-colors font-medium"
+              >
+                <Share2 className="w-4 h-4" />
+                {language === 'es' ? 'Compartir' : 'Share'}
+              </button>
+            )}
             <button
               onClick={handleDeleteWorkout}
               className="flex items-center justify-center gap-2 px-4 py-2 border border-red-600 text-red-600 dark:border-red-400 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors font-medium"
@@ -1546,6 +1557,13 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
         onSkip={handleFeedbackSkip}
         workoutData={getWorkoutShareData()}
       />
+
+      {showShareCard && (
+        <WorkoutShareCard
+          workoutData={getWorkoutShareData()}
+          onClose={() => setShowShareCard(false)}
+        />
+      )}
 
       <StrengthEstimator
         isOpen={showStrengthEstimator}

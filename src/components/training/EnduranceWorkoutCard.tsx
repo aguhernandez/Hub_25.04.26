@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Bike, PersonStanding, Waves, Dumbbell, Clock, Zap, ChevronDown, ChevronUp, RotateCcw, Play, Target, Activity, FileText, ClipboardCheck, CheckCircle2, ArrowLeftRight, Download, Share2, Info, AlertTriangle } from 'lucide-react';
 import { exportFitWorkout } from '../../utils/fit/exportFitFile';
+import ActivityShareCard from './ActivityShareCard';
 
 export interface WorkoutStep {
   id: string;
@@ -258,6 +259,7 @@ export default function EnduranceWorkoutCard({ workout, language, initialExpande
   const [fitExporting, setFitExporting] = useState(false);
   const [fitExportMsg, setFitExportMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showFitInfo, setShowFitInfo] = useState(false);
+  const [showShareCard, setShowShareCard] = useState(false);
 
   const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -536,7 +538,7 @@ export default function EnduranceWorkoutCard({ workout, language, initialExpande
           )}
 
           {workout.status === 'completed' ? (
-            <div className="px-4 pb-4 pt-2">
+            <div className="px-4 pb-4 pt-2 space-y-2">
               <div className="flex items-center gap-2 py-2.5 px-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                 <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
@@ -548,6 +550,13 @@ export default function EnduranceWorkoutCard({ workout, language, initialExpande
                   </span>
                 )}
               </div>
+              <button
+                onClick={() => setShowShareCard(true)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-600 hover:to-teal-600 text-white text-sm font-semibold transition-colors"
+              >
+                <Share2 className="w-4 h-4" />
+                {language === 'es' ? 'Compartir' : 'Share'}
+              </button>
             </div>
           ) : (
             <div className="px-4 pb-4 pt-2 flex flex-col gap-2">
@@ -579,6 +588,20 @@ export default function EnduranceWorkoutCard({ workout, language, initialExpande
             </div>
           )}
         </div>
+      )}
+
+      {showShareCard && (
+        <ActivityShareCard
+          activityData={{
+            sportType: workout.sport || 'cycling',
+            title: workout.name,
+            distanceKm: 0,
+            durationSeconds: (workout.estimated_duration_minutes || 0) * 60,
+            elevationGainM: 0,
+            date: workout.scheduled_date,
+          }}
+          onClose={() => setShowShareCard(false)}
+        />
       )}
     </div>
   );

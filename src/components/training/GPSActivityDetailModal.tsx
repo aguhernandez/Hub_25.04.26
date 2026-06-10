@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { X, MapPin, Clock, TrendingUp, Zap, Activity, Navigation, Mountain } from 'lucide-react';
+import { X, MapPin, Clock, TrendingUp, Zap, Activity, Navigation, Mountain, Share2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import ActivityMapViewer from './ActivityMapViewer';
+import ActivityShareCard from './ActivityShareCard';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 interface GPSActivityDetailModalProps {
@@ -49,6 +50,7 @@ export default function GPSActivityDetailModal({
   const { language } = useLanguage();
   const [gpsPoints, setGpsPoints] = useState<any[]>([]);
   const [loadingPoints, setLoadingPoints] = useState(false);
+  const [showShareCard, setShowShareCard] = useState(false);
 
   const raw = activityData?.raw_data || activityData || {};
   const name = activityData?.name || raw.name || (language === 'es' ? 'Actividad GPS' : 'GPS Activity');
@@ -221,8 +223,33 @@ export default function GPSActivityDetailModal({
               {gpsPoints.length} {language === 'es' ? 'puntos GPS registrados' : 'GPS points recorded'}
             </p>
           )}
+
+          <div className="flex justify-center pt-2">
+            <button
+              onClick={() => setShowShareCard(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-teal-500 text-white rounded-xl hover:from-cyan-600 hover:to-teal-600 transition-colors font-medium text-sm shadow-lg shadow-cyan-500/20"
+            >
+              <Share2 className="w-4 h-4" />
+              {language === 'es' ? 'Compartir' : 'Share'}
+            </button>
+          </div>
         </div>
       </div>
+
+      {showShareCard && (
+        <ActivityShareCard
+          activityData={{
+            sportType: sport || 'activity',
+            title: name,
+            distanceKm,
+            durationSeconds: durationSecs,
+            elevationGainM: elevationGain,
+            date,
+            gpsPoints: gpsPoints.length > 0 ? gpsPoints : undefined,
+          }}
+          onClose={() => setShowShareCard(false)}
+        />
+      )}
     </div>
   );
 }
