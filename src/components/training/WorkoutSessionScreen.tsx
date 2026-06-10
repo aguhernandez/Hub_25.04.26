@@ -66,6 +66,7 @@ interface WorkoutSessionScreenProps {
   onPause: () => void;
   workoutStartTime: number | null;
   onSetWorkoutStartTime: (t: number) => void;
+  onDismiss?: () => void;
 }
 
 function groupIntoSections(exercises: Exercise[]): WorkoutSection[] {
@@ -540,6 +541,7 @@ export default function WorkoutSessionScreen({
   onPause,
   workoutStartTime,
   onSetWorkoutStartTime,
+  onDismiss,
 }: WorkoutSessionScreenProps) {
   const { language } = useLanguage();
   const { profile } = useAuth();
@@ -838,15 +840,51 @@ export default function WorkoutSessionScreen({
       {showFeedback && (
         <PostTrainingFeedbackModal
           isOpen={showFeedback}
-          onClose={() => setShowFeedback(false)}
+          onClose={() => { setShowFeedback(false); if (onDismiss) onDismiss(); }}
           onSubmit={async (feedback) => {
-            setShowFeedback(false);
             await onComplete(feedback);
           }}
           onSkip={() => {
             setShowFeedback(false);
             onComplete({ rpe: 5, energy_level: 'normal', pain_level: 'none', mood: 'normal', feedback_notes: '' });
+            if (onDismiss) onDismiss();
           }}
+          workoutData={(() => {
+            let totalVolume = 0;
+            let bestSet: { exercise: string; weight: number; reps: number } | null = null;
+            let completedSets = 0;
+            const completedExercises = new Set<string>();
+
+            for (const exercise of exercises) {
+              const maxSets = getTotalSets(exercise);
+              for (let setNum = 1; setNum <= maxSets; setNum++) {
+                const key = `${exercise.workout_exercise_id}-${setNum}`;
+                const tracking = setTracking[key];
+                if (tracking?.reps && tracking?.weight) {
+                  totalVolume += tracking.reps * tracking.weight;
+                  completedSets++;
+                  completedExercises.add(exercise.workout_exercise_id);
+                  if (!bestSet || tracking.weight > bestSet.weight || (tracking.weight === bestSet.weight && tracking.reps > bestSet.reps)) {
+                    bestSet = { exercise: exercise.name, weight: tracking.weight, reps: tracking.reps };
+                  }
+                }
+              }
+            }
+
+            const durationMinutes = workoutStartTime
+              ? Math.round((Date.now() - workoutStartTime) / 60000)
+              : 60;
+
+            return {
+              date: workout?.scheduled_date || new Date().toISOString().split('T')[0],
+              duration: durationMinutes,
+              totalVolume,
+              bestSet,
+              exerciseCount: completedExercises.size,
+              setCount: completedSets,
+              workoutName: workout?.workouts?.name || workout?.name || undefined,
+            };
+          })()}
         />
       )}
 

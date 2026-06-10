@@ -1067,12 +1067,12 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
         setTracking={setTracking}
         onUpdateTracking={updateSetTracking}
         onComplete={async (feedback) => {
-          setShowSessionScreen(false);
           await handleFeedbackSubmit(feedback);
         }}
         onPause={() => setShowSessionScreen(false)}
         workoutStartTime={workoutStartTime}
         onSetWorkoutStartTime={setWorkoutStartTime}
+        onDismiss={() => setShowSessionScreen(false)}
       />
     );
   }
