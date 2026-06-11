@@ -11,6 +11,100 @@ const KRONA_ONE_URL = 'https://fonts.gstatic.com/s/kronaone/v14/jAnEgHdjHcjgfIb1
 const FONT_NAME = 'Krona One';
 const FONT_FALLBACK = 'sans-serif';
 
+// ─── OSM Tile Rendering ──────────────────────────────────────────────
+const TILE_SIZE = 256;
+const OSM_URL = 'https://tile.openstreetmap.org';
+
+function lon2tile(lon: number, z: number) { return ((lon + 180) / 360) * Math.pow(2, z); }
+function lat2tile(lat: number, z: number) {
+  const r = (lat * Math.PI) / 180;
+  return ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * Math.pow(2, z);
+}
+
+function fitZoom(minLat: number, maxLat: number, minLon: number, maxLon: number, w: number, h: number): number {
+  const pad = 0.25;
+  const dLat = maxLat - minLat || 0.001;
+  const dLon = maxLon - minLon || 0.001;
+  for (let z = 17; z >= 1; z--) {
+    const x1 = lon2tile(minLon - dLon * pad, z) * TILE_SIZE;
+    const x2 = lon2tile(maxLon + dLon * pad, z) * TILE_SIZE;
+    const y1 = lat2tile(maxLat + dLat * pad, z) * TILE_SIZE;
+    const y2 = lat2tile(minLat - dLat * pad, z) * TILE_SIZE;
+    if ((x2 - x1) <= w && (y2 - y1) <= h) return z;
+  }
+  return 1;
+}
+
+function latLonToPx(lat: number, lon: number, z: number): [number, number] {
+  return [lon2tile(lon, z) * TILE_SIZE, lat2tile(lat, z) * TILE_SIZE];
+}
+
+function loadTile(x: number, y: number, z: number): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('tile fail'));
+    img.src = `${OSM_URL}/${z}/${x}/${y}.png`;
+  });
+}
+
+async function renderMapTiles(
+  ctx: CanvasRenderingContext2D,
+  points: Array<{ latitude: number; longitude: number }>,
+  dx: number, dy: number, dw: number, dh: number
+): Promise<{ zoom: number; ox: number; oy: number } | null> {
+  if (points.length < 2) return null;
+  const lats = points.map(p => p.latitude);
+  const lons = points.map(p => p.longitude);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+
+  const zoom = fitZoom(minLat, maxLat, minLon, maxLon, dw, dh);
+  const cLat = (minLat + maxLat) / 2;
+  const cLon = (minLon + maxLon) / 2;
+  const [cpx, cpy] = latLonToPx(cLat, cLon, zoom);
+  const ox = cpx - dw / 2;
+  const oy = cpy - dh / 2;
+
+  const txMin = Math.floor(ox / TILE_SIZE);
+  const txMax = Math.floor((ox + dw) / TILE_SIZE);
+  const tyMin = Math.floor(oy / TILE_SIZE);
+  const tyMax = Math.floor((oy + dh) / TILE_SIZE);
+  const maxT = Math.pow(2, zoom);
+
+  const promises: Promise<{ img: HTMLImageElement; tx: number; ty: number } | null>[] = [];
+  for (let tx = txMin; tx <= txMax; tx++) {
+    for (let ty = tyMin; ty <= tyMax; ty++) {
+      const wx = ((tx % maxT) + maxT) % maxT;
+      if (ty < 0 || ty >= maxT) continue;
+      promises.push(loadTile(wx, ty, zoom).then(img => ({ img, tx, ty })).catch(() => null));
+    }
+  }
+  const tiles = await Promise.all(promises);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(dx, dy, dw, dh);
+  ctx.clip();
+  for (const t of tiles) {
+    if (!t) continue;
+    ctx.drawImage(t.img, dx + t.tx * TILE_SIZE - ox, dy + t.ty * TILE_SIZE - oy, TILE_SIZE, TILE_SIZE);
+  }
+  ctx.restore();
+  return { zoom, ox, oy };
+}
+
+function projectOnTiles(
+  points: Array<{ latitude: number; longitude: number }>,
+  zoom: number, ox: number, oy: number, dx: number, dy: number
+): Array<[number, number]> {
+  return points.map(p => {
+    const [px, py] = latLonToPx(p.latitude, p.longitude, zoom);
+    return [dx + px - ox, dy + py - oy];
+  });
+}
+
 const SPORT_META: Record<string, { label: string; labelEs: string; color: string }> = {
   run:             { label: 'Run',             labelEs: 'Carrera',          color: '#f5c400' },
   trail_run:       { label: 'Trail Run',       labelEs: 'Trail Run',        color: '#84cc16' },
@@ -325,57 +419,80 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   };
 
   // ─── Card Type 1: MAP ───────────────────────────────────────────────
-  const drawMapCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    ctx.clearRect(0, 0, W, H);
-
-    // Date top-left
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.font = f('400 26px');
-    ctx.textAlign = 'left';
-    ctx.fillText(fmtDate(), 72, 70);
-
-    // Sport type top-right
-    const sportLabel = (language === 'es' ? sport.labelEs : sport.label).toUpperCase();
-    ctx.fillStyle = sport.color;
-    ctx.font = f('700 22px');
-    ctx.textAlign = 'right';
-    ctx.fillText(sportLabel, W - 72, 70);
-
-    // GPS Map area (upper portion)
-    const mapX = 60, mapY = 110;
-    const mapW = W - 120, mapH = H * 0.52;
-
-    // Map background panel
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    roundRect(ctx, mapX, mapY, mapW, mapH, 28);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.lineWidth = 1;
-    roundRect(ctx, mapX, mapY, mapW, mapH, 28);
-    ctx.stroke();
+  const drawMapCard = useCallback(async (ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    // Dark base
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, W, H);
 
     const pts = activityData.gpsPoints;
+    const mapH = H * 0.65;
+
     if (pts && pts.length >= 2) {
       const sampled = samplePoints(pts, 1500);
-      const projected = projectPoints(sampled, mapX, mapY, mapW, mapH, 50);
-      drawRoute(ctx, projected, sport.color, 4.5, 24);
+      try {
+        const result = await renderMapTiles(ctx, sampled, 0, 0, W, mapH);
+        // Slight darken for contrast
+        ctx.fillStyle = 'rgba(10, 10, 30, 0.25)';
+        ctx.fillRect(0, 0, W, mapH);
+        if (result) {
+          const projected = projectOnTiles(sampled, result.zoom, result.ox, result.oy, 0, 0);
+          drawRoute(ctx, projected, sport.color, 5, 28);
+        }
+      } catch {
+        const projected = projectPoints(sampled, 0, 0, W, mapH, 60);
+        drawRoute(ctx, projected, sport.color, 5, 28);
+      }
     } else {
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.font = f('400 24px');
       ctx.textAlign = 'center';
-      ctx.fillText(language === 'es' ? 'Sin ruta GPS' : 'No GPS route', mapX + mapW / 2, mapY + mapH / 2);
+      ctx.fillText(language === 'es' ? 'Sin ruta GPS' : 'No GPS route', W / 2, mapH / 2);
     }
 
+    // Gradient fade from map to dark bottom
+    const fadeStart = mapH * 0.5;
+    const grad = ctx.createLinearGradient(0, fadeStart, 0, mapH + 60);
+    grad.addColorStop(0, 'rgba(26, 26, 46, 0)');
+    grad.addColorStop(0.6, 'rgba(26, 26, 46, 0.85)');
+    grad.addColorStop(1, 'rgba(26, 26, 46, 1)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, fadeStart, W, mapH + 60 - fadeStart);
+
+    // Solid dark below
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, mapH + 60, W, H - mapH - 60);
+
+    // Date pill top-left
+    const dateText = fmtDate();
+    ctx.font = f('400 26px');
+    const dateW = ctx.measureText(dateText).width;
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    roundRect(ctx, 50, 42, dateW + 36, 46, 23);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.textAlign = 'left';
+    ctx.fillText(dateText, 68, 74);
+
+    // Sport pill top-right
+    const sportLabel = (language === 'es' ? sport.labelEs : sport.label).toUpperCase();
+    ctx.font = f('700 22px');
+    const sportW = ctx.measureText(sportLabel).width;
+    ctx.fillStyle = sport.color + '33';
+    roundRect(ctx, W - 68 - sportW - 36, 42, sportW + 36, 46, 23);
+    ctx.fill();
+    ctx.fillStyle = sport.color;
+    ctx.textAlign = 'right';
+    ctx.fillText(sportLabel, W - 68, 74);
+
     // Bottom section: two columns
-    const bottomY = mapY + mapH + 40;
+    const bottomY = mapH - 20;
     const colW = (W - 120 - 40) / 2;
     const leftX = 60;
     const rightX = leftX + colW + 40;
 
-    // Left column: 4 stats
+    // Left column: stats
     const stats = getStatsArray();
     const statSpacing = 110;
-
     stats.forEach((s, i) => {
       const sy = bottomY + i * statSpacing;
       drawIcon(ctx, s.icon, leftX + 24, sy + 20, 28, sport.color);
@@ -388,10 +505,9 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       ctx.fillText(s.label, leftX + 56, sy + 64);
     });
 
-    // Right column: CTA + Logo (tight spacing)
+    // Right column: CTA + Logo
     const ctaTitle = getCtaTitle();
     const ctaUrl = getShareUrlShort();
-
     ctx.fillStyle = '#fdda36';
     ctx.font = f('700 36px');
     ctx.textAlign = 'left';
@@ -411,7 +527,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       ctaTextY += 32;
     });
 
-    // Logo immediately after URL
     const logoY = ctaTextY + 60;
     drawLogoOrText(ctx, logoImgRef.current, rightX + colW / 2, logoY, colW * 0.85, 100, f('700 48px'));
   }, [activityData, language, sport, shareMode, activeProject, profile]);
@@ -557,7 +672,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
   // Generate card on canvas
-  const generateCard = useCallback(() => {
+  const generateCard = useCallback(async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -568,7 +683,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     canvas.width = W;
     canvas.height = H;
 
-    if (cardType === 'map') drawMapCard(ctx, W, H);
+    if (cardType === 'map') await drawMapCard(ctx, W, H);
     else if (cardType === 'transparent') drawTransparentCard(ctx, W, H);
     else drawStoryCard(ctx, W, H);
   }, [cardType, drawMapCard, drawTransparentCard, drawStoryCard]);
@@ -766,7 +881,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
           {/* Canvas Preview */}
           <div
             className="rounded-xl overflow-hidden border border-neutral-200 dark:border-neutral-600"
-            style={{
+            style={cardType === 'map' ? { backgroundColor: '#1a1a2e' } : {
               backgroundImage: 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)',
               backgroundSize: '20px 20px',
               backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
