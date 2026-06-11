@@ -142,27 +142,27 @@ function computeLocalFallback(
 
 const CLASSIFICATION_STYLES = {
   green: {
-    bg: 'bg-emerald-500/10 border-emerald-500/30',
-    text: 'text-emerald-400',
-    badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    bg: 'bg-emerald-50 border-emerald-200',
+    text: 'text-emerald-700',
+    badge: 'bg-emerald-100 text-emerald-700 border-emerald-200',
     icon: CheckCircle,
     labelEN: 'On Track',
     labelES: 'En Objetivo',
     glow: '#10b981',
   },
   yellow: {
-    bg: 'bg-amber-500/10 border-amber-500/30',
-    text: 'text-amber-400',
-    badge: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    bg: 'bg-amber-50 border-amber-200',
+    text: 'text-amber-700',
+    badge: 'bg-amber-100 text-amber-700 border-amber-200',
     icon: AlertTriangle,
     labelEN: 'Needs Attention',
     labelES: 'Atención Requerida',
     glow: '#f59e0b',
   },
   red: {
-    bg: 'bg-red-500/10 border-red-500/30',
-    text: 'text-red-400',
-    badge: 'bg-red-500/20 text-red-300 border-red-500/40',
+    bg: 'bg-red-50 border-red-200',
+    text: 'text-red-700',
+    badge: 'bg-red-100 text-red-700 border-red-200',
     icon: XCircle,
     labelEN: 'High Stress',
     labelES: 'Alta Tensión',
@@ -287,25 +287,25 @@ export default function WorkoutAnalysisPanel({ activityData, activityId, planned
   const ClassIcon = classStyle?.icon ?? Loader2;
 
   return (
-    <div className="rounded-2xl border border-white/8 overflow-hidden" style={{ background: '#ffffff06' }}>
+    <div className="rounded-2xl border border-gray-100 overflow-hidden bg-white shadow-sm">
       {/* Header */}
-      <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-white/8">
-        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: '#fdda3615' }}>
-          <Activity className="w-3.5 h-3.5" style={{ color: '#fdda36' }} />
+      <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-gray-100">
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: '#fef9e0' }}>
+          <Activity className="w-3.5 h-3.5" style={{ color: '#7c3aed' }} />
         </div>
-        <span className="text-xs font-bold text-white/60 uppercase tracking-widest">
+        <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">
           {es ? 'Análisis de Sesión' : 'Session Analysis'}
         </span>
         <div className="ml-auto flex items-center gap-1.5">
           {(status === 'waiting') && (
-            <span className="flex items-center gap-1 text-[10px] text-white/30">
+            <span className="flex items-center gap-1 text-[10px] text-gray-400">
               <Loader2 className="w-3 h-3 animate-spin" />
               {es ? 'Analizando...' : 'Analyzing...'}
             </span>
           )}
           {status === 'done' && result?.source === 'satellite' && (
-            <span className="flex items-center gap-1 text-[10px] text-white/30">
-              <Satellite className="w-3 h-3 text-emerald-400" />
+            <span className="flex items-center gap-1 text-[10px] text-gray-400">
+              <Satellite className="w-3 h-3 text-emerald-500" />
               {es ? 'Satélite' : 'Satellite'}
             </span>
           )}
@@ -313,29 +313,26 @@ export default function WorkoutAnalysisPanel({ activityData, activityId, planned
       </div>
 
       <div className="p-4 space-y-3">
-        {/* Quick Feedback - always shown immediately */}
+        {/* Quick Feedback */}
         {result?.quick_feedback && (
-          <div className="flex items-start gap-2.5 rounded-xl p-3.5" style={{ background: '#fdda3608', border: '1px solid #fdda3618' }}>
-            <Zap className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: '#fdda36' }} />
-            <p className="text-sm text-white/75 leading-relaxed">{result.quick_feedback}</p>
+          <div className="flex items-start gap-2.5 rounded-xl p-3.5 bg-violet-50 border border-violet-100">
+            <Zap className="w-4 h-4 flex-shrink-0 mt-0.5 text-violet-600" />
+            <p className="text-sm text-gray-700 leading-relaxed">{result.quick_feedback}</p>
           </div>
         )}
 
         {/* Loading shimmer while waiting for satellite */}
         {status === 'waiting' && (
           <div className="space-y-2 animate-pulse">
-            <div className="h-14 rounded-xl bg-white/5" />
-            <div className="h-8 rounded-lg bg-white/4 w-3/4" />
+            <div className="h-14 rounded-xl bg-gray-100" />
+            <div className="h-8 rounded-lg bg-gray-50 w-3/4" />
           </div>
         )}
 
         {/* Classification Badge */}
         {status === 'done' && result && classStyle && (
           <>
-            <div
-              className={`rounded-xl p-4 border flex items-center gap-3.5 ${classStyle.bg}`}
-              style={{ boxShadow: `0 0 20px ${classStyle.glow}18` }}
-            >
+            <div className={`rounded-xl p-4 border flex items-center gap-3.5 ${classStyle.bg}`}>
               <div
                 className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{ background: classStyle.glow + '22' }}
@@ -347,7 +344,7 @@ export default function WorkoutAnalysisPanel({ activityData, activityId, planned
                   {es ? classStyle.labelES : classStyle.labelEN}
                 </p>
                 <div className="flex items-center gap-2">
-                  <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-1000"
                       style={{ width: `${result.final_score}%`, background: classStyle.glow }}
@@ -362,15 +359,15 @@ export default function WorkoutAnalysisPanel({ activityData, activityId, planned
 
             {/* Metrics pills */}
             <div className="flex flex-wrap gap-2">
-              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/6 border border-white/10">
-                <Clock className="w-3 h-3 text-white/40" />
-                <span className="text-[11px] font-semibold text-white/60">
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-50 border border-gray-200">
+                <Clock className="w-3 h-3 text-gray-400" />
+                <span className="text-[11px] font-semibold text-gray-600">
                   {result.duration_pct}% {es ? 'duración' : 'duration'}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/6 border border-white/10">
-                <TrendingUp className="w-3 h-3 text-white/40" />
-                <span className="text-[11px] font-semibold text-white/60">
+              <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gray-50 border border-gray-200">
+                <TrendingUp className="w-3 h-3 text-gray-400" />
+                <span className="text-[11px] font-semibold text-gray-600">
                   {es
                     ? {
                         on_target: 'Intensidad ideal',
@@ -390,9 +387,9 @@ export default function WorkoutAnalysisPanel({ activityData, activityId, planned
                 </span>
               </div>
               {result.updated_fitness !== undefined && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                  <TrendingUp className="w-3 h-3 text-emerald-400" />
-                  <span className="text-[11px] font-semibold text-emerald-300">
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200">
+                  <TrendingUp className="w-3 h-3 text-emerald-600" />
+                  <span className="text-[11px] font-semibold text-emerald-700">
                     Fitness {result.updated_fitness > 0 ? '+' : ''}{result.updated_fitness?.toFixed(1)}
                   </span>
                 </div>
@@ -401,23 +398,23 @@ export default function WorkoutAnalysisPanel({ activityData, activityId, planned
 
             {/* Insights collapsible */}
             {result.insights.length > 0 && (
-              <div className="rounded-xl overflow-hidden border border-white/8">
+              <div className="rounded-xl overflow-hidden border border-gray-100">
                 <button
                   onClick={() => setShowInsights(v => !v)}
-                  className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-white/4 transition-colors"
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 hover:bg-gray-50 transition-colors"
                 >
-                  <span className="text-[11px] font-bold text-white/40 uppercase tracking-widest">
+                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
                     {es ? 'Insights' : 'Insights'} ({result.insights.length})
                   </span>
                   {showInsights
-                    ? <ChevronUp className="w-3.5 h-3.5 text-white/30" />
-                    : <ChevronDown className="w-3.5 h-3.5 text-white/30" />}
+                    ? <ChevronUp className="w-3.5 h-3.5 text-gray-300" />
+                    : <ChevronDown className="w-3.5 h-3.5 text-gray-300" />}
                 </button>
                 {showInsights && (
-                  <div className="border-t border-white/8 px-3.5 py-2.5 space-y-1.5">
+                  <div className="border-t border-gray-100 px-3.5 py-2.5 space-y-1.5">
                     {result.insights.map((ins, i) => (
-                      <p key={i} className="text-xs text-white/60 leading-relaxed flex items-start gap-2">
-                        <span className="text-white/20 flex-shrink-0">•</span>
+                      <p key={i} className="text-xs text-gray-600 leading-relaxed flex items-start gap-2">
+                        <span className="text-violet-400 flex-shrink-0">•</span>
                         {ins}
                       </p>
                     ))}
