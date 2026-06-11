@@ -590,7 +590,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     ctx.fillText(getShareUrlShort(), W / 2, ctaY + 46);
 
     // Logo immediately after
-    drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 120, W * 0.45, 100, f('700 44px'));
+    drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 130, W * 0.45, 100, f('700 44px'));
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
   // ─── Card Type 3: STORY ─────────────────────────────────────────────
@@ -882,7 +882,8 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
           <div
             className="rounded-xl overflow-hidden border border-neutral-200 dark:border-neutral-600"
             style={cardType === 'map' ? { backgroundColor: '#1a1a2e' } : {
-              backgroundImage: 'linear-gradient(45deg, #e5e7eb 25%, transparent 25%), linear-gradient(-45deg, #e5e7eb 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e5e7eb 75%), linear-gradient(-45deg, transparent 75%, #e5e7eb 75%)',
+              backgroundColor: '#1c1c1c',
+              backgroundImage: 'linear-gradient(45deg, #2a2a2a 25%, transparent 25%), linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2a 75%), linear-gradient(-45deg, transparent 75%, #2a2a2a 75%)',
               backgroundSize: '20px 20px',
               backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
             }}
