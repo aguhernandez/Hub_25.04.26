@@ -57,7 +57,7 @@ const BiologicalPassportPage = lazy(() => import('./pages/BiologicalPassportPage
 const TrainerAthleteNutritionPage = lazy(() => import('./pages/TrainerAthleteNutritionPage'));
 const LiveRacePage = lazy(() => import('./pages/LiveRacePage'));
 import AdaptiveNavigation from './components/AdaptiveNavigation';
-import PWAInstallPrompt from './components/PWAInstallPrompt';
+
 import AppUpdateBanner from './components/AppUpdateBanner';
 import { removePushListeners, deletePushToken } from './services/pushNotificationService';
 
@@ -433,7 +433,7 @@ function App() {
         </Layout>
       )}
       <AdaptiveNavigation currentPage={currentPage} onNavigate={setCurrentPage} />
-      <PWAInstallPrompt />
+
       <AppUpdateBanner />
     </>
   );
