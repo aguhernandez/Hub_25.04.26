@@ -17,12 +17,14 @@
     "restore": "node restore-backup.js"
   },
   "dependencies": {
+    "@capacitor-community/media": "^9.1.0",
     "@capacitor/android": "^7.6.5",
     "@capacitor/app": "^7.0.0",
     "@capacitor/browser": "^7.0.0",
     "@capacitor/camera": "^7.0.0",
     "@capacitor/cli": "^7.6.5",
     "@capacitor/core": "^7.6.5",
+    "@capacitor/filesystem": "^8.1.2",
     "@capacitor/geolocation": "^7.0.0",
     "@capacitor/ios": "^7.6.5",
     "@capacitor/push-notifications": "^7.0.0",

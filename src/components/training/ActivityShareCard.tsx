@@ -316,6 +316,9 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   const [sharing, setSharing] = useState(false);
   const [shared, setShared] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [fontLoaded, setFontLoaded] = useState(false);
   const [logoLoaded, setLogoLoaded] = useState(false);
@@ -695,32 +698,103 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   }, [ready, fontLoaded, logoLoaded, generateCard]);
 
   // ─── Share Handlers ─────────────────────────────────────────────────
-  const handleDownload = async () => {
+  const handleSaveToGallery = async () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
-    if (!blob) return;
-    const dateStr = activityData.date || new Date().toISOString().split('T')[0];
-    const fileName = `asciende-${cardType}-${activityData.sportType}-${dateStr}.png`;
+    if (!canvas || saving) return;
 
-    if (navigator.share) {
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const dateStr = activityData.date || new Date().toISOString().split('T')[0];
+      const fileName = `asciende-${activityData.sportType}-${dateStr}.png`;
+
+      let platform = 'web';
       try {
-        const file = new File([blob], fileName, { type: 'image/png' });
-        if (navigator.canShare?.({ files: [file] })) {
-          await navigator.share({ files: [file] });
-          return;
-        }
-      } catch (e: any) {
-        if (e?.name === 'AbortError') return;
-      }
-    }
+        const { Capacitor } = await import('@capacitor/core');
+        if (Capacitor.isNativePlatform()) platform = Capacitor.getPlatform();
+      } catch { /* web */ }
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    a.click();
-    URL.revokeObjectURL(url);
+      if (platform === 'ios' || platform === 'android') {
+        // Native: save to photo library via @capacitor-community/media
+        const base64 = canvas.toDataURL('image/png').split(',')[1];
+        try {
+          const { Media } = await import('@capacitor-community/media');
+
+          // Ensure the "Asciende" album exists
+          let albumId: string | undefined;
+          try {
+            const { albums } = await Media.getAlbums();
+            const existing = albums.find((a: any) =>
+              a.name?.toLowerCase() === 'asciende'
+            );
+            if (existing) {
+              albumId = existing.identifier ?? existing.id;
+            } else {
+              const created = await Media.createAlbum({ name: 'Asciende' });
+              albumId = created.identifier ?? created.id;
+            }
+          } catch {
+            // Album operations not supported on this device — save to default Photos
+          }
+
+          await Media.savePhoto({
+            base64String: base64,
+            albumIdentifier: albumId,
+            fileName,
+          });
+
+          setSavedOk(true);
+          setTimeout(() => setSavedOk(false), 3000);
+        } catch (mediaErr: any) {
+          // Fallback: write to filesystem (Android) or prompt share (iOS)
+          if (platform === 'android') {
+            try {
+              const { Filesystem, Directory } = await import('@capacitor/filesystem');
+              await Filesystem.writeFile({
+                path: `Pictures/Asciende/${fileName}`,
+                data: base64,
+                directory: Directory.ExternalStorage,
+                recursive: true,
+              });
+              setSavedOk(true);
+              setTimeout(() => setSavedOk(false), 3000);
+            } catch {
+              setSaveError('Could not save to gallery');
+              setTimeout(() => setSaveError(null), 3000);
+            }
+          } else {
+            // iOS fallback: share sheet (user can tap "Save Image")
+            const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
+            if (blob) {
+              const file = new File([blob], fileName, { type: 'image/png' });
+              await navigator.share({ files: [file] });
+              setSavedOk(true);
+              setTimeout(() => setSavedOk(false), 3000);
+            }
+          }
+        }
+      } else {
+        // Web: trigger file download
+        const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        setSavedOk(true);
+        setTimeout(() => setSavedOk(false), 2500);
+      }
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        setSaveError('Could not save');
+        setTimeout(() => setSaveError(null), 3000);
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCopyLink = async () => {
@@ -764,14 +838,14 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
         setShared(true);
         setTimeout(() => setShared(false), 3000);
       } else {
-        await handleDownload();
+        await handleSaveToGallery();
         await navigator.clipboard.writeText(shareUrl).catch(() => {});
         setShared(true);
         setTimeout(() => setShared(false), 3000);
       }
     } catch (e: any) {
       if (e?.name !== 'AbortError') {
-        await handleDownload();
+        await handleSaveToGallery();
       }
     } finally {
       setSharing(false);
@@ -900,11 +974,30 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
           {/* Actions */}
           <div className="flex gap-2">
             <button
-              onClick={handleDownload}
-              className="flex items-center gap-1.5 px-3 py-2.5 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 text-xs font-medium rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
+              onClick={handleSaveToGallery}
+              disabled={saving}
+              className={`flex items-center gap-1.5 px-3 py-2.5 border text-xs font-medium rounded-xl transition-all ${
+                savedOk
+                  ? 'border-green-400 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
+                  : saveError
+                  ? 'border-red-400 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20'
+                  : 'border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+              } disabled:opacity-60 disabled:cursor-not-allowed`}
             >
-              <Download className="w-4 h-4" />
-              {language === 'es' ? 'Guardar' : 'Save'}
+              {saving ? (
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : savedOk ? (
+                <CheckCircle className="w-4 h-4" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              {saving
+                ? (language === 'es' ? 'Guardando...' : 'Saving...')
+                : savedOk
+                ? (language === 'es' ? '¡Guardado!' : 'Saved!')
+                : saveError
+                ? (language === 'es' ? 'Error' : 'Error')
+                : (language === 'es' ? 'Guardar' : 'Save')}
             </button>
             <button
               onClick={handleCopyLink}
