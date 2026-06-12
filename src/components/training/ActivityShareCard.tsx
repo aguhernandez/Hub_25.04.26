@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Share2, Download, X, CheckCircle, MapPin, Clock, Zap, Mountain } from 'lucide-react';
+import { Share2, Download, X, CheckCircle, MapPin, Clock, Zap, Mountain, Link2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -318,6 +318,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   const [ready, setReady] = useState(false);
   const [fontLoaded, setFontLoaded] = useState(false);
   const [logoLoaded, setLogoLoaded] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const sport = SPORT_META[activityData.sportType] ?? SPORT_META['run'];
   const f = (w: string) => `${w} ${FONT_NAME}, ${FONT_FALLBACK}`;
@@ -669,7 +670,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     return () => cancelAnimationFrame(raf);
   }, [ready, fontLoaded, logoLoaded, generateCard]);
 
-  // ─── Save to Camera Roll (silent, no dialogs) ─────────────────────
+  // ─── Save to Camera Roll ─────────────────────────────────────────
   const handleSaveToGallery = async () => {
     const canvas = canvasRef.current;
     if (!canvas || saving) return;
@@ -688,9 +689,18 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       } catch { /* web */ }
 
       if (platform === 'ios' || platform === 'android') {
-        const base64 = canvas.toDataURL('image/png').split(',')[1];
         const { Media } = await import('@capacitor-community/media');
 
+        // Request permission first (this prompts the user on first use)
+        try {
+          await (Media as any).getPermissions?.();
+        } catch {
+          // Older versions don't have getPermissions — savePhoto will prompt
+        }
+
+        const base64 = canvas.toDataURL('image/png').split(',')[1];
+
+        // Save directly to Camera Roll (default album if Asciende album fails)
         let albumId: string | undefined;
         try {
           const { albums } = await Media.getAlbums();
@@ -704,14 +714,14 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
             albumId = created.identifier ?? created.id;
           }
         } catch {
-          // Album ops not supported — save to default Photos
+          // Album ops failed — save to default Camera Roll
         }
 
         await Media.savePhoto({
-          base64String: base64,
+          path: `data:image/png;base64,${base64}`,
           albumIdentifier: albumId,
           fileName,
-        });
+        } as any);
 
         setSavedOk(true);
         setTimeout(() => setSavedOk(false), 3000);
@@ -738,37 +748,35 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     }
   };
 
-  // ─── Share via native share sheet (includes Instagram as option) ───
+  // ─── Share: Try Instagram Stories sticker first, then native share ──
   const handleShare = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     setSharing(true);
     try {
-      // For transparent/story cards, first try Instagram Stories sticker directly on native
-      if (cardType === 'transparent' || cardType === 'story') {
-        try {
-          const { Capacitor } = await import('@capacitor/core');
-          if (Capacitor.isNativePlatform()) {
-            const base64 = canvas.toDataURL('image/png').split(',')[1];
-            if (base64) {
-              const { default: InstagramStories } = await import('../../plugins/instagram-stories');
-              await InstagramStories.shareSticker({
-                stickerImage: base64,
-                appId: 'pro.asciende.app',
-                backgroundTopColor: '#000000',
-                backgroundBottomColor: '#1a1a2e',
-              });
-              setShared(true);
-              setTimeout(() => setShared(false), 3000);
-              return;
-            }
+      // On native platforms, always try Instagram Stories sticker first (like Strava)
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        if (Capacitor.isNativePlatform()) {
+          const base64 = canvas.toDataURL('image/png').split(',')[1];
+          if (base64) {
+            const { default: InstagramStories } = await import('../../plugins/instagram-stories');
+            await InstagramStories.shareSticker({
+              stickerImage: base64,
+              appId: 'pro.asciende.app',
+              backgroundTopColor: '#000000',
+              backgroundBottomColor: '#1a1a2e',
+            });
+            setShared(true);
+            setTimeout(() => setShared(false), 3000);
+            return;
           }
-        } catch {
-          // Instagram not installed or sticker failed — fall through to native share sheet
         }
+      } catch {
+        // Instagram not installed or sticker failed — fall through to native share sheet
       }
 
-      // Native share sheet (works for all platforms, Instagram appears as option)
+      // Native share sheet fallback
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
       if (!blob) return;
 
@@ -799,7 +807,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
         setShared(true);
         setTimeout(() => setShared(false), 3000);
       } else {
-        // Fallback: save + copy URL
         await handleSaveToGallery();
         await navigator.clipboard.writeText(shareUrl).catch(() => {});
         setShared(true);
@@ -822,8 +829,23 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     { id: 'story', label: 'Story', labelEs: 'Story', desc: 'Card with route', descEs: 'Tarjeta con ruta' },
   ];
 
+  const handleCopyLink = async () => {
+    const url = getShareUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setCopied(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-neutral-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-3 overflow-y-auto">
+    <div
+      className="fixed inset-0 bg-neutral-950/80 backdrop-blur-sm flex items-center justify-center z-[60] p-3 overflow-y-auto"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       <div className="bg-white dark:bg-neutral-800 rounded-2xl max-w-lg w-full my-4 shadow-2xl border border-neutral-200 dark:border-neutral-700 overflow-hidden">
 
         {/* Header */}
@@ -933,12 +955,12 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
             )}
           </div>
 
-          {/* Actions: Save + Share (no dedicated Instagram button) */}
+          {/* Actions: Save + Copy Link + Share */}
           <div className="flex gap-2">
             <button
               onClick={handleSaveToGallery}
               disabled={saving}
-              className={`flex items-center gap-1.5 px-4 py-2.5 border text-xs font-medium rounded-xl transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-2.5 border text-xs font-medium rounded-xl transition-all ${
                 savedOk
                   ? 'border-green-400 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
                   : saveError
@@ -956,10 +978,21 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
               {saving
                 ? (language === 'es' ? 'Guardando...' : 'Saving...')
                 : savedOk
-                ? (language === 'es' ? 'Guardado en Fotos' : 'Saved to Photos')
+                ? (language === 'es' ? 'Guardado' : 'Saved')
                 : saveError
                 ? saveError
                 : (language === 'es' ? 'Guardar' : 'Save')}
+            </button>
+            <button
+              onClick={handleCopyLink}
+              className={`flex items-center gap-1.5 px-3 py-2.5 border text-xs font-medium rounded-xl transition-all ${
+                copied
+                  ? 'border-green-400 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
+                  : 'border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+              }`}
+            >
+              {copied ? <CheckCircle className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
+              {copied ? (language === 'es' ? 'Copiado' : 'Copied') : 'Link'}
             </button>
             <button
               onClick={handleShare}
@@ -981,8 +1014,8 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
 
           <p className="text-[9px] text-center text-neutral-400 dark:text-neutral-500">
             {language === 'es'
-              ? 'Compartir abre opciones nativas: Instagram Stories, WhatsApp, y mas'
-              : 'Share opens native options: Instagram Stories, WhatsApp, and more'}
+              ? 'Compartir abre Instagram Stories directamente (o mas opciones si no esta instalado)'
+              : 'Share opens Instagram Stories directly (or more options if not installed)'}
           </p>
         </div>
       </div>
