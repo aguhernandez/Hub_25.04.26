@@ -11,7 +11,6 @@ const KRONA_ONE_URL = 'https://fonts.gstatic.com/s/kronaone/v14/jAnEgHdjHcjgfIb1
 const FONT_NAME = 'Krona One';
 const FONT_FALLBACK = 'sans-serif';
 
-// ─── OSM Tile Rendering ──────────────────────────────────────────────
 const TILE_SIZE = 256;
 const OSM_URL = 'https://tile.openstreetmap.org';
 
@@ -112,9 +111,9 @@ const SPORT_META: Record<string, { label: string; labelEs: string; color: string
   mountain_bike:   { label: 'Mountain Bike',   labelEs: 'Bicicleta MTB',    color: '#f97316' },
   gravel_bike:     { label: 'Gravel Bike',     labelEs: 'Gravel',           color: '#a3e635' },
   open_water_swim: { label: 'Open Water Swim', labelEs: 'Aguas Abiertas',   color: '#06b6d4' },
-  swim:            { label: 'Swimming',        labelEs: 'Natación',         color: '#06b6d4' },
+  swim:            { label: 'Swimming',        labelEs: 'Natacion',         color: '#06b6d4' },
   hike:            { label: 'Hike',            labelEs: 'Senderismo',       color: '#d97706' },
-  nordic_ski:      { label: 'Nordic Ski',      labelEs: 'Esquí Nórdico',    color: '#7dd3fc' },
+  nordic_ski:      { label: 'Nordic Ski',      labelEs: 'Esqui Nordico',    color: '#7dd3fc' },
 };
 
 export interface ActivityShareData {
@@ -215,7 +214,6 @@ function drawRoute(
   ctx.lineWidth = lineWidth;
   ctx.stroke();
 
-  // Start dot
   ctx.fillStyle = '#22c55e';
   ctx.beginPath();
   ctx.arc(projected[0][0], projected[0][1], lineWidth * 2.5, 0, Math.PI * 2);
@@ -224,7 +222,6 @@ function drawRoute(
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // End dot
   const last = projected[projected.length - 1];
   ctx.fillStyle = '#ef4444';
   ctx.beginPath();
@@ -325,7 +322,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   const sport = SPORT_META[activityData.sportType] ?? SPORT_META['run'];
   const f = (w: string) => `${w} ${FONT_NAME}, ${FONT_FALLBACK}`;
 
-  // Load Krona One font
   useEffect(() => {
     const font = new FontFace(FONT_NAME, `url(${KRONA_ONE_URL})`);
     font.load().then((loaded) => {
@@ -334,7 +330,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     }).catch(() => setFontLoaded(true));
   }, []);
 
-  // Load logo
   useEffect(() => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -343,7 +338,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     img.src = asciendeLogoSrc;
   }, []);
 
-  // Load active project
   useEffect(() => {
     if (!profile?.id) { setReady(true); return; }
     supabase
@@ -422,7 +416,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
 
   // ─── Card Type 1: MAP ───────────────────────────────────────────────
   const drawMapCard = useCallback(async (ctx: CanvasRenderingContext2D, W: number, H: number) => {
-    // Dark base
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, 0, W, H);
 
@@ -433,7 +426,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       const sampled = samplePoints(pts, 1500);
       try {
         const result = await renderMapTiles(ctx, sampled, 0, 0, W, mapH);
-        // Slight darken for contrast
         ctx.fillStyle = 'rgba(10, 10, 30, 0.25)';
         ctx.fillRect(0, 0, W, mapH);
         if (result) {
@@ -451,7 +443,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       ctx.fillText(language === 'es' ? 'Sin ruta GPS' : 'No GPS route', W / 2, mapH / 2);
     }
 
-    // Gradient fade from map to dark bottom
     const fadeStart = mapH * 0.5;
     const grad = ctx.createLinearGradient(0, fadeStart, 0, mapH + 60);
     grad.addColorStop(0, 'rgba(26, 26, 46, 0)');
@@ -460,11 +451,9 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     ctx.fillStyle = grad;
     ctx.fillRect(0, fadeStart, W, mapH + 60 - fadeStart);
 
-    // Solid dark below
     ctx.fillStyle = '#1a1a2e';
     ctx.fillRect(0, mapH + 60, W, H - mapH - 60);
 
-    // Date pill top-left
     const dateText = fmtDate();
     ctx.font = f('400 26px');
     const dateW = ctx.measureText(dateText).width;
@@ -475,7 +464,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     ctx.textAlign = 'left';
     ctx.fillText(dateText, 68, 74);
 
-    // Sport pill top-right
     const sportLabel = (language === 'es' ? sport.labelEs : sport.label).toUpperCase();
     ctx.font = f('700 22px');
     const sportW = ctx.measureText(sportLabel).width;
@@ -486,13 +474,11 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     ctx.textAlign = 'right';
     ctx.fillText(sportLabel, W - 68, 74);
 
-    // Bottom section: two columns
     const bottomY = mapH - 20;
     const colW = (W - 120 - 40) / 2;
     const leftX = 60;
     const rightX = leftX + colW + 40;
 
-    // Left column: stats
     const stats = getStatsArray();
     const statSpacing = 110;
     stats.forEach((s, i) => {
@@ -507,7 +493,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       ctx.fillText(s.label, leftX + 56, sy + 64);
     });
 
-    // Right column: CTA + Logo
     const ctaTitle = getCtaTitle();
     const ctaUrl = getShareUrlShort();
     ctx.fillStyle = '#fdda36';
@@ -533,18 +518,17 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     drawLogoOrText(ctx, logoImgRef.current, rightX + colW / 2, logoY, colW * 0.85, 100, f('700 48px'));
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
-  // ─── Card Type 2: TRANSPARENT ───────────────────────────────────────
+  // ─── Card Type 2: TRANSPARENT (sticker for Instagram Stories) ───────
   const drawTransparentCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    // Clear to fully transparent — no background fill
     ctx.clearRect(0, 0, W, H);
 
-    // Sport type at top
     const sportLabel = (language === 'es' ? sport.labelEs : sport.label).toUpperCase();
     ctx.fillStyle = '#ffffff';
     ctx.font = f('700 44px');
     ctx.textAlign = 'center';
     ctx.fillText(sportLabel, W / 2, 100);
 
-    // Thin divider
     ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -552,7 +536,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     ctx.lineTo(W * 0.8, 135);
     ctx.stroke();
 
-    // 4 stats stacked vertically - bigger
     const stats = getStatsArray();
     let statY = 240;
     const statGap = 210;
@@ -570,7 +553,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       statY += statGap;
     });
 
-    // GPS route line
     const routeY = statY + 20;
     const routeH = 320;
     const pts = activityData.gpsPoints;
@@ -580,7 +562,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       drawRoute(ctx, projected, sport.color, 5, 28);
     }
 
-    // CTA + Logo (tight spacing)
     const ctaY = routeY + routeH + 80;
     ctx.fillStyle = '#fdda36';
     ctx.font = f('700 38px');
@@ -591,15 +572,14 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     ctx.font = `400 26px ${FONT_FALLBACK}`;
     ctx.fillText(getShareUrlShort(), W / 2, ctaY + 46);
 
-    // Logo immediately after
     drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 130, W * 0.45, 100, f('700 44px'));
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
   // ─── Card Type 3: STORY ─────────────────────────────────────────────
   const drawStoryCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    // Clear to transparent
     ctx.clearRect(0, 0, W, H);
 
-    // Rounded map card at top
     const cardPad = 60;
     const cardX = cardPad;
     const cardY = 80;
@@ -607,7 +587,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     const cardH = 700;
     const cardR = 36;
 
-    // Card background with subtle fill
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
     roundRect(ctx, cardX, cardY, cardW, cardH, cardR);
     ctx.fill();
@@ -616,7 +595,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     roundRect(ctx, cardX, cardY, cardW, cardH, cardR);
     ctx.stroke();
 
-    // GPS route inside card
     const pts = activityData.gpsPoints;
     if (pts && pts.length >= 2) {
       const sampled = samplePoints(pts, 1500);
@@ -630,7 +608,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       ctx.fillText(language === 'es' ? 'Sin ruta GPS' : 'No GPS route', cardX + cardW / 2, cardY + cardH / 2 - 40);
     }
 
-    // Stats row at bottom of card
     const stats = getStatsArray();
     const rowY = cardY + cardH - 90;
     const colW = cardW / stats.length;
@@ -647,19 +624,17 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       ctx.fillText(s.value, cx, rowY + 48);
     });
 
-    // Sport type + date below card
     const infoY = cardY + cardH + 70;
-    const sportLabel = (language === 'es' ? sport.labelEs : sport.label);
+    const sportLabelFull = (language === 'es' ? sport.labelEs : sport.label);
     ctx.fillStyle = '#ffffff';
     ctx.font = f('700 48px');
     ctx.textAlign = 'center';
-    ctx.fillText(sportLabel, W / 2, infoY);
+    ctx.fillText(sportLabelFull, W / 2, infoY);
 
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = f('400 30px');
     ctx.fillText(fmtDate(), W / 2, infoY + 56);
 
-    // CTA section (tight spacing with logo)
     const ctaY = infoY + 130;
     ctx.fillStyle = '#fdda36';
     ctx.font = f('700 38px');
@@ -669,11 +644,9 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     ctx.font = `400 26px ${FONT_FALLBACK}`;
     ctx.fillText(getShareUrlShort(), W / 2, ctaY + 46);
 
-    // Logo immediately after
     drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 120, W * 0.45, 100, f('700 44px'));
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
-  // Generate card on canvas
   const generateCard = useCallback(async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -696,7 +669,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     return () => cancelAnimationFrame(raf);
   }, [ready, fontLoaded, logoLoaded, generateCard]);
 
-  // ─── Share Handlers ─────────────────────────────────────────────────
+  // ─── Save to Camera Roll (silent, no dialogs) ─────────────────────
   const handleSaveToGallery = async () => {
     const canvas = canvasRef.current;
     if (!canvas || saving) return;
@@ -715,64 +688,33 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       } catch { /* web */ }
 
       if (platform === 'ios' || platform === 'android') {
-        // Native: save to photo library via @capacitor-community/media
         const base64 = canvas.toDataURL('image/png').split(',')[1];
+        const { Media } = await import('@capacitor-community/media');
+
+        let albumId: string | undefined;
         try {
-          const { Media } = await import('@capacitor-community/media');
-
-          // Ensure the "Asciende" album exists
-          let albumId: string | undefined;
-          try {
-            const { albums } = await Media.getAlbums();
-            const existing = albums.find((a: any) =>
-              a.name?.toLowerCase() === 'asciende'
-            );
-            if (existing) {
-              albumId = existing.identifier ?? existing.id;
-            } else {
-              const created = await Media.createAlbum({ name: 'Asciende' });
-              albumId = created.identifier ?? created.id;
-            }
-          } catch {
-            // Album operations not supported on this device — save to default Photos
-          }
-
-          await Media.savePhoto({
-            base64String: base64,
-            albumIdentifier: albumId,
-            fileName,
-          });
-
-          setSavedOk(true);
-          setTimeout(() => setSavedOk(false), 3000);
-        } catch (mediaErr: any) {
-          // Fallback: write to filesystem (Android) or prompt share (iOS)
-          if (platform === 'android') {
-            try {
-              const { Filesystem, Directory } = await import('@capacitor/filesystem');
-              await Filesystem.writeFile({
-                path: `Pictures/Asciende/${fileName}`,
-                data: base64,
-                directory: Directory.ExternalStorage,
-                recursive: true,
-              });
-              setSavedOk(true);
-              setTimeout(() => setSavedOk(false), 3000);
-            } catch {
-              setSaveError('Could not save to gallery');
-              setTimeout(() => setSaveError(null), 3000);
-            }
+          const { albums } = await Media.getAlbums();
+          const existing = albums.find((a: any) =>
+            a.name?.toLowerCase() === 'asciende'
+          );
+          if (existing) {
+            albumId = existing.identifier ?? existing.id;
           } else {
-            // iOS fallback: share sheet (user can tap "Save Image")
-            const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
-            if (blob) {
-              const file = new File([blob], fileName, { type: 'image/png' });
-              await navigator.share({ files: [file] });
-              setSavedOk(true);
-              setTimeout(() => setSavedOk(false), 3000);
-            }
+            const created = await Media.createAlbum({ name: 'Asciende' });
+            albumId = created.identifier ?? created.id;
           }
+        } catch {
+          // Album ops not supported — save to default Photos
         }
+
+        await Media.savePhoto({
+          base64String: base64,
+          albumIdentifier: albumId,
+          fileName,
+        });
+
+        setSavedOk(true);
+        setTimeout(() => setSavedOk(false), 3000);
       } else {
         // Web: trigger file download
         const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
@@ -788,7 +730,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       }
     } catch (e: any) {
       if (e?.name !== 'AbortError') {
-        setSaveError('Could not save');
+        setSaveError(language === 'es' ? 'No se pudo guardar' : 'Could not save');
         setTimeout(() => setSaveError(null), 3000);
       }
     } finally {
@@ -796,53 +738,37 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     }
   };
 
-  const shareToInstagramStory = async (): Promise<boolean> => {
-    const canvas = canvasRef.current;
-    if (!canvas) return false;
-
-    try {
-      const { Capacitor } = await import('@capacitor/core');
-      if (!Capacitor.isNativePlatform()) return false;
-
-      const base64 = canvas.toDataURL('image/png').split(',')[1];
-      if (!base64) return false;
-
-      const { default: InstagramStories } = await import('../../plugins/instagram-stories');
-      await InstagramStories.shareSticker({
-        stickerImage: base64,
-        appId: 'pro.asciende.app',
-        backgroundTopColor: '#000000',
-        backgroundBottomColor: '#1a1a2e',
-      });
-      return true;
-    } catch (e) {
-      console.warn('Instagram Story sticker share failed:', e);
-    }
-    return false;
-  };
-
-  const handleInstagramStory = async () => {
-    setSharing(true);
-    try {
-      const success = await shareToInstagramStory();
-      if (success) {
-        setShared(true);
-        setTimeout(() => setShared(false), 3000);
-      } else {
-        await handleShare();
-      }
-    } catch {
-      await handleShare();
-    } finally {
-      setSharing(false);
-    }
-  };
-
+  // ─── Share via native share sheet (includes Instagram as option) ───
   const handleShare = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     setSharing(true);
     try {
+      // For transparent/story cards, first try Instagram Stories sticker directly on native
+      if (cardType === 'transparent' || cardType === 'story') {
+        try {
+          const { Capacitor } = await import('@capacitor/core');
+          if (Capacitor.isNativePlatform()) {
+            const base64 = canvas.toDataURL('image/png').split(',')[1];
+            if (base64) {
+              const { default: InstagramStories } = await import('../../plugins/instagram-stories');
+              await InstagramStories.shareSticker({
+                stickerImage: base64,
+                appId: 'pro.asciende.app',
+                backgroundTopColor: '#000000',
+                backgroundBottomColor: '#1a1a2e',
+              });
+              setShared(true);
+              setTimeout(() => setShared(false), 3000);
+              return;
+            }
+          }
+        } catch {
+          // Instagram not installed or sticker failed — fall through to native share sheet
+        }
+      }
+
+      // Native share sheet (works for all platforms, Instagram appears as option)
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
       if (!blob) return;
 
@@ -873,6 +799,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
         setShared(true);
         setTimeout(() => setShared(false), 3000);
       } else {
+        // Fallback: save + copy URL
         await handleSaveToGallery();
         await navigator.clipboard.writeText(shareUrl).catch(() => {});
         setShared(true);
@@ -891,8 +818,8 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
 
   const CARD_TYPES: { id: CardType; label: string; labelEs: string; desc: string; descEs: string }[] = [
     { id: 'map', label: 'Map', labelEs: 'Mapa', desc: 'Dark with GPS route', descEs: 'Oscuro con ruta GPS' },
-    { id: 'transparent', label: 'Transparent', labelEs: 'Transparente', desc: 'Overlay on photos', descEs: 'Para pegar en fotos' },
-    { id: 'story', label: 'Story', labelEs: 'Story', desc: 'Card with map', descEs: 'Tarjeta con mapa' },
+    { id: 'transparent', label: 'Sticker', labelEs: 'Sticker', desc: 'Transparent for Stories', descEs: 'Transparente para Stories' },
+    { id: 'story', label: 'Story', labelEs: 'Story', desc: 'Card with route', descEs: 'Tarjeta con ruta' },
   ];
 
   return (
@@ -1006,12 +933,12 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
             )}
           </div>
 
-          {/* Actions */}
+          {/* Actions: Save + Share (no dedicated Instagram button) */}
           <div className="flex gap-2">
             <button
               onClick={handleSaveToGallery}
               disabled={saving}
-              className={`flex items-center gap-1.5 px-3 py-2.5 border text-xs font-medium rounded-xl transition-all ${
+              className={`flex items-center gap-1.5 px-4 py-2.5 border text-xs font-medium rounded-xl transition-all ${
                 savedOk
                   ? 'border-green-400 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
                   : saveError
@@ -1029,23 +956,10 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
               {saving
                 ? (language === 'es' ? 'Guardando...' : 'Saving...')
                 : savedOk
-                ? (language === 'es' ? '¡Guardado!' : 'Saved!')
+                ? (language === 'es' ? 'Guardado en Fotos' : 'Saved to Photos')
                 : saveError
-                ? (language === 'es' ? 'Error' : 'Error')
+                ? saveError
                 : (language === 'es' ? 'Guardar' : 'Save')}
-            </button>
-            <button
-              onClick={handleInstagramStory}
-              disabled={sharing}
-              className="flex items-center gap-1.5 px-3 py-2.5 border border-neutral-300 dark:border-neutral-600 text-xs font-medium rounded-xl transition-all text-neutral-700 dark:text-neutral-300 hover:bg-gradient-to-br hover:from-purple-500 hover:to-orange-400 hover:text-white hover:border-transparent disabled:opacity-60 disabled:cursor-not-allowed"
-              title="Instagram Stories"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
-                <circle cx="12" cy="12" r="5" />
-                <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none" />
-              </svg>
-              Story
             </button>
             <button
               onClick={handleShare}
@@ -1067,8 +981,8 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
 
           <p className="text-[9px] text-center text-neutral-400 dark:text-neutral-500">
             {language === 'es'
-              ? 'Comparte en Instagram Stories, WhatsApp, y mas'
-              : 'Share on Instagram Stories, WhatsApp, and more'}
+              ? 'Compartir abre opciones nativas: Instagram Stories, WhatsApp, y mas'
+              : 'Share opens native options: Instagram Stories, WhatsApp, and more'}
           </p>
         </div>
       </div>
