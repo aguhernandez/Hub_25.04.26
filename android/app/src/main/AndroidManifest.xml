@@ -14,6 +14,13 @@
     <!-- ─── Camera ────────────────────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!-- ─── Storage / Media (gallery save for activity cards) ────────────── -->
+    <!-- Android 13+ (API 33): granular media permission -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <!-- Android 12 and below: legacy storage permissions -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+
     <!-- ─── Push Notifications ───────────────────────────────────────────── -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
