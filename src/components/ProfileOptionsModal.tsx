@@ -226,9 +226,26 @@ export default function ProfileOptionsModal({
 
     setIsDeleting(true);
     try {
-      const { error } = await supabase.auth.admin.deleteUser(athleteId);
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const session = await supabase.auth.getSession();
+      const token = session.data?.session?.access_token;
 
-      if (error) throw error;
+      if (!token) throw new Error('No authentication token');
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/admin-delete-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userId: athleteId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete user');
+      }
 
       setToast({
         message: language === 'es' ? 'Perfil eliminado exitosamente' : 'Profile deleted successfully',
