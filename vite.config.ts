@@ -54,6 +54,10 @@ if (!isPackageInstalled('@capacitor/browser')) {
   capacitorAliases['@capacitor/browser'] = path.resolve(__dirname, 'src/stubs/capacitor-browser.ts');
 }
 
+// Native-only plugins that have no web implementation - always stub
+capacitorAliases['@capacitor-community/media'] = path.resolve(__dirname, 'src/stubs/capacitor-community-media.ts');
+capacitorAliases['@capacitor/filesystem'] = path.resolve(__dirname, 'src/stubs/capacitor-filesystem.ts');
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react(), copyPublicManually()],
@@ -62,7 +66,7 @@ export default defineConfig({
     alias: capacitorAliases,
   },
   optimizeDeps: {
-    exclude: ['lucide-react', '@capacitor/push-notifications', '@capacitor/core', '@capacitor/camera', '@capacitor/geolocation', '@capacitor/browser', '@capacitor/app'],
+    exclude: ['lucide-react', '@capacitor/push-notifications', '@capacitor/core', '@capacitor/camera', '@capacitor/geolocation', '@capacitor/browser', '@capacitor/app', '@capacitor-community/media', '@capacitor/filesystem'],
   },
   build: {
     rollupOptions: {
