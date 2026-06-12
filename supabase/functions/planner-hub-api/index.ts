@@ -250,7 +250,88 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const ATHLETE_FREE_ENDPOINTS: string[] = [];
+    const ATHLETE_FREE_ENDPOINTS: string[] = ["coach-athletes"];
+
+    // ──────────────────────────────────────────────────────────────────
+    // GET /planner-hub-api/coach-athletes
+    // Returns all athletes assigned to a coach
+    // ──────────────────────────────────────────────────────────────────
+    if (endpoint === "coach-athletes" && req.method === "GET") {
+      const coachId = url.searchParams.get("coach_id");
+      const coachEmail = url.searchParams.get("coach_email");
+
+      if (!coachId && !coachEmail) {
+        return new Response(JSON.stringify({ error: "coach_id or coach_email query parameter is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let coachProfile: any = null;
+      if (coachId) {
+        const { data } = await supabaseAdmin
+          .from("profiles")
+          .select("id, email, full_name, role")
+          .eq("id", coachId)
+          .in("role", ["trainer", "admin"])
+          .maybeSingle();
+        coachProfile = data;
+      }
+      if (!coachProfile && coachEmail) {
+        const { data } = await supabaseAdmin
+          .from("profiles")
+          .select("id, email, full_name, role")
+          .ilike("email", coachEmail.trim())
+          .in("role", ["trainer", "admin"])
+          .maybeSingle();
+        coachProfile = data;
+      }
+
+      if (!coachProfile) {
+        await logAccess(plannerInfo.id, null, "read", endpoint, 200);
+        return new Response(JSON.stringify({ athletes: [] }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: athletes } = await supabaseAdmin
+        .from("profiles")
+        .select("id, email, full_name, sport")
+        .eq("assigned_trainer_id", coachProfile.id)
+        .eq("role", "athlete")
+        .eq("is_active", true)
+        .order("full_name", { ascending: true });
+
+      const athleteIds = (athletes || []).map((a: any) => a.id);
+      let membershipMap: Record<string, string> = {};
+
+      if (athleteIds.length > 0) {
+        const { data: memberships } = await supabaseAdmin
+          .from("user_memberships")
+          .select("user_id, membership:memberships(slug)")
+          .in("user_id", athleteIds)
+          .eq("status", "active");
+
+        for (const m of memberships || []) {
+          const slug = (m as any).membership?.slug;
+          if (slug) membershipMap[m.user_id] = slug;
+        }
+      }
+
+      const result = (athletes || []).map((a: any) => ({
+        id: a.id,
+        email: a.email,
+        full_name: a.full_name,
+        sport_primary: a.sport || null,
+        membership_slug: membershipMap[a.id] || null,
+      }));
+
+      await logAccess(plannerInfo.id, null, "read", endpoint, 200);
+
+      return new Response(JSON.stringify({ athletes: result }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const athleteIdParam = url.searchParams.get("athlete_id");
     const athleteEmail = url.searchParams.get("athlete_email");
