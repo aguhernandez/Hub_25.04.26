@@ -89,6 +89,13 @@
 		</dict>
 	</array>
 
+	<!-- Queried URL Schemes (Instagram Stories) -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>instagram-stories</string>
+		<string>instagram</string>
+	</array>
+
 	<!-- App Transport Security (allow HTTPS by default, no cleartext) -->
 	<key>NSAppTransportSecurity</key>
 	<dict>

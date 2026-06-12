@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Share2, Download, X, CheckCircle, MapPin, Clock, Zap, Mountain, Link, Map } from 'lucide-react';
+import { Share2, Download, X, CheckCircle, MapPin, Clock, Zap, Mountain } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -315,7 +315,6 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   const [cardType, setCardType] = useState<CardType>('map');
   const [sharing, setSharing] = useState(false);
   const [shared, setShared] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -797,10 +796,46 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     }
   };
 
-  const handleCopyLink = async () => {
-    await navigator.clipboard.writeText(getShareUrl()).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+  const shareToInstagramStory = async (): Promise<boolean> => {
+    const canvas = canvasRef.current;
+    if (!canvas) return false;
+
+    try {
+      const { Capacitor } = await import('@capacitor/core');
+      if (!Capacitor.isNativePlatform()) return false;
+
+      const base64 = canvas.toDataURL('image/png').split(',')[1];
+      if (!base64) return false;
+
+      const { default: InstagramStories } = await import('../../plugins/instagram-stories');
+      await InstagramStories.shareSticker({
+        stickerImage: base64,
+        appId: 'pro.asciende.app',
+        backgroundTopColor: '#000000',
+        backgroundBottomColor: '#1a1a2e',
+      });
+      return true;
+    } catch (e) {
+      console.warn('Instagram Story sticker share failed:', e);
+    }
+    return false;
+  };
+
+  const handleInstagramStory = async () => {
+    setSharing(true);
+    try {
+      const success = await shareToInstagramStory();
+      if (success) {
+        setShared(true);
+        setTimeout(() => setShared(false), 3000);
+      } else {
+        await handleShare();
+      }
+    } catch {
+      await handleShare();
+    } finally {
+      setSharing(false);
+    }
   };
 
   const handleShare = async () => {
@@ -1000,15 +1035,17 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
                 : (language === 'es' ? 'Guardar' : 'Save')}
             </button>
             <button
-              onClick={handleCopyLink}
-              className={`flex items-center gap-1.5 px-3 py-2.5 border text-xs font-medium rounded-xl transition-all ${
-                copied
-                  ? 'border-green-400 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
-                  : 'border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
-              }`}
+              onClick={handleInstagramStory}
+              disabled={sharing}
+              className="flex items-center gap-1.5 px-3 py-2.5 border border-neutral-300 dark:border-neutral-600 text-xs font-medium rounded-xl transition-all text-neutral-700 dark:text-neutral-300 hover:bg-gradient-to-br hover:from-purple-500 hover:to-orange-400 hover:text-white hover:border-transparent disabled:opacity-60 disabled:cursor-not-allowed"
+              title="Instagram Stories"
             >
-              {copied ? <CheckCircle className="w-4 h-4" /> : <Link className="w-4 h-4" />}
-              {copied ? (language === 'es' ? 'Copiado' : 'Copied') : 'Link'}
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+                <circle cx="12" cy="12" r="5" />
+                <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none" />
+              </svg>
+              Story
             </button>
             <button
               onClick={handleShare}
