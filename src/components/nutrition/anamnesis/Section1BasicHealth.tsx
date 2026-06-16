@@ -98,18 +98,18 @@ export default function Section1BasicHealth({ formData, setFormData, language }:
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {language === 'es' ? 'Horas de Trabajo por Día' : 'Work Hours per Day'}
+            {language === 'es' ? 'Horario de Trabajo' : 'Work Schedule'}
           </label>
-          <input
-            type="number"
-            min="0"
-            max="24"
-            step="0.5"
-            value={formData.work_hours || ''}
+          <select
+            value={formData.work_hours || 'mixed'}
             onChange={(e) => setFormData({ ...formData, work_hours: e.target.value })}
             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
-            placeholder={language === 'es' ? 'Ej: 8' : 'e.g., 8'}
-          />
+          >
+            <option value="morning">{language === 'es' ? 'Mañana' : 'Morning'}</option>
+            <option value="afternoon">{language === 'es' ? 'Tarde' : 'Afternoon'}</option>
+            <option value="night">{language === 'es' ? 'Noche' : 'Night'}</option>
+            <option value="mixed">{language === 'es' ? 'Mixto' : 'Mixed'}</option>
+          </select>
         </div>
       </div>
 

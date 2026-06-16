@@ -131,7 +131,7 @@ export default function Section4Goals({
             </h3>
             <button
               onClick={() => setIsEditingMacros(!isEditingMacros)}
-              className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center gap-2 text-gray-700 dark:text-gray-100"
             >
               <Edit className="w-4 h-4" />
               {isEditingMacros
