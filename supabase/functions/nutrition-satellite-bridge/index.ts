@@ -359,7 +359,136 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: "Unknown endpoint. Use: push-nutrition-plan, active-plan, training-load, athlete-profile, scheduled-workouts, nutrition-summary" }), {
+    // GET /nutrition-satellite-bridge/biological-passport
+    if (endpoint === "biological-passport") {
+      const { data: passport, error: passportError } = await supabase
+        .from("biological_passports")
+        .select(`
+          id,
+          version_number,
+          status,
+          source,
+          measurement_date,
+          vo2max,
+          lt1_power,
+          lt2_power,
+          lt1_hr,
+          lt2_hr,
+          ftp_watts,
+          critical_power,
+          anaerobic_capacity_kj,
+          running_threshold_pace,
+          sport_context,
+          power_zones_json,
+          hr_zones_json,
+          rpe_zones_json,
+          height_cm,
+          weight_kg,
+          body_fat_percent,
+          muscle_mass_kg,
+          lean_mass_kg,
+          bone_mass_kg,
+          training_age_years,
+          athlete_level,
+          skinfold_sum_6,
+          notes,
+          created_at,
+          updated_at
+        `)
+        .eq("athlete_id", athleteId)
+        .in("status", ["current", "active"])
+        .order("measurement_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (passportError) throw passportError;
+
+      // Also fetch the latest passport regardless of status as fallback
+      let latestPassport = passport;
+      if (!latestPassport) {
+        const { data: fallback } = await supabase
+          .from("biological_passports")
+          .select("id, version_number, status, source, measurement_date, vo2max, lt1_power, lt2_power, lt1_hr, lt2_hr, ftp_watts, critical_power, running_threshold_pace, sport_context, power_zones_json, hr_zones_json, rpe_zones_json, height_cm, weight_kg, body_fat_percent, muscle_mass_kg, lean_mass_kg, bone_mass_kg, training_age_years, athlete_level, skinfold_sum_6, notes, updated_at")
+          .eq("athlete_id", athleteId)
+          .order("measurement_date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        latestPassport = fallback;
+      }
+
+      return new Response(JSON.stringify({ biological_passport: latestPassport }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // GET /nutrition-satellite-bridge/anamnesis
+    if (endpoint === "anamnesis") {
+      const { data: anamnesis, error: anamnesisError } = await supabase
+        .from("nutrition_anamnesis")
+        .select("*")
+        .eq("athlete_id", athleteId)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (anamnesisError) throw anamnesisError;
+
+      return new Response(JSON.stringify({ anamnesis }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // GET /nutrition-satellite-bridge/food-diary
+    // Returns the last N food diary sessions with their entries
+    if (endpoint === "food-diary") {
+      const limitParam = parseInt(url.searchParams.get("limit") || "5");
+      const limit = Math.min(limitParam, 20);
+
+      const { data: sessions, error: sessionsError } = await supabase
+        .from("food_diary_sessions")
+        .select(`
+          id,
+          period_hours,
+          start_date,
+          day_of_week,
+          status,
+          total_calories,
+          total_carbs_g,
+          total_protein_g,
+          total_fat_g,
+          ai_observations,
+          professional_notes,
+          completed_at,
+          created_at
+        `)
+        .eq("athlete_id", athleteId)
+        .order("created_at", { ascending: false })
+        .limit(limit);
+
+      if (sessionsError) throw sessionsError;
+
+      // Fetch entries for each session
+      let sessionsWithEntries = sessions || [];
+      if (sessionsWithEntries.length > 0) {
+        const sessionIds = sessionsWithEntries.map((s: any) => s.id);
+        const { data: entries } = await supabase
+          .from("food_diary_entries")
+          .select("id, session_id, entry_time, meal_type, food_description, estimated_calories, estimated_carbs_g, estimated_protein_g, estimated_fat_g, additional_notes")
+          .in("session_id", sessionIds)
+          .order("entry_time", { ascending: true });
+
+        sessionsWithEntries = sessionsWithEntries.map((session: any) => ({
+          ...session,
+          entries: (entries || []).filter((e: any) => e.session_id === session.id),
+        }));
+      }
+
+      return new Response(JSON.stringify({ food_diary_sessions: sessionsWithEntries }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: "Unknown endpoint. Use: push-nutrition-plan, active-plan, training-load, athlete-profile, scheduled-workouts, nutrition-summary, biological-passport, anamnesis, food-diary" }), {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
