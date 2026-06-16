@@ -408,7 +408,7 @@ Deno.serve(async (req: Request) => {
           updated_at
         `)
         .eq("athlete_id", athleteId)
-        .in("status", ["current", "active"])
+        .in("status", ["active", "archived"])
         .order("measurement_date", { ascending: false })
         .limit(1)
         .maybeSingle();
