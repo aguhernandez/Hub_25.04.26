@@ -389,7 +389,7 @@ export default function FoodDiary24h({ isOpen, onClose }: Props) {
                       className={`p-4 rounded-xl border-2 font-medium transition-all ${
                         periodHours === 24
                           ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
-                          : 'border-gray-300 dark:border-gray-600 hover:border-green-300'
+                          : 'border-gray-300 dark:border-gray-600 hover:border-green-300 text-gray-900 dark:text-white'
                       }`}
                     >
                       24 {language === 'es' ? 'horas' : 'hours'}
@@ -399,7 +399,7 @@ export default function FoodDiary24h({ isOpen, onClose }: Props) {
                       className={`p-4 rounded-xl border-2 font-medium transition-all ${
                         periodHours === 48
                           ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
-                          : 'border-gray-300 dark:border-gray-600 hover:border-green-300'
+                          : 'border-gray-300 dark:border-gray-600 hover:border-green-300 text-gray-900 dark:text-white'
                       }`}
                     >
                       48 {language === 'es' ? 'horas' : 'hours'}
@@ -722,7 +722,7 @@ export default function FoodDiary24h({ isOpen, onClose }: Props) {
                       type="time"
                       value={formData.entry_time}
                       onChange={(e) => setFormData({ ...formData, entry_time: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                     />
                   </div>
                   <div>
@@ -732,7 +732,7 @@ export default function FoodDiary24h({ isOpen, onClose }: Props) {
                     <select
                       value={formData.meal_type}
                       onChange={(e) => setFormData({ ...formData, meal_type: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                     >
                       {mealTypes.map(type => (
                         <option key={type.value} value={type.value}>{type.label}</option>
@@ -753,7 +753,7 @@ export default function FoodDiary24h({ isOpen, onClose }: Props) {
                     placeholder={language === 'es'
                       ? '2 tostadas integrales (60g)\n1 huevo revuelto (60g)\n...'
                       : '2 whole wheat toasts (60g)\n1 scrambled egg (60g)\n...'}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                   />
                 </div>
 
@@ -767,7 +767,7 @@ export default function FoodDiary24h({ isOpen, onClose }: Props) {
                       type="number"
                       value={formData.estimated_calories}
                       onChange={(e) => setFormData({ ...formData, estimated_calories: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                     />
                   </div>
                   <div>
@@ -778,7 +778,7 @@ export default function FoodDiary24h({ isOpen, onClose }: Props) {
                       type="number"
                       value={formData.estimated_carbs_g}
                       onChange={(e) => setFormData({ ...formData, estimated_carbs_g: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                     />
                   </div>
                   <div>
@@ -789,7 +789,7 @@ export default function FoodDiary24h({ isOpen, onClose }: Props) {
                       type="number"
                       value={formData.estimated_protein_g}
                       onChange={(e) => setFormData({ ...formData, estimated_protein_g: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                     />
                   </div>
                   <div>
@@ -800,7 +800,7 @@ export default function FoodDiary24h({ isOpen, onClose }: Props) {
                       type="number"
                       value={formData.estimated_fat_g}
                       onChange={(e) => setFormData({ ...formData, estimated_fat_g: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900"
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                     />
                   </div>
                 </div>
@@ -817,7 +817,7 @@ export default function FoodDiary24h({ isOpen, onClose }: Props) {
                     placeholder={language === 'es'
                       ? 'Pre-entrenamiento, con mucha hambre, etc.'
                       : 'Pre-workout, very hungry, etc.'}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                   />
                 </div>
 
