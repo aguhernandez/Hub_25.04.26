@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Share2, Download, X, CheckCircle, MapPin, Clock, Zap, Mountain, Link2 } from 'lucide-react';
+import { Share2, Download, X, CheckCircle, MapPin, Clock, Zap, Mountain, QrCode, Copy } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -319,6 +319,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   const [fontLoaded, setFontLoaded] = useState(false);
   const [logoLoaded, setLogoLoaded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
   const sport = SPORT_META[activityData.sportType] ?? SPORT_META['run'];
   const f = (w: string) => `${w} ${FONT_NAME}, ${FONT_FALLBACK}`;
@@ -573,7 +574,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     ctx.font = `400 26px ${FONT_FALLBACK}`;
     ctx.fillText(getShareUrlShort(), W / 2, ctaY + 46);
 
-    drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 130, W * 0.45, 100, f('700 44px'));
+    drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 180, W * 0.45, 100, f('700 44px'));
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
   // ─── Card Type 3: STORY ─────────────────────────────────────────────
@@ -645,7 +646,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     ctx.font = `400 26px ${FONT_FALLBACK}`;
     ctx.fillText(getShareUrlShort(), W / 2, ctaY + 46);
 
-    drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 120, W * 0.45, 100, f('700 44px'));
+    drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 180, W * 0.45, 100, f('700 44px'));
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
   const generateCard = useCallback(async () => {
@@ -984,15 +985,11 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
                 : (language === 'es' ? 'Guardar' : 'Save')}
             </button>
             <button
-              onClick={handleCopyLink}
-              className={`flex items-center gap-1.5 px-3 py-2.5 border text-xs font-medium rounded-xl transition-all ${
-                copied
-                  ? 'border-green-400 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
-                  : 'border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
-              }`}
+              onClick={() => setShowQR(true)}
+              className="flex items-center gap-1.5 px-3 py-2.5 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 text-xs font-medium rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
             >
-              {copied ? <CheckCircle className="w-4 h-4" /> : <Link2 className="w-4 h-4" />}
-              {copied ? (language === 'es' ? 'Copiado' : 'Copied') : 'Link'}
+              <QrCode className="w-4 h-4" />
+              Link
             </button>
             <button
               onClick={handleShare}
@@ -1019,6 +1016,54 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
           </p>
         </div>
       </div>
+
+      {/* QR Code Modal */}
+      {showQR && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[70] p-4"
+          onClick={() => setShowQR(false)}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div
+            className="bg-white dark:bg-neutral-800 rounded-2xl p-6 max-w-xs w-full shadow-2xl border border-neutral-200 dark:border-neutral-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-neutral-900 dark:text-white text-sm">
+                {language === 'es' ? 'Codigo QR' : 'QR Code'}
+              </h3>
+              <button onClick={() => setShowQR(false)} className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors">
+                <X className="w-4 h-4 text-neutral-500" />
+              </button>
+            </div>
+            <div className="bg-white p-3 rounded-xl mb-4 flex items-center justify-center">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getShareUrl())}`}
+                alt="QR Code"
+                width={200}
+                height={200}
+                className="rounded-lg"
+              />
+            </div>
+            <p className="text-[10px] text-center text-neutral-500 dark:text-neutral-400 break-all mb-3">
+              {getShareUrlShort()}
+            </p>
+            <button
+              onClick={handleCopyLink}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-medium transition-all border ${
+                copied
+                  ? 'border-green-400 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                  : 'border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+              }`}
+            >
+              {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied
+                ? (language === 'es' ? 'Copiado!' : 'Copied!')
+                : (language === 'es' ? 'Copiar enlace' : 'Copy link')}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

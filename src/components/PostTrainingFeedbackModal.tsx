@@ -54,6 +54,10 @@ export default function PostTrainingFeedbackModal({ isOpen, onClose, onSubmit, o
     try {
       await onSubmit(feedback);
       setCompleted(true);
+      // Auto-show share card after brief celebration delay (like Strava)
+      if (workoutData) {
+        setTimeout(() => setShowShareCard(true), 1800);
+      }
     } catch (error) {
       console.error('Error submitting feedback:', error);
     } finally {
@@ -180,14 +184,20 @@ export default function PostTrainingFeedbackModal({ isOpen, onClose, onSubmit, o
             {/* Actions */}
             <div className="space-y-2.5">
               {workoutData && (
-                <button
-                  onClick={() => setShowShareCard(true)}
-                  className="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-[#fdda36] text-[#1a1625] font-bold rounded-xl hover:bg-[#ffd01a] transition-colors"
-                >
-                  <Share2 className="w-5 h-5" />
-                  {language === 'es' ? 'Compartir Entrenamiento' : 'Share Workout'}
-                </button>
+                <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
+                  <div className="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                    {language === 'es' ? 'Generando sticker para compartir...' : 'Generating share sticker...'}
+                  </p>
+                </div>
               )}
+              <button
+                onClick={() => workoutData && setShowShareCard(true)}
+                className="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-[#fdda36] text-[#1a1625] font-bold rounded-xl hover:bg-[#ffd01a] transition-colors"
+              >
+                <Share2 className="w-5 h-5" />
+                {language === 'es' ? 'Compartir Ahora' : 'Share Now'}
+              </button>
               <button
                 onClick={() => { onClose(); resetForm(); }}
                 className="w-full px-5 py-3 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 font-medium rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm"

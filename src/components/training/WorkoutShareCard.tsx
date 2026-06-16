@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Share2, Download, X, CheckCircle, Dumbbell, Link } from 'lucide-react';
+import { Share2, Download, X, CheckCircle, Dumbbell, QrCode, Copy } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -139,6 +139,7 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
   const [sharing, setSharing] = useState(false);
   const [shared, setShared] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
   const [ready, setReady] = useState(false);
   const [fontLoaded, setFontLoaded] = useState(false);
   const [logoLoaded, setLogoLoaded] = useState(false);
@@ -300,8 +301,8 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
       ctaTextY += 32;
     });
 
-    // Logo immediately after URL text
-    const logoY = ctaTextY + 60;
+    // Logo lower — below URL text with more breathing room
+    const logoY = ctaTextY + 140;
     drawLogoOrText(ctx, logoImgRef.current, rightX + colW / 2, logoY, colW * 0.85, 100, f('700 48px'));
   }, [workoutData, t, shareMode, activeProject, profile]);
 
@@ -359,6 +360,28 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
     if (!canvas) return;
     setSharing(true);
     try {
+      // Try Instagram Stories sticker first on native (like Strava)
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        if (Capacitor.isNativePlatform()) {
+          const base64 = canvas.toDataURL('image/png').split(',')[1];
+          if (base64) {
+            const { default: InstagramStories } = await import('../../plugins/instagram-stories');
+            await InstagramStories.shareSticker({
+              stickerImage: base64,
+              appId: 'pro.asciende.app',
+              backgroundTopColor: '#000000',
+              backgroundBottomColor: '#111111',
+            });
+            setShared(true);
+            setTimeout(() => setShared(false), 3000);
+            return;
+          }
+        }
+      } catch {
+        // Instagram not installed — fall through to native share sheet
+      }
+
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
       if (!blob) return;
 
@@ -394,7 +417,11 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
   };
 
   return (
-    <div className="fixed inset-0 bg-neutral-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-3 overflow-y-auto">
+    <div
+      className="fixed inset-0 bg-neutral-950/80 backdrop-blur-sm flex items-center justify-center z-[60] p-3 overflow-y-auto"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       <div className="bg-white dark:bg-neutral-800 rounded-2xl max-w-lg w-full my-4 shadow-2xl border border-neutral-200 dark:border-neutral-700 overflow-hidden">
 
         {/* Header */}
@@ -486,15 +513,11 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
               {t('Guardar', 'Save')}
             </button>
             <button
-              onClick={handleCopyLink}
-              className={`flex items-center gap-1.5 px-3 py-2.5 border text-xs font-medium rounded-xl transition-all ${
-                copied
-                  ? 'border-green-400 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
-                  : 'border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
-              }`}
+              onClick={() => setShowQR(true)}
+              className="flex items-center gap-1.5 px-3 py-2.5 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 text-xs font-medium rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
             >
-              {copied ? <CheckCircle className="w-4 h-4" /> : <Link className="w-4 h-4" />}
-              {copied ? t('Copiado', 'Copied') : 'Link'}
+              <QrCode className="w-4 h-4" />
+              Link
             </button>
             <button
               onClick={handleShare}
@@ -511,10 +534,56 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
           </div>
 
           <p className="text-[9px] text-center text-neutral-400 dark:text-neutral-500">
-            {t('Comparte en Instagram Stories, WhatsApp, y mas', 'Share on Instagram Stories, WhatsApp, and more')}
+            {t('Compartir abre Instagram Stories directamente', 'Share opens Instagram Stories directly')}
           </p>
         </div>
       </div>
+
+      {/* QR Code Modal */}
+      {showQR && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[70] p-4"
+          onClick={() => setShowQR(false)}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div
+            className="bg-white dark:bg-neutral-800 rounded-2xl p-6 max-w-xs w-full shadow-2xl border border-neutral-200 dark:border-neutral-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-neutral-900 dark:text-white text-sm">
+                {t('Codigo QR', 'QR Code')}
+              </h3>
+              <button onClick={() => setShowQR(false)} className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors">
+                <X className="w-4 h-4 text-neutral-500" />
+              </button>
+            </div>
+            <div className="bg-white p-3 rounded-xl mb-4 flex items-center justify-center">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getShareUrl())}`}
+                alt="QR Code"
+                width={200}
+                height={200}
+                className="rounded-lg"
+              />
+            </div>
+            <p className="text-[10px] text-center text-neutral-500 dark:text-neutral-400 break-all mb-3">
+              {getShareUrlShort()}
+            </p>
+            <button
+              onClick={handleCopyLink}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-medium transition-all border ${
+                copied
+                  ? 'border-green-400 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                  : 'border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+              }`}
+            >
+              {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied ? t('Copiado!', 'Copied!') : t('Copiar enlace', 'Copy link')}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
