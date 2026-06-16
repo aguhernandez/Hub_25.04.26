@@ -1,58 +1,81 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { crypto } from "jsr:@std/crypto";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Planner-Token",
 };
 
-Deno.serve(async (req: Request) => {
-  console.log("DEBUG: Incoming request");
-  console.log("DEBUG: Method:", req.method);
-  console.log("DEBUG: URL:", req.url);
-  console.log("DEBUG: Headers:", Array.from(req.headers.entries()));
+async function hashToken(token: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(token);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
 
+async function validatePlannerToken(token: string, serviceSupabase: any): Promise<{ id: string; planner_type: string; planner_name: string } | null> {
+  const tokenHash = await hashToken(token);
+  const { data } = await serviceSupabase
+    .from("external_planner_tokens")
+    .select("id, planner_type, planner_name")
+    .eq("token_hash", tokenHash)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (data) {
+    await serviceSupabase
+      .from("external_planner_tokens")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", data.id);
+  }
+
+  return data;
+}
+
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
-    let authHeader = req.headers.get("Authorization");
-    const plannerToken = req.headers.get("X-Planner-Token");
-
-    console.log("DEBUG: authHeader:", authHeader);
-    console.log("DEBUG: plannerToken:", plannerToken);
-
-    if (!authHeader && plannerToken) {
-      authHeader = `Bearer ${plannerToken}`;
-      console.log("DEBUG: Using plannerToken as Bearer token");
-    }
-
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Missing authorization" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-
     const serviceSupabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    console.log("DEBUG: Auth error:", authError);
-    console.log("DEBUG: User:", user?.id);
+    const authHeader = req.headers.get("Authorization");
+    const plannerTokenHeader = req.headers.get("X-Planner-Token");
 
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized", details: authError?.message }), {
+    let plannerInfo: { id: string; planner_type: string; planner_name: string } | null = null;
+    let userId: string | null = null;
+
+    if (plannerTokenHeader) {
+      plannerInfo = await validatePlannerToken(plannerTokenHeader, serviceSupabase);
+      if (!plannerInfo) {
+        return new Response(JSON.stringify({ error: "Invalid or inactive planner token" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else if (authHeader) {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: "Unauthorized", details: authError?.message }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      userId = user.id;
+    } else {
+      return new Response(JSON.stringify({ error: "Missing authentication. Use Authorization header (JWT) or X-Planner-Token header." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -60,41 +83,31 @@ Deno.serve(async (req: Request) => {
 
     const url = new URL(req.url);
     const endpoint = url.pathname.split("/").pop();
-    const athleteId = url.searchParams.get("athlete_id") || user.id;
+    const athleteId = url.searchParams.get("athlete_id") || userId || "";
     const athleteEmail = url.searchParams.get("athlete_email");
     const dateFrom = url.searchParams.get("date_from");
     const dateTo = url.searchParams.get("date_to");
 
-    console.log("DEBUG: Endpoint:", endpoint);
-    console.log("DEBUG: athleteEmail:", athleteEmail);
-
     // POST /nutrition-satellite-bridge/push-nutrition-plan
-    // Receives a full nutrition plan from the Nutrition Satellite and stores it
     if (endpoint === "push-nutrition-plan" && req.method === "POST") {
-      console.log("DEBUG: Handling push-nutrition-plan");
+      // For planner token auth, skip role check (external planners are trusted)
+      if (userId) {
+        const { data: pusherProfile } = await serviceSupabase
+          .from("profiles")
+          .select("id, role")
+          .eq("id", userId)
+          .maybeSingle();
 
-      const { data: pusherProfile } = await serviceSupabase
-        .from("profiles")
-        .select("id, role")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      console.log("DEBUG: Pusher profile:", pusherProfile);
-
-      if (!pusherProfile || !["trainer", "admin"].includes(pusherProfile.role)) {
-        return new Response(JSON.stringify({ error: "Only trainers and admins can push nutrition plans" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        if (!pusherProfile || !["trainer", "admin"].includes(pusherProfile.role)) {
+          return new Response(JSON.stringify({ error: "Only trainers and admins can push nutrition plans" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
 
       const body = await req.json();
-      console.log("DEBUG: Request body keys:", Object.keys(body));
-      console.log("DEBUG: Full body:", JSON.stringify(body, null, 2));
-
       const { plan_date, plan_name, plan_duration_days, summary, plan_data, notes } = body;
-
-      console.log("DEBUG: Extracted fields - plan_date:", plan_date, "summary:", !!summary, "plan_data:", !!plan_data);
 
       if (!plan_date || !summary || !plan_data) {
         return new Response(JSON.stringify({
@@ -136,7 +149,7 @@ Deno.serve(async (req: Request) => {
         .from("nutrition_pushed_plans")
         .insert({
           athlete_id: resolvedAthleteId,
-          pushed_by: user.id,
+          pushed_by: userId || plannerInfo?.id || null,
           plan_date,
           plan_name: plan_name || "Plan Nutricional",
           plan_duration_days: plan_duration_days || 7,
@@ -156,9 +169,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // GET /nutrition-satellite-bridge/active-plan
-    // Returns the full active pushed nutrition plan for an athlete
     if (endpoint === "active-plan") {
-      const { data: plan, error: planError } = await supabase
+      const { data: plan, error: planError } = await serviceSupabase
         .from("nutrition_pushed_plans")
         .select("*")
         .eq("athlete_id", athleteId)
@@ -176,7 +188,7 @@ Deno.serve(async (req: Request) => {
 
     // GET /nutrition-satellite-bridge/training-load
     if (endpoint === "training-load") {
-      let query = supabase
+      let query = serviceSupabase
         .from("training_logs")
         .select(`
           id,
@@ -206,7 +218,7 @@ Deno.serve(async (req: Request) => {
 
     // GET /nutrition-satellite-bridge/athlete-profile
     if (endpoint === "athlete-profile") {
-      const { data: profile, error: profileError } = await supabase
+      const { data: profile, error: profileError } = await serviceSupabase
         .from("profiles")
         .select(`
           id,
@@ -224,7 +236,7 @@ Deno.serve(async (req: Request) => {
 
       if (profileError) throw profileError;
 
-      const { data: bioimpedance } = await supabase
+      const { data: bioimpedance } = await serviceSupabase
         .from("bioimpedance_measurements")
         .select("weight, height, adipose_tissue_percent, adipose_tissue_kg, muscle_mass_percent, muscle_mass_kg, measurement_date")
         .eq("user_id", athleteId)
@@ -252,7 +264,7 @@ Deno.serve(async (req: Request) => {
     if (endpoint === "scheduled-workouts") {
       const today = new Date().toISOString().split("T")[0];
 
-      const { data, error } = await supabase
+      const { data, error } = await serviceSupabase
         .from("athlete_workouts")
         .select(`
           id,
@@ -284,31 +296,31 @@ Deno.serve(async (req: Request) => {
       const today = new Date().toISOString().split("T")[0];
 
       const [planResult, adherenceResult, diaryResult, targetsResult, pushedPlanResult, externalPlanResult] = await Promise.all([
-        supabase
+        serviceSupabase
           .from("meal_plans")
           .select("id, plan_name, status, target_kcal, target_protein_g, target_carbs_g, target_fat_g")
           .eq("athlete_id", athleteId)
           .eq("status", "active")
           .maybeSingle(),
-        supabase
+        serviceSupabase
           .from("meal_adherence")
           .select("adherence_score, actual_kcal, target_kcal, date")
           .eq("athlete_id", athleteId)
           .eq("date", today)
           .maybeSingle(),
-        supabase
+        serviceSupabase
           .from("food_diary_sessions")
           .select("id, session_date, status")
           .eq("athlete_id", athleteId)
           .order("session_date", { ascending: false })
           .limit(1)
           .maybeSingle(),
-        supabase
+        serviceSupabase
           .from("nutrition_targets")
           .select("target_kcal, target_protein_g, target_carbs_g, target_fat_g, updated_at")
           .eq("athlete_id", athleteId)
           .maybeSingle(),
-        supabase
+        serviceSupabase
           .from("nutrition_pushed_plans")
           .select("id, plan_name, plan_date, plan_duration_days, summary, plan_data, status, created_at, notes")
           .eq("athlete_id", athleteId)
@@ -361,7 +373,7 @@ Deno.serve(async (req: Request) => {
 
     // GET /nutrition-satellite-bridge/biological-passport
     if (endpoint === "biological-passport") {
-      const { data: passport, error: passportError } = await supabase
+      const { data: passport, error: passportError } = await serviceSupabase
         .from("biological_passports")
         .select(`
           id,
@@ -406,7 +418,7 @@ Deno.serve(async (req: Request) => {
       // Also fetch the latest passport regardless of status as fallback
       let latestPassport = passport;
       if (!latestPassport) {
-        const { data: fallback } = await supabase
+        const { data: fallback } = await serviceSupabase
           .from("biological_passports")
           .select("id, version_number, status, source, measurement_date, vo2max, lt1_power, lt2_power, lt1_hr, lt2_hr, ftp_watts, critical_power, running_threshold_pace, sport_context, power_zones_json, hr_zones_json, rpe_zones_json, height_cm, weight_kg, body_fat_percent, muscle_mass_kg, lean_mass_kg, bone_mass_kg, training_age_years, athlete_level, skinfold_sum_6, notes, updated_at")
           .eq("athlete_id", athleteId)
@@ -423,7 +435,7 @@ Deno.serve(async (req: Request) => {
 
     // GET /nutrition-satellite-bridge/anamnesis
     if (endpoint === "anamnesis") {
-      const { data: anamnesis, error: anamnesisError } = await supabase
+      const { data: anamnesis, error: anamnesisError } = await serviceSupabase
         .from("nutrition_anamnesis")
         .select("*")
         .eq("athlete_id", athleteId)
@@ -444,7 +456,7 @@ Deno.serve(async (req: Request) => {
       const limitParam = parseInt(url.searchParams.get("limit") || "5");
       const limit = Math.min(limitParam, 20);
 
-      const { data: sessions, error: sessionsError } = await supabase
+      const { data: sessions, error: sessionsError } = await serviceSupabase
         .from("food_diary_sessions")
         .select(`
           id,
@@ -471,7 +483,7 @@ Deno.serve(async (req: Request) => {
       let sessionsWithEntries = sessions || [];
       if (sessionsWithEntries.length > 0) {
         const sessionIds = sessionsWithEntries.map((s: any) => s.id);
-        const { data: entries } = await supabase
+        const { data: entries } = await serviceSupabase
           .from("food_diary_entries")
           .select("id, session_id, entry_time, meal_type, food_description, estimated_calories, estimated_carbs_g, estimated_protein_g, estimated_fat_g, additional_notes")
           .in("session_id", sessionIds)
