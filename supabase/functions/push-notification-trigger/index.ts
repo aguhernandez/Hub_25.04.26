@@ -115,8 +115,126 @@ function getLocalizedMessages(
         },
       };
 
+    case "external_endurance_plans":
+      return {
+        es: {
+          title: "Nuevo plan de entrenamiento",
+          body: record.plan_name
+            ? `Plan de resistencia: ${record.plan_name}`
+            : "Tu entrenador te ha enviado un plan de entrenamiento",
+        },
+        en: {
+          title: "New training plan",
+          body: record.plan_name
+            ? `Endurance plan: ${record.plan_name}`
+            : "Your coach has sent you a training plan",
+        },
+      };
+
+    case "digest_articles":
+      return {
+        es: {
+          title: "Nueva Performance Pill",
+          body: record.title || "Hay un nuevo articulo disponible",
+        },
+        en: {
+          title: "New Performance Pill",
+          body: record.title || "A new article is available",
+        },
+      };
+
     default:
       return null;
+  }
+}
+
+function buildEmailHtml(title: string, body: string, lang: string): string {
+  const footerText =
+    lang === "es"
+      ? "Abre la app Asciende para ver los detalles."
+      : "Open the Asciende app to view the details.";
+
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+        <tr>
+          <td style="background:#0f172a;padding:24px 32px;border-radius:12px 12px 0 0;text-align:center;">
+            <p style="color:#64748b;font-size:12px;margin:0 0 8px 0;text-transform:uppercase;letter-spacing:2px;">ASCIENDE</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#ffffff;padding:32px;border-radius:0 0 12px 12px;">
+            <h1 style="color:#0f172a;font-size:22px;font-weight:700;margin:0 0 12px 0;">${title}</h1>
+            <p style="color:#334155;font-size:16px;line-height:1.6;margin:0 0 24px 0;">${body}</p>
+            <p style="color:#94a3b8;font-size:13px;margin:0;">${footerText}</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+async function sendEmailNotifications(
+  supabase: any,
+  supabaseUrl: string,
+  userIds: string[],
+  localizedMessages: LocalizedText,
+  category: string
+): Promise<void> {
+  // Respect same preferences as push notifications
+  let eligibleUserIds = userIds;
+  if (category) {
+    const { data: prefs } = await supabase
+      .from("push_notification_preferences")
+      .select(`user_id, ${category}`)
+      .in("user_id", userIds);
+
+    if (prefs && prefs.length > 0) {
+      const disabledUsers = new Set(
+        prefs.filter((p: any) => p[category] === false).map((p: any) => p.user_id)
+      );
+      eligibleUserIds = userIds.filter((id) => !disabledUsers.has(id));
+    }
+  }
+
+  if (eligibleUserIds.length === 0) return;
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, email, language")
+    .in("id", eligibleUserIds);
+
+  if (!profiles || profiles.length === 0) return;
+
+  const emailsByLang: Record<"es" | "en", string[]> = { es: [], en: [] };
+  for (const profile of profiles) {
+    if (!profile.email) continue;
+    const lang = profile.language === "es" ? "es" : "en";
+    emailsByLang[lang].push(profile.email);
+  }
+
+  const emailUrl = `${supabaseUrl}/functions/v1/brevo-send-email`;
+
+  for (const lang of ["es", "en"] as const) {
+    const emails = emailsByLang[lang];
+    if (emails.length === 0) continue;
+
+    const msg = localizedMessages[lang];
+    await fetch(emailUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: emails,
+        subject: msg.title,
+        htmlContent: buildEmailHtml(msg.title, msg.body, lang),
+      }),
+    });
   }
 }
 
@@ -131,11 +249,30 @@ Deno.serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const payload: WebhookPayload = await req.json();
-    const { type, table, record } = payload;
+    const { type, table, record, old_record } = payload;
 
-    if (type !== "INSERT") {
+    // Allow UPDATE only for meaningful publish events
+    if (type === "UPDATE") {
+      const isCoursePublished =
+        table === "courses" &&
+        record.is_published === true &&
+        old_record?.is_published !== true;
+      const isArticlePublished =
+        table === "digest_articles" &&
+        record.is_published === true &&
+        old_record?.is_published !== true;
+
+      if (!isCoursePublished && !isArticlePublished) {
+        return new Response(
+          JSON.stringify({ skipped: true, reason: "UPDATE not a publish event" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    if (type === "DELETE") {
       return new Response(
-        JSON.stringify({ skipped: true, reason: "Only INSERT events are handled" }),
+        JSON.stringify({ skipped: true, reason: "DELETE not handled" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -200,7 +337,8 @@ Deno.serve(async (req: Request) => {
       }
 
       case "courses": {
-        if (record.status !== "published") break;
+        // Fire on INSERT (if already published) or UPDATE (when published)
+        if (!record.is_published && !record.is_active) break;
         const { data: athletes } = await supabase
           .from("profiles")
           .select("id")
@@ -222,6 +360,30 @@ Deno.serve(async (req: Request) => {
         targetUserIds = [userId];
         category = "new_habit";
         data = { page: "habits" };
+        break;
+      }
+
+      case "external_endurance_plans": {
+        const athleteId = record.athlete_id;
+        if (!athleteId) break;
+        targetUserIds = [athleteId];
+        category = "new_training_plan";
+        data = { page: "training" };
+        break;
+      }
+
+      case "digest_articles": {
+        if (!record.is_published) break;
+        const { data: athletes } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("role", "athlete");
+
+        if (athletes) {
+          targetUserIds = athletes.map((a: any) => a.id);
+        }
+        category = "performance_pills";
+        data = { page: "digest" };
         break;
       }
 
@@ -247,7 +409,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // Fetch user languages to group by locale
+    // Group target users by preferred language
     const { data: userProfiles } = await supabase
       .from("profiles")
       .select("id, language")
@@ -261,8 +423,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const sendUrl = `${supabaseUrl}/functions/v1/send-push-notification`;
-    const results: any[] = [];
+    const pushResults: any[] = [];
 
+    // Send push notifications (grouped by language)
     for (const lang of ["es", "en"] as const) {
       const ids = usersByLang[lang];
       if (ids.length === 0) continue;
@@ -270,9 +433,7 @@ Deno.serve(async (req: Request) => {
       const msg = localizedMessages[lang];
       const response = await fetch(sendUrl, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_ids: ids,
           title: msg.title,
@@ -283,11 +444,20 @@ Deno.serve(async (req: Request) => {
       });
 
       const result = await response.json();
-      results.push({ lang, ...result });
+      pushResults.push({ lang, ...result });
     }
 
+    // Send email notifications (fire-and-forget, same preference gates)
+    sendEmailNotifications(
+      supabase,
+      supabaseUrl,
+      targetUserIds,
+      localizedMessages,
+      category
+    ).catch((err) => console.error("Email notification error:", err));
+
     return new Response(
-      JSON.stringify({ success: true, table, category, results }),
+      JSON.stringify({ success: true, table, type, category, push: pushResults }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {
