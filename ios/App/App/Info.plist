@@ -62,7 +62,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Asciende needs access to your photo library to select images for your profile and training</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Asciende needs permission to save photos to your library</string>
+	<string>Asciende saves your workout summaries to your photo library</string>
 
 	<!-- Location / GPS -->
 	<key>NSLocationWhenInUseUsageDescription</key>
