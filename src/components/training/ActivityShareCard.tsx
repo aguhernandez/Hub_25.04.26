@@ -741,8 +741,14 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
       }
     } catch (e: any) {
       if (e?.name !== 'AbortError') {
-        setSaveError(language === 'es' ? 'No se pudo guardar' : 'Could not save');
-        setTimeout(() => setSaveError(null), 3000);
+        if (e?.message?.includes('denied') || e?.message?.includes('permission')) {
+          setSaveError(language === 'es'
+            ? 'Permiso denegado. Habilita en Ajustes.'
+            : 'Permission denied. Enable in Settings.');
+        } else {
+          setSaveError(language === 'es' ? 'No se pudo guardar' : 'Could not save');
+        }
+        setTimeout(() => setSaveError(null), 4000);
       }
     } finally {
       setSaving(false);

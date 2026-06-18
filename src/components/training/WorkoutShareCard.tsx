@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Share2, Download, X, CheckCircle, Dumbbell, QrCode, Copy } from 'lucide-react';
+import { Share2, Download, X, CheckCircle, Dumbbell, QrCode, Copy, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -143,6 +143,9 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
   const [ready, setReady] = useState(false);
   const [fontLoaded, setFontLoaded] = useState(false);
   const [logoLoaded, setLogoLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const t = useCallback((es: string, en: string) => language === 'es' ? es : en, [language]);
   const f = (w: string) => `${w} ${FONT_NAME}, ${FONT_FALLBACK}`;
@@ -322,31 +325,82 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
     return () => cancelAnimationFrame(raf);
   }, [ready, fontLoaded, logoLoaded, generateCard]);
 
-  const handleDownload = async () => {
+  const handleSaveToPhotos = async () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
-    if (!blob) return;
-    const fileName = `asciende-workout-${workoutData.date}.png`;
+    if (!canvas || saving) return;
 
-    if (navigator.share) {
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const fileName = `asciende-workout-${workoutData.date}.png`;
+
+      let platform = 'web';
       try {
-        const file = new File([blob], fileName, { type: 'image/png' });
-        if (navigator.canShare?.({ files: [file] })) {
-          await navigator.share({ files: [file] });
-          return;
-        }
-      } catch (e: any) {
-        if (e?.name === 'AbortError') return;
-      }
-    }
+        const { Capacitor } = await import('@capacitor/core');
+        if (Capacitor.isNativePlatform()) platform = Capacitor.getPlatform();
+      } catch { /* web */ }
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    a.click();
-    URL.revokeObjectURL(url);
+      if (platform === 'ios' || platform === 'android') {
+        const { Media } = await import('@capacitor-community/media');
+
+        try {
+          await (Media as any).getPermissions?.();
+        } catch {
+          // Older versions don't have getPermissions
+        }
+
+        const base64 = await canvasToBase64(canvas);
+
+        let albumId: string | undefined;
+        try {
+          const { albums } = await Media.getAlbums();
+          const existing = albums.find((a: any) =>
+            a.name?.toLowerCase() === 'asciende'
+          );
+          if (existing) {
+            albumId = existing.identifier ?? existing.id;
+          } else {
+            const created = await Media.createAlbum({ name: 'Asciende' });
+            albumId = created.identifier ?? created.id;
+          }
+        } catch {
+          // Album ops failed -- save to default Camera Roll
+        }
+
+        await Media.savePhoto({
+          path: `data:image/png;base64,${base64}`,
+          albumIdentifier: albumId,
+          fileName,
+        } as any);
+
+        setSavedOk(true);
+        setTimeout(() => setSavedOk(false), 3000);
+      } else {
+        // Web: trigger file download
+        const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        setSavedOk(true);
+        setTimeout(() => setSavedOk(false), 2500);
+      }
+    } catch (e: any) {
+      if (e?.message?.includes('denied') || e?.message?.includes('permission')) {
+        setSaveError(language === 'es'
+          ? 'Permiso denegado. Habilita acceso a fotos en Ajustes.'
+          : 'Permission denied. Enable photo access in Settings.');
+      } else {
+        setSaveError(language === 'es' ? 'No se pudo guardar' : 'Could not save');
+      }
+      setTimeout(() => setSaveError(null), 4000);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCopyLink = async () => {
@@ -418,13 +472,13 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
         setShared(true);
         setTimeout(() => setShared(false), 3000);
       } else {
-        await handleDownload();
+        await handleSaveToPhotos();
         await navigator.clipboard.writeText(shareUrl).catch(() => {});
         setShared(true);
         setTimeout(() => setShared(false), 3000);
       }
     } catch (e: any) {
-      if (e?.name !== 'AbortError') await handleDownload();
+      if (e?.name !== 'AbortError') await handleSaveToPhotos();
     } finally {
       setSharing(false);
     }
@@ -520,11 +574,32 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
           {/* Actions */}
           <div className="flex gap-2">
             <button
-              onClick={handleDownload}
-              className="flex items-center gap-1.5 px-3 py-2.5 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 text-xs font-medium rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
+              onClick={handleSaveToPhotos}
+              disabled={saving}
+              className={`flex items-center gap-1.5 px-3 py-2.5 border text-xs font-medium rounded-xl transition-all ${
+                savedOk
+                  ? 'border-green-400 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
+                  : saveError
+                  ? 'border-red-400 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20'
+                  : 'border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+              } disabled:opacity-60 disabled:cursor-not-allowed`}
             >
-              <Download className="w-4 h-4" />
-              {t('Guardar', 'Save')}
+              {saving ? (
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : savedOk ? (
+                <CheckCircle className="w-4 h-4" />
+              ) : saveError ? (
+                <AlertCircle className="w-4 h-4" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              {saving
+                ? t('Guardando...', 'Saving...')
+                : savedOk
+                ? t('Guardado', 'Saved to Photos')
+                : saveError
+                ? saveError
+                : t('Guardar', 'Save')}
             </button>
             <button
               onClick={() => setShowQR(true)}
