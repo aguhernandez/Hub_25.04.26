@@ -11,12 +11,13 @@ public class InstagramStoriesPlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     @objc func shareSticker(_ call: CAPPluginCall) {
-        guard let base64String = call.getString("stickerImage") else {
+        guard let base64String = call.getString("stickerImage"),
+              !base64String.isEmpty else {
             call.reject("Missing stickerImage parameter")
             return
         }
 
-        guard let imageData = Data(base64Encoded: base64String) else {
+        guard let imageData = Data(base64Encoded: base64String, options: .ignoreUnknownCharacters) else {
             call.reject("Invalid base64 image data")
             return
         }
@@ -36,11 +37,12 @@ public class InstagramStoriesPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
 
-            var pasteboardItems: [[String: Any]] = [[:]]
-            pasteboardItems[0]["com.instagram.sharedSticker.stickerImage"] = imageData
-            pasteboardItems[0]["com.instagram.sharedSticker.backgroundTopColor"] = backgroundTopColor
-            pasteboardItems[0]["com.instagram.sharedSticker.backgroundBottomColor"] = backgroundBottomColor
-            pasteboardItems[0]["com.instagram.sharedSticker.appID"] = appId
+            let pasteboardItems: [[String: Any]] = [[
+                "com.instagram.sharedSticker.stickerImage": imageData,
+                "com.instagram.sharedSticker.backgroundTopColor": backgroundTopColor,
+                "com.instagram.sharedSticker.backgroundBottomColor": backgroundBottomColor,
+                "com.instagram.sharedSticker.appID": appId
+            ]]
 
             let options: [UIPasteboard.OptionsKey: Any] = [
                 .expirationDate: Date().addingTimeInterval(60 * 5)

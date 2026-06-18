@@ -355,16 +355,30 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
     setTimeout(() => setCopied(false), 2500);
   };
 
+  const canvasToBase64 = (cvs: HTMLCanvasElement): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      cvs.toBlob((blob) => {
+        if (!blob) { reject(new Error('toBlob failed')); return; }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = reader.result as string;
+          resolve(dataUrl.split(',')[1]);
+        };
+        reader.onerror = () => reject(new Error('FileReader failed'));
+        reader.readAsDataURL(blob);
+      }, 'image/png');
+    });
+  };
+
   const handleShare = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     setSharing(true);
     try {
-      // Try Instagram Stories sticker first on native (like Strava)
       try {
         const { Capacitor } = await import('@capacitor/core');
         if (Capacitor.isNativePlatform()) {
-          const base64 = canvas.toDataURL('image/png').split(',')[1];
+          const base64 = await canvasToBase64(canvas);
           if (base64) {
             const { default: InstagramStories } = await import('../../plugins/instagram-stories');
             await InstagramStories.shareSticker({
@@ -379,7 +393,7 @@ export default function WorkoutShareCard({ workoutData, onClose }: WorkoutShareC
           }
         }
       } catch {
-        // Instagram not installed — fall through to native share sheet
+        // Instagram not installed -- fall through to native share sheet
       }
 
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));

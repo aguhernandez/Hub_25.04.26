@@ -52,21 +52,24 @@ public class InstagramStoriesPlugin extends Plugin {
             );
 
             Intent intent = new Intent("com.instagram.share.ADD_TO_STORY");
-            intent.setDataAndType(stickerUri, "image/png");
-            intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.setPackage("com.instagram.android");
+            intent.setType("image/*");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             intent.putExtra("source_application", appId);
             intent.putExtra("interactive_asset_uri", stickerUri);
             intent.putExtra("top_background_color", backgroundTopColor);
             intent.putExtra("bottom_background_color", backgroundBottomColor);
 
-            if (getActivity().getPackageManager().resolveActivity(intent, 0) != null) {
-                getActivity().startActivityForResult(intent, 0);
-                JSObject result = new JSObject();
-                result.put("success", true);
-                call.resolve(result);
-            } else {
-                call.reject("Instagram is not installed");
-            }
+            getContext().grantUriPermission(
+                "com.instagram.android",
+                stickerUri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            );
+
+            getActivity().startActivityForResult(intent, 0);
+            JSObject result = new JSObject();
+            result.put("success", true);
+            call.resolve(result);
         } catch (IOException e) {
             call.reject("Failed to write sticker image: " + e.getMessage());
         } catch (Exception e) {

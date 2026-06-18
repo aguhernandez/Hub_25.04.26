@@ -699,7 +699,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
           // Older versions don't have getPermissions — savePhoto will prompt
         }
 
-        const base64 = canvas.toDataURL('image/png').split(',')[1];
+        const base64 = await canvasToBase64(canvas);
 
         // Save directly to Camera Roll (default album if Asciende album fails)
         let albumId: string | undefined;
@@ -749,17 +749,31 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     }
   };
 
+  const canvasToBase64 = (canvas: HTMLCanvasElement): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error('toBlob failed')); return; }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = reader.result as string;
+          resolve(dataUrl.split(',')[1]);
+        };
+        reader.onerror = () => reject(new Error('FileReader failed'));
+        reader.readAsDataURL(blob);
+      }, 'image/png');
+    });
+  };
+
   // ─── Share: Try Instagram Stories sticker first, then native share ──
   const handleShare = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     setSharing(true);
     try {
-      // On native platforms, always try Instagram Stories sticker first (like Strava)
       try {
         const { Capacitor } = await import('@capacitor/core');
         if (Capacitor.isNativePlatform()) {
-          const base64 = canvas.toDataURL('image/png').split(',')[1];
+          const base64 = await canvasToBase64(canvas);
           if (base64) {
             const { default: InstagramStories } = await import('../../plugins/instagram-stories');
             await InstagramStories.shareSticker({
@@ -774,10 +788,9 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
           }
         }
       } catch {
-        // Instagram not installed or sticker failed — fall through to native share sheet
+        // Instagram not installed or sticker failed -- fall through to native share sheet
       }
 
-      // Native share sheet fallback
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
       if (!blob) return;
 
