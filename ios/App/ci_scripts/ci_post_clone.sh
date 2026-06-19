@@ -2,9 +2,11 @@
 set -e
 echo "=== Installing Homebrew dependencies ==="
 brew install node cocoapods
-echo "=== Installing npm dependencies ==="
 cd ../../..
+echo "=== Installing npm dependencies ==="
 npm install
+echo "=== Building web assets ==="
+npm run build
 echo "=== Running Capacitor sync ==="
 npx cap sync ios
 echo "=== Installing iOS pods ==="
