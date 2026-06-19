@@ -4,7 +4,7 @@ echo "=== Installing Homebrew dependencies ==="
 brew install node cocoapods
 cd ../../..
 echo "=== Installing npm dependencies ==="
-npm install
+npm install --legacy-peer-deps
 echo "=== Building web assets ==="
 npm run build
 echo "=== Running Capacitor sync ==="
