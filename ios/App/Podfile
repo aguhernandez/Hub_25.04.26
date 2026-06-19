@@ -5,8 +5,6 @@ use_frameworks!
 
 target 'App\' do
   capacitor_pods
-  pod 'CapacitorCommunityMedia',
-      :path => '../../node_modules/@capacitor-community/media'
 end
 
 post_install do |installer|
