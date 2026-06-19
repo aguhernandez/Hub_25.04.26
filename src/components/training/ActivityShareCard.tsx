@@ -578,7 +578,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
   // ─── Card Type 3: STORY ─────────────────────────────────────────────
-  const drawStoryCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
+  const drawStoryCard = useCallback(async (ctx: CanvasRenderingContext2D, W: number, H: number) => {
     // Clear to transparent
     ctx.clearRect(0, 0, W, H);
 
@@ -588,30 +588,60 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     const cardW = W - cardPad * 2;
     const cardH = 700;
     const cardR = 36;
+    const mapMargin = 20;
+    const statsH = 110;
+    const mapX = cardX + mapMargin;
+    const mapY = cardY + mapMargin;
+    const mapW = cardW - mapMargin * 2;
+    const mapH = cardH - statsH - mapMargin * 2;
 
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    // Draw card background with rounded clip
+    ctx.save();
     roundRect(ctx, cardX, cardY, cardW, cardH, cardR);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-    ctx.lineWidth = 1.5;
-    roundRect(ctx, cardX, cardY, cardW, cardH, cardR);
-    ctx.stroke();
+    ctx.clip();
 
     const pts = activityData.gpsPoints;
     if (pts && pts.length >= 2) {
       const sampled = samplePoints(pts, 1500);
-      const mapArea = { x: cardX + 20, y: cardY + 20, w: cardW - 40, h: cardH - 120 };
-      const projected = projectPoints(sampled, mapArea.x, mapArea.y, mapArea.w, mapArea.h, 40);
-      drawRoute(ctx, projected, sport.color, 4, 20);
+      try {
+        const result = await renderMapTiles(ctx, sampled, mapX, mapY, mapW, mapH);
+        // Dark overlay on the map tiles
+        ctx.fillStyle = 'rgba(10, 10, 30, 0.25)';
+        ctx.fillRect(mapX, mapY, mapW, mapH);
+        if (result) {
+          const projected = projectOnTiles(sampled, result.zoom, result.ox, result.oy, mapX, mapY);
+          drawRoute(ctx, projected, sport.color, 4, 20);
+        }
+      } catch {
+        // Fallback: vector route on dark background
+        ctx.fillStyle = 'rgba(20,20,40,0.9)';
+        ctx.fillRect(mapX, mapY, mapW, mapH);
+        const projected = projectPoints(sampled, mapX, mapY, mapW, mapH, 40);
+        drawRoute(ctx, projected, sport.color, 4, 20);
+      }
     } else {
+      ctx.fillStyle = 'rgba(20,20,40,0.9)';
+      ctx.fillRect(mapX, mapY, mapW, mapH);
       ctx.fillStyle = 'rgba(255,255,255,0.3)';
       ctx.font = f('400 24px');
       ctx.textAlign = 'center';
       ctx.fillText(language === 'es' ? 'Sin ruta GPS' : 'No GPS route', cardX + cardW / 2, cardY + cardH / 2 - 40);
     }
 
+    // Stats bar at bottom of card
+    ctx.fillStyle = 'rgba(10,10,30,0.75)';
+    ctx.fillRect(cardX, cardY + cardH - statsH, cardW, statsH);
+
+    ctx.restore();
+
+    // Card border
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, cardX, cardY, cardW, cardH, cardR);
+    ctx.stroke();
+
     const stats = getStatsArray();
-    const rowY = cardY + cardH - 90;
+    const rowY = cardY + cardH - statsH / 2 - 14;
     const colW = cardW / stats.length;
 
     stats.forEach((s, i) => {
@@ -646,7 +676,8 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     ctx.font = `400 26px ${FONT_FALLBACK}`;
     ctx.fillText(getShareUrlShort(), W / 2, ctaY + 46);
 
-    drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 180, W * 0.45, 100, f('700 44px'));
+    // Logo 20px lower than previous position
+    drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 200, W * 0.45, 100, f('700 44px'));
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
   const generateCard = useCallback(async () => {
@@ -662,7 +693,7 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
 
     if (cardType === 'map') await drawMapCard(ctx, W, H);
     else if (cardType === 'transparent') drawTransparentCard(ctx, W, H);
-    else drawStoryCard(ctx, W, H);
+    else await drawStoryCard(ctx, W, H);
   }, [cardType, drawMapCard, drawTransparentCard, drawStoryCard]);
 
   useEffect(() => {
