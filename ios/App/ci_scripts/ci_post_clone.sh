@@ -13,18 +13,18 @@ rm -rf ~/Library/Caches/org.swift.swiftpm 2>/dev/null || true
 rm -rf ~/Library/org.swift.swiftpm 2>/dev/null || true
 
 # -------------------------------------------------------
-# 2. Install Node.js (Xcode Cloud has no Node by default)
+# 2. Install Node.js and CocoaPods
+#    (Xcode Cloud has no Node by default)
 # -------------------------------------------------------
-echo "--- Instalando Node.js ---"
-brew install node
+echo "--- Instalando Node.js y CocoaPods ---"
+brew install node cocoapods
 export PATH="/usr/local/bin:$PATH"
 
 # Go to project root (ci_scripts is at ios/App/ci_scripts)
 cd ../../..
 
 # -------------------------------------------------------
-# 3. Environment variables (hardcoded in supabase.ts now,
-#    but .env still used by Vite for other vars)
+# 3. Environment variables
 # -------------------------------------------------------
 echo "--- Configurando .env ---"
 cat > .env << 'EOF'
@@ -41,11 +41,23 @@ npm install --force
 echo "--- npm run build ---"
 npm run build
 
+# -------------------------------------------------------
+# 5. Capacitor sync (generates native files, updates SPM)
+# -------------------------------------------------------
 echo "--- npx cap sync ios ---"
 npx cap sync ios
 
 # -------------------------------------------------------
-# 5. Remove any lingering Cordova.framework references
+# 6. CocoaPods install (for @capacitor-community/media
+#    which has no SPM support)
+# -------------------------------------------------------
+echo "--- pod install ---"
+cd ios/App
+pod install --repo-update
+cd ../..
+
+# -------------------------------------------------------
+# 7. Remove any lingering Cordova.framework references
 #    from pbxproj (safety net)
 # -------------------------------------------------------
 echo "--- Limpieza de Cordova.framework del pbxproj ---"
@@ -59,9 +71,7 @@ fi
 cd ../../..
 
 # -------------------------------------------------------
-# 6. Force SPM package resolution from scratch
-#    This ensures Package.resolved (pinned to 7.6.5)
-#    is respected and no cached 9.x binaries are used
+# 8. Force SPM package resolution from scratch
 # -------------------------------------------------------
 echo "--- Resolviendo dependencias SPM ---"
 cd ios/App
@@ -72,7 +82,7 @@ xcodebuild -resolvePackageDependencies \
 cd ../..
 
 # -------------------------------------------------------
-# 7. Verify resolved versions
+# 9. Verify resolved versions
 # -------------------------------------------------------
 echo "--- Verificando versiones resueltas ---"
 RESOLVED_FILE="ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
