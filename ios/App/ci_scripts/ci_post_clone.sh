@@ -9,6 +9,8 @@ echo "=== Building web assets ==="
 npm run build
 echo "=== Running Capacitor sync ==="
 npx cap sync ios
+echo "=== Resolving Swift Package Manager dependencies ==="
+xcodebuild -resolvePackageDependencies -workspace ios/App/App.xcworkspace -scheme App
 echo "=== Generating clean Podfile ==="
 cat > ios/App/Podfile << 'PODFILE'
 platform :ios, '15.0'
