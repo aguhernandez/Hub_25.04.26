@@ -10,9 +10,12 @@ npm run build
 echo "=== Running Capacitor sync ==="
 npx cap sync ios
 echo "=== Resolving Swift Package Manager dependencies ==="
-xcodebuild -resolvePackageDependencies -workspace ios/App/App.xcworkspace -scheme App -scmProvider system
-mkdir -p ios/App/App.xcworkspace/xcshareddata/swiftpm/
-cp ios/App/App.xcworkspace/xcshareddata/swiftpm/Package.resolved ios/App/App.xcworkspace/xcshareddata/swiftpm/Package.resolved 2>/dev/null || true
+xcodebuild -resolvePackageDependencies \
+  -workspace /Volumes/workspace/repository/ios/App/App.xcworkspace \
+  -scheme App \
+  -scmProvider xcode
+echo "=== Package.resolved contents ==="
+cat /Volumes/workspace/repository/ios/App/App.xcworkspace/xcshareddata/swiftpm/Package.resolved
 echo "=== Generating clean Podfile ==="
 cat > ios/App/Podfile << 'PODFILE'
 platform :ios, '15.0'
