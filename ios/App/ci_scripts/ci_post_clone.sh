@@ -10,8 +10,11 @@ npm run build
 echo "=== Running Capacitor sync ==="
 npx cap sync ios
 echo "=== Generating clean Podfile ==="
-cat > ios/App/Podfile << 'PODFILE'
-require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
+REPO_ROOT="/Volumes/workspace/repository"
+echo "=== Verifying pods_helpers path ==="
+ls $REPO_ROOT/node_modules/@capacitor/ios/scripts/pods_helpers.rb
+cat > ios/App/Podfile << PODFILE
+require_relative '$REPO_ROOT/node_modules/@capacitor/ios/scripts/pods_helpers'
 platform :ios, '15.0'
 use_frameworks!
 target 'App' do
