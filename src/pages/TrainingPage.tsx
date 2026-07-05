@@ -1231,13 +1231,15 @@ export default function TrainingPage() {
     if (!copiedWorkout || !effectiveAthleteId) return;
 
     try {
+      const isTrainer = profile?.role === 'trainer' && selectedAthleteId;
       const { data: newAthleteWorkout, error: awError } = await supabase
         .from('athlete_workouts')
         .insert({
           athlete_id: effectiveAthleteId,
           workout_id: copiedWorkout.workout_id,
           scheduled_date: targetDate,
-          status: 'pending'
+          status: 'pending',
+          ...(isTrainer && { trainer_id: profile.id })
         })
         .select()
         .single();
@@ -1263,13 +1265,15 @@ export default function TrainingPage() {
     if (!workoutToDuplicate || !effectiveAthleteId) return;
 
     try {
+      const isTrainer = profile?.role === 'trainer' && selectedAthleteId;
       const { data: newAthleteWorkout, error: awError } = await supabase
         .from('athlete_workouts')
         .insert({
           athlete_id: effectiveAthleteId,
           workout_id: workoutToDuplicate.workout_id,
           scheduled_date: targetDate,
-          status: 'pending'
+          status: 'pending',
+          ...(isTrainer && { trainer_id: profile.id })
         })
         .select()
         .single();
