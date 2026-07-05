@@ -1228,13 +1228,13 @@ export default function TrainingPage() {
   };
 
   const handlePasteWorkout = async (targetDate: string) => {
-    if (!copiedWorkout || !profile?.id) return;
+    if (!copiedWorkout || !effectiveAthleteId) return;
 
     try {
       const { data: newAthleteWorkout, error: awError } = await supabase
         .from('athlete_workouts')
         .insert({
-          athlete_id: profile.id,
+          athlete_id: effectiveAthleteId,
           workout_id: copiedWorkout.workout_id,
           scheduled_date: targetDate,
           status: 'pending'
@@ -1260,13 +1260,13 @@ export default function TrainingPage() {
   };
 
   const executeDuplicate = async (targetDate: string) => {
-    if (!workoutToDuplicate || !profile?.id) return;
+    if (!workoutToDuplicate || !effectiveAthleteId) return;
 
     try {
       const { data: newAthleteWorkout, error: awError } = await supabase
         .from('athlete_workouts')
         .insert({
-          athlete_id: profile.id,
+          athlete_id: effectiveAthleteId,
           workout_id: workoutToDuplicate.workout_id,
           scheduled_date: targetDate,
           status: 'pending'
@@ -1988,6 +1988,7 @@ export default function TrainingPage() {
                 ) : (
                   <DailyWorkoutView
                     selectedDate={selectedDate}
+                    athleteId={effectiveAthleteId}
                     onWorkoutUpdate={loadWorkouts}
                     onOpenExtraTraining={() => setShowExtraTrainingModal(true)}
                   />
@@ -2375,6 +2376,7 @@ export default function TrainingPage() {
             <div className="p-6">
               <DailyWorkoutView
                 selectedDate={selectedDate}
+                athleteId={effectiveAthleteId}
                 onWorkoutUpdate={loadWorkouts}
                 onOpenExtraTraining={() => {
                   setShowMonthlyDayModal(false);

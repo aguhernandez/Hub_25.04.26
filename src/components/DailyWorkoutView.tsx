@@ -54,10 +54,12 @@ interface DailyWorkoutViewProps {
   selectedDate: Date;
   onWorkoutUpdate: () => void;
   onOpenExtraTraining?: () => void;
+  athleteId?: string;
 }
 
-export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpenExtraTraining }: DailyWorkoutViewProps) {
+export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpenExtraTraining, athleteId }: DailyWorkoutViewProps) {
   const { profile } = useAuth();
+  const effectiveAthleteId = athleteId || profile?.id;
   const { t, language } = useLanguage();
   const { toast, hideToast, success, error } = useToast();
   const [allWorkouts, setAllWorkouts] = useState<any[]>([]);
@@ -82,7 +84,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
 
   useEffect(() => {
     loadDailyWorkout();
-  }, [selectedDate, profile?.id]);
+  }, [selectedDate, profile?.id, athleteId]);
 
   const getTotalSetsForExercise = (exercise: Exercise): number => {
     if (exercise.set_lines) {
@@ -152,7 +154,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
   };
 
   const loadDailyWorkout = async () => {
-    if (!profile?.id) return;
+    if (!effectiveAthleteId) return;
 
     setLoading(true);
     const formatDateLocal = (date: Date): string => {
@@ -167,7 +169,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
     const { data: workoutList, error: wError } = await supabase
       .from('athlete_workouts')
       .select('*')
-      .eq('athlete_id', profile.id)
+      .eq('athlete_id', effectiveAthleteId)
       .eq('scheduled_date', dateStr)
       .order('created_at');
 
@@ -175,14 +177,14 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
     const { data: extraTraining, error: extraError } = await supabase
       .from('extra_training_logs')
       .select('*')
-      .eq('athlete_id', profile.id)
+      .eq('athlete_id', effectiveAthleteId)
       .eq('training_date', dateStr);
 
     // Load external activities (Strava, etc)
     const { data: allExternalActivities, error: externalError } = await supabase
       .from('external_activities')
       .select('*')
-      .eq('user_id', profile.id)
+      .eq('user_id', effectiveAthleteId)
       .order('start_time', { ascending: false });
 
     // Filter external activities by date - prefer local_date field, fallback to string substring
@@ -209,7 +211,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
           )
         )
       `)
-      .eq('athlete_id', profile.id)
+      .eq('athlete_id', effectiveAthleteId)
       .order('logged_at', { ascending: false });
 
     // Filter logs for this date
@@ -217,7 +219,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       return String(log.logged_at).substring(0, 10) === dateStr;
     }) || [];
 
-    console.log('📅 Date:', dateStr, 'Athlete:', profile.id);
+    console.log('📅 Date:', dateStr, 'Athlete:', effectiveAthleteId);
     console.log('🏋️ Programmed workouts found:', workoutList?.length || 0);
     console.log('💪 Extra training found:', extraTraining?.length || 0);
     console.log('🏃 External activities found:', externalActivities?.length || 0);
@@ -281,7 +283,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
     const { data: enduranceWorkouts } = await supabase
       .from('external_endurance_workouts')
       .select('*')
-      .eq('athlete_id', profile.id)
+      .eq('athlete_id', effectiveAthleteId)
       .eq('scheduled_date', dateStr);
 
     if (enduranceWorkouts && enduranceWorkouts.length > 0) {
@@ -307,7 +309,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
     const { data: endurancePlans } = await supabase
       .from('external_endurance_plans')
       .select('id, week_start_date, plan_name, planner_source, summary, plan_data')
-      .eq('athlete_id', profile.id)
+      .eq('athlete_id', effectiveAthleteId)
       .gte('week_start_date', formatDateLocal(weekStart))
       .lte('week_start_date', dateStr);
 
@@ -839,6 +841,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       window.dispatchEvent(new Event('workout-history-refresh'));
 
       onWorkoutUpdate();
+      await loadDailyWorkout();
     } catch (err: any) {
       console.error('Error saving changes:', err);
       error(err.message || (language === 'es' ? 'Error al guardar cambios' : 'Error saving changes'), 5000);
