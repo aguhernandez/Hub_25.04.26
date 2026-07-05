@@ -1227,25 +1227,64 @@ export default function TrainingPage() {
     success(language === 'es' ? 'Entrenamiento copiado' : 'Workout copied');
   };
 
+  const deepCopyWorkoutToDate = async (sourceWorkoutId: string, targetDate: string, athleteId: string, trainerId?: string): Promise<void> => {
+    const { data: originalWorkout, error: wErr } = await supabase
+      .from('workouts')
+      .select('name, description, duration_minutes, difficulty, trainer_id')
+      .eq('id', sourceWorkoutId)
+      .maybeSingle();
+    if (wErr) throw wErr;
+
+    const { data: newWorkout, error: nwErr } = await supabase
+      .from('workouts')
+      .insert({
+        trainer_id: trainerId ?? originalWorkout?.trainer_id ?? null,
+        name: originalWorkout?.name || '',
+        description: originalWorkout?.description ?? null,
+        duration_minutes: originalWorkout?.duration_minutes ?? null,
+        difficulty: originalWorkout?.difficulty ?? null,
+      })
+      .select('id')
+      .single();
+    if (nwErr) throw nwErr;
+
+    const { data: originalExercises, error: exErr } = await supabase
+      .from('workout_exercises')
+      .select('exercise_id, custom_exercise_name, custom_exercise_video_url, sets, reps, rest_seconds, notes, superset_group, order_index, primary_metric, secondary_metric, set_lines, section_title, use_1rm_auto_load, target_1rm_percentage, reference_1rm_method, calculated_load, rir, rpe, primary_value, secondary_value')
+      .eq('workout_id', sourceWorkoutId)
+      .order('order_index');
+    if (exErr) throw exErr;
+
+    if (originalExercises && originalExercises.length > 0) {
+      const { error: insertExErr } = await supabase
+        .from('workout_exercises')
+        .insert(originalExercises.map(ex => ({ ...ex, workout_id: newWorkout.id })));
+      if (insertExErr) throw insertExErr;
+    }
+
+    const { error: awErr } = await supabase
+      .from('athlete_workouts')
+      .insert({
+        athlete_id: athleteId,
+        workout_id: newWorkout.id,
+        scheduled_date: targetDate,
+        status: 'pending',
+        ...(trainerId && { trainer_id: trainerId }),
+      });
+    if (awErr) throw awErr;
+  };
+
   const handlePasteWorkout = async (targetDate: string) => {
     if (!copiedWorkout || !effectiveAthleteId) return;
 
     try {
       const isTrainer = profile?.role === 'trainer' && selectedAthleteId;
-      const { data: newAthleteWorkout, error: awError } = await supabase
-        .from('athlete_workouts')
-        .insert({
-          athlete_id: effectiveAthleteId,
-          workout_id: copiedWorkout.workout_id,
-          scheduled_date: targetDate,
-          status: 'pending',
-          ...(isTrainer && { trainer_id: profile.id })
-        })
-        .select()
-        .single();
-
-      if (awError) throw awError;
-
+      await deepCopyWorkoutToDate(
+        copiedWorkout.workout_id,
+        targetDate,
+        effectiveAthleteId,
+        isTrainer ? profile.id : undefined
+      );
       success(language === 'es' ? 'Entrenamiento pegado exitosamente' : 'Workout pasted successfully');
       setCopiedWorkout(null);
       await loadWorkouts();
@@ -1266,27 +1305,19 @@ export default function TrainingPage() {
 
     try {
       const isTrainer = profile?.role === 'trainer' && selectedAthleteId;
-      const { data: newAthleteWorkout, error: awError } = await supabase
-        .from('athlete_workouts')
-        .insert({
-          athlete_id: effectiveAthleteId,
-          workout_id: workoutToDuplicate.workout_id,
-          scheduled_date: targetDate,
-          status: 'pending',
-          ...(isTrainer && { trainer_id: profile.id })
-        })
-        .select()
-        .single();
-
-      if (awError) throw awError;
-
+      await deepCopyWorkoutToDate(
+        workoutToDuplicate.workout_id,
+        targetDate,
+        effectiveAthleteId,
+        isTrainer ? profile.id : undefined
+      );
       success(language === 'es' ? 'Entrenamiento duplicado exitosamente' : 'Workout duplicated successfully');
       await loadWorkouts();
       setShowDuplicateModal(false);
       setWorkoutToDuplicate(null);
-    } catch (error) {
-      console.error('Error duplicating workout:', error);
-      throw error;
+    } catch (err) {
+      console.error('Error duplicating workout:', err);
+      throw err;
     }
   };
 
