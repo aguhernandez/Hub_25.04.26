@@ -1112,23 +1112,56 @@ export default function TrainingPage() {
 
     // Endurance plan items — show the detail card modal
     if ((workout as any).type === 'endurance_plan') {
-      const data = (workout as any).endurance_workout_data;
-      if (data) {
-        setSelectedEnduranceWorkout(data as EnduranceWorkout);
+      const raw = (workout as any).endurance_workout_data;
+      const w = workout as any;
+      // Normalize: raw plan-day objects have description+steps in one text blob; db rows have steps as a jsonb array
+      const rawDescription: string = (raw?.description || w.description || '');
+      const steps: any[] = raw?.steps || w.parsed_steps || (rawDescription ? parseStepsFromDescription(rawDescription) : []);
+      // Clean description: strip the "Steps:" block and metadata lines
+      const cleanedDescription = rawDescription
+        .split('\n\n')
+        .filter((p: string) => {
+          const t = p.trim();
+          return t.length > 0
+            && !t.startsWith('Steps:')
+            && !t.startsWith('Planned impulse:')
+            && !t.startsWith('Intensity basis:');
+        })
+        .join('\n\n')
+        .trim() || undefined;
+
+      if (raw) {
+        setSelectedEnduranceWorkout({
+          id: raw.id || w.id,
+          name: raw.name || w.name,
+          sport: raw.sport || w.sport || 'cycling',
+          sub_discipline: raw.sub_discipline || w.sub_discipline,
+          description: cleanedDescription,
+          intensity_basis: raw.intensity_basis || 'rpe',
+          scheduled_date: raw.scheduled_date || w.scheduled_date,
+          estimated_duration_minutes: raw.estimated_duration_minutes || raw.planned_duration_minutes || raw.duration_min || w.estimated_duration_minutes || 0,
+          estimated_impulse: raw.estimated_impulse || raw.planned_tss || raw.tss || w.estimated_impulse,
+          status: raw.status || w.status || 'planned',
+          steps,
+          planner_source: raw.planner_source || w.planner_source || '',
+          session_type: raw.session_type || w.session_type,
+          target_zones: raw.target_zones || w.target_zones,
+          rpe: raw.rpe || w.rpe,
+          notes: raw.notes || w.notes,
+        } as EnduranceWorkout);
       } else {
-        const w = workout as any;
         setSelectedEnduranceWorkout({
           id: w.id,
           name: w.name,
           sport: w.sport || 'cycling',
           sub_discipline: w.sub_discipline,
-          description: w.description,
+          description: cleanedDescription,
           intensity_basis: 'rpe',
           scheduled_date: w.scheduled_date,
           estimated_duration_minutes: w.estimated_duration_minutes || 0,
           estimated_impulse: w.estimated_impulse,
           status: w.status || 'planned',
-          steps: w.parsed_steps || [],
+          steps,
           planner_source: w.planner_source || '',
           session_type: w.session_type,
           target_zones: w.target_zones,
