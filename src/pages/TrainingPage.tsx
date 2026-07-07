@@ -264,9 +264,10 @@ export default function TrainingPage() {
     const lines = stepsMatch[1].split('\n').filter(l => l.trim());
     let idCounter = 0;
     return lines.map(line => {
-      const match = line.match(/^(\w+):\s+(\d+)(?:min|km|m)?\s+@\s+(.+)$/i);
+      // Match: "warmup: 10min @ 3-3 RPE" or "interval: 30s @ 8-8 RPE" or "cooldown: 10min @ Z2"
+      const match = line.match(/^(\w+):\s+(\d+)(min|s|km|m)?\s+@\s+(.+)$/i);
       if (!match) return null;
-      const [, stepType, durationStr, targetStr] = match;
+      const [, stepType, durationStr, unit, targetStr] = match;
       const normalizedType = stepType.toLowerCase();
       const stepTypeMap: Record<string, string> = {
         warmup: 'warmup', warm: 'warmup', wu: 'warmup',
@@ -276,7 +277,9 @@ export default function TrainingPage() {
         steady: 'steady', endurance: 'steady', base: 'steady',
       };
       const mappedType = stepTypeMap[normalizedType] || 'steady';
-      const durationSeconds = parseInt(durationStr) * 60;
+      const durationVal = parseInt(durationStr);
+      // Convert to seconds: min→×60, s→×1, default→×60
+      const durationSeconds = (unit?.toLowerCase() === 's') ? durationVal : durationVal * 60;
 
       let targetType: string = 'rpe';
       let targetZone: number | undefined;
@@ -305,13 +308,19 @@ export default function TrainingPage() {
           targetType = 'power';
           targetPercentFtp = parseInt(pctMatch[1]);
         }
-      } else if (targetStr.match(/RPE\s*\d+/i)) {
-        const rpeMatch = targetStr.match(/RPE\s*(\d+)/i);
-        if (rpeMatch) {
+      } else {
+        // Handle RPE formats: "RPE 8", "8-8 RPE", "3-3 RPE", "8 RPE"
+        const rpeAfter = targetStr.match(/RPE\s*(\d+)/i);
+        const rpeBefore = targetStr.match(/(\d+)(?:-(\d+))?\s*RPE/i);
+        if (rpeAfter) {
           targetType = 'rpe';
-          const rpeVal = parseInt(rpeMatch[1]);
+          const rpeVal = parseInt(rpeAfter[1]);
           targetMin = rpeVal;
           targetMax = rpeVal;
+        } else if (rpeBefore) {
+          targetType = 'rpe';
+          targetMin = parseInt(rpeBefore[1]);
+          targetMax = rpeBefore[2] ? parseInt(rpeBefore[2]) : targetMin;
         }
       }
 

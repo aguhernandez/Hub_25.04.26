@@ -68,20 +68,39 @@ const SPORT_ICONS: Record<string, any> = {
 };
 
 function getStepIntensity(step: WorkoutStep): number {
-  if (step.target_percent_ftp) return Math.min(step.target_percent_ftp, 130);
-  if (step.target_zone) return step.target_zone * 18;
+  if (step.target_percent_ftp != null) return Math.min(step.target_percent_ftp, 130);
+  if (step.target_type === 'power' && step.target_zone != null) return step.target_zone * 18;
+  if (step.target_type === 'rpe') {
+    const rpe = step.target_max_value ?? step.target_min_value ?? step.target_zone;
+    if (rpe != null) return Math.min((rpe / 10) * 100, 130);
+  }
+  if (step.target_type === 'hr' && step.target_zone != null) return step.target_zone * 18;
+  if (step.target_zone != null) return step.target_zone * 18;
+  // No intensity data — use step type defaults only as last resort
   const defaults: Record<string, number> = {
-    warmup: 55, cooldown: 50, recovery: 50, steady: 76, interval: 105,
+    warmup: 35, cooldown: 35, recovery: 30, steady: 65, interval: 90,
   };
-  return defaults[step.step_type] ?? 70;
+  return defaults[step.step_type] ?? 50;
+}
+
+function getStepLabel(step: WorkoutStep): string {
+  if (step.target_percent_ftp != null) return `${step.target_percent_ftp}%`;
+  if (step.target_type === 'rpe') {
+    const rpe = step.target_max_value ?? step.target_min_value ?? step.target_zone;
+    if (rpe != null) return `RPE ${rpe}`;
+  }
+  if (step.target_zone != null) return `Z${step.target_zone}`;
+  if (step.target_min_value != null && step.target_type === 'power') return `${step.target_min_value}W`;
+  return '';
 }
 
 function formatDuration(step: WorkoutStep): string {
   if (step.duration_type === 'time') {
     const secs = step.duration_value;
+    if (secs < 60) return `${secs}s`;
     const m = Math.floor(secs / 60);
     const s = secs % 60;
-    return s === 0 ? `${m} min` : `${m}:${String(s).padStart(2, '0')} min`;
+    return s === 0 ? `${m} min` : `${m}:${String(s).padStart(2, '0')}`;
   }
   return `${(step.duration_value / 1000).toFixed(1)} km`;
 }
@@ -121,7 +140,7 @@ function WorkoutBarChart({ steps }: { steps: WorkoutStep[] }) {
 
   if (totalDuration === 0) return null;
 
-  const CHART_H = 120;
+  const CHART_H = 140;
   const MAX_INTENSITY = 130;
 
   const groupedByRepeat = new Map<string, WorkoutStep[]>();
@@ -172,9 +191,9 @@ function WorkoutBarChart({ steps }: { steps: WorkoutStep[] }) {
           return (
             <g key={`${step.id}-${i}`}>
               <rect x={`${xStart}%`} y={CHART_H - barH} width={`${xWidth - 0.3}%`} height={barH} fill={colors.fill} stroke={colors.stroke} strokeWidth="1" rx="2" />
-              {xWidth > 4 && (
-                <text x={`${xStart + xWidth / 2}%`} y={CHART_H - barH + 14} textAnchor="middle" fontSize="10" fill={colors.stroke} fontWeight="600">
-                  {intensity}%
+              {xWidth > 5 && (
+                <text x={`${xStart + xWidth / 2}%`} y={CHART_H - barH + 14} textAnchor="middle" fontSize="9" fill={colors.stroke} fontWeight="600">
+                  {getStepLabel(step)}
                 </text>
               )}
             </g>
@@ -196,10 +215,12 @@ function StepRow({ step, language }: { step: WorkoutStep; language: string }) {
   const duration = formatDuration(step);
   return (
     <div className="flex items-center gap-2 py-1.5 border-b border-gray-100 dark:border-gray-800 last:border-0">
-      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${colors.dot}`} />
-      <span className="text-xs text-gray-700 dark:text-gray-300 w-28 flex-shrink-0 truncate">{label}</span>
-      <span className="text-xs text-gray-500 dark:text-gray-400 w-16 flex-shrink-0">{duration}</span>
-      <span className="text-xs font-medium text-gray-800 dark:text-gray-200 flex-1 truncate">{target}</span>
+      <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${colors.dot}`} />
+      <span className="text-xs text-gray-700 dark:text-gray-300 flex-1 truncate">{label}</span>
+      <span className="text-xs text-gray-500 dark:text-gray-400 w-14 text-right flex-shrink-0">{duration}</span>
+      {target && (
+        <span className="text-xs font-bold flex-shrink-0 ml-2" style={{ color: colors.stroke }}>{target}</span>
+      )}
     </div>
   );
 }
