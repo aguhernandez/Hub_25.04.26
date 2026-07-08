@@ -403,7 +403,7 @@ export default function EnduranceWorkoutCard({ workout, language, initialExpande
           {(workout.target_zones && workout.target_zones.length > 0) && (
             <div className="px-4 py-2.5 border-b border-gray-100 dark:border-gray-800">
               <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">
-                {language === 'es' ? 'Zonas objetivo' : 'Target Zones'}
+                {language === 'es' ? 'Objetivo' : 'Target'}
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {workout.target_zones.map((z: any, i: number) => (

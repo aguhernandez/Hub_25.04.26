@@ -643,7 +643,13 @@ export default function TrainingPage() {
             estimated_impulse: tss || undefined,
             sport,
             session_type: sessionType || undefined,
-            target_zones: (w.target_zones || []).map((z: number) => `Z${z}`),
+            target_zones: (w.target_zones || []).map((z: number) => {
+              const basis = w.intensity_basis || 'zone';
+              if (basis === 'rpe') return `RPE ${z}`;
+              if (basis === 'power') return `Z${z}`;
+              if (basis === 'hr') return `Z${z}`;
+              return `Z${z}`;
+            }),
             rpe: w.rpe || undefined,
             notes: w.notes || undefined,
             plan_week_id: ep.id,
@@ -1124,20 +1130,41 @@ export default function TrainingPage() {
       const raw = (workout as any).endurance_workout_data;
       const w = workout as any;
       // Normalize: raw plan-day objects have description+steps in one text blob; db rows have steps as a jsonb array
-      const rawDescription: string = (raw?.description || w.description || '');
+      // Use raw?.description (full original text) first; w.description is already pre-cleaned so use as fallback
+      const rawDescription: string = raw?.description || '';
       const steps: any[] = raw?.steps || w.parsed_steps || (rawDescription ? parseStepsFromDescription(rawDescription) : []);
-      // Clean description: strip the "Steps:" block and metadata lines
-      const cleanedDescription = rawDescription
-        .split('\n\n')
-        .filter((p: string) => {
+
+      // Build display description:
+      // If raw has full description text, parse out the meaningful paragraphs (skip Steps/metadata blocks and the name line)
+      // If raw has no description, use w.description (already cleaned during calendar load)
+      let cleanedDescription: string | undefined;
+      if (rawDescription) {
+        const paragraphs = rawDescription.split('\n\n');
+        // Heuristic: if first paragraph is a single short line that matches the workout name, skip it
+        const workoutName: string = (raw?.name || w.name || '').toLowerCase().trim();
+        const filtered = paragraphs.filter((p, idx) => {
           const t = p.trim();
-          return t.length > 0
-            && !t.startsWith('Steps:')
-            && !t.startsWith('Planned impulse:')
-            && !t.startsWith('Intensity basis:');
-        })
-        .join('\n\n')
-        .trim() || undefined;
+          if (!t) return false;
+          if (t.startsWith('Steps:')) return false;
+          if (t.startsWith('Planned impulse:')) return false;
+          if (t.startsWith('Intensity basis:')) return false;
+          // Skip first paragraph if it's just the name
+          if (idx === 0 && workoutName && t.toLowerCase() === workoutName) return false;
+          return true;
+        });
+        cleanedDescription = filtered.join('\n\n').trim() || undefined;
+      } else {
+        cleanedDescription = w.description || undefined;
+      }
+
+      const intensityBasis: string = raw?.intensity_basis || w.intensity_basis || 'zone';
+      const formatZone = (z: any): string => {
+        if (typeof z === 'string') return z; // already formatted
+        if (intensityBasis === 'rpe') return `RPE ${z}`;
+        return `Z${z}`;
+      };
+      const rawZones = raw?.target_zones || w.target_zones;
+      const formattedZones = Array.isArray(rawZones) ? rawZones.map(formatZone) : undefined;
 
       if (raw) {
         setSelectedEnduranceWorkout({
@@ -1146,7 +1173,7 @@ export default function TrainingPage() {
           sport: raw.sport || w.sport || 'cycling',
           sub_discipline: raw.sub_discipline || w.sub_discipline,
           description: cleanedDescription,
-          intensity_basis: raw.intensity_basis || 'rpe',
+          intensity_basis: intensityBasis,
           scheduled_date: raw.scheduled_date || w.scheduled_date,
           estimated_duration_minutes: raw.estimated_duration_minutes || raw.planned_duration_minutes || raw.duration_min || w.estimated_duration_minutes || 0,
           estimated_impulse: raw.estimated_impulse || raw.planned_tss || raw.tss || w.estimated_impulse,
@@ -1154,7 +1181,7 @@ export default function TrainingPage() {
           steps,
           planner_source: raw.planner_source || w.planner_source || '',
           session_type: raw.session_type || w.session_type,
-          target_zones: raw.target_zones || w.target_zones,
+          target_zones: formattedZones,
           rpe: raw.rpe || w.rpe,
           notes: raw.notes || w.notes,
         } as EnduranceWorkout);
@@ -1165,7 +1192,7 @@ export default function TrainingPage() {
           sport: w.sport || 'cycling',
           sub_discipline: w.sub_discipline,
           description: cleanedDescription,
-          intensity_basis: 'rpe',
+          intensity_basis: intensityBasis,
           scheduled_date: w.scheduled_date,
           estimated_duration_minutes: w.estimated_duration_minutes || 0,
           estimated_impulse: w.estimated_impulse,
@@ -1173,7 +1200,7 @@ export default function TrainingPage() {
           steps,
           planner_source: w.planner_source || '',
           session_type: w.session_type,
-          target_zones: w.target_zones,
+          target_zones: formattedZones,
           rpe: w.rpe,
           notes: w.notes,
         } as EnduranceWorkout);
