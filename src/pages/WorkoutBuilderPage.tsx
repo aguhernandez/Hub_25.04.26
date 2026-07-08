@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAthlete } from '../contexts/AthleteContext';
 import { supabase } from '../lib/supabase';
-import { Dumbbell, Plus, Save, Users, Calendar, Search, X, Play, Trash2, CreditCard as Edit2, Check, GripVertical, MoveUp, MoveDown, Calculator, Layers, AlertTriangle } from 'lucide-react';
+import { Dumbbell, Plus, Save, Users, Calendar, Search, X, Play, Trash2, CreditCard as Edit2, Check, GripVertical, MoveUp, MoveDown, Calculator, Layers, AlertTriangle, ChevronDown } from 'lucide-react';
 import AdvancedExerciseBuilder from '../components/training/AdvancedExerciseBuilder';
 import StrengthEstimator from '../components/training/StrengthEstimator';
 import CircuitPanelInline from '../components/training/CircuitPanelInline';
@@ -1559,18 +1559,10 @@ export default function WorkoutBuilderPage() {
             </button>
           </div>
 
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-            <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">
-              {language === 'es' ? '💡 Funcionalidades Avanzadas' : '💡 Advanced Features'}
-            </h3>
-            <ul className="text-sm text-blue-800 dark:text-blue-400 space-y-1">
-              <li>• {language === 'es' ? 'Múltiples líneas de series por ejercicio' : 'Multiple set lines per exercise'}</li>
-              <li>• {language === 'es' ? 'Métricas primarias y secundarias' : 'Primary and secondary metrics'}</li>
-              <li>• {language === 'es' ? 'Kg, Lb, %, Tiempo, Distancia, Calorías' : 'Kg, Lb, %, Time, Distance, Calories'}</li>
-              <li>• {language === 'es' ? 'Duplicar ejercicios fácilmente' : 'Duplicate exercises easily'}</li>
-              <li>• <strong>{language === 'es' ? 'Estimador de Fuerza 1RM (Fórmula de Epley)' : 'Strength Estimator 1RM (Epley Formula)'}</strong></li>
-            </ul>
-          </div>
+          <WorkoutSummaryPanel
+            exercises={workoutExercises}
+            language={language}
+          />
 
           <button
             onClick={saveWorkout}
@@ -1598,5 +1590,76 @@ export default function WorkoutBuilderPage() {
 
       </div>
     </>
+  );
+}
+
+interface WorkoutSummaryPanelProps {
+  exercises: Array<{
+    exercise_name: string;
+    section_title?: string;
+    set_lines: Array<{ sets: number; reps: string }>;
+  }>;
+  language: string;
+}
+
+function WorkoutSummaryPanel({ exercises, language }: WorkoutSummaryPanelProps) {
+  const [openSections, setOpenSections] = React.useState<Record<string, boolean>>({});
+
+  if (exercises.length === 0) return null;
+
+  const sections = exercises.reduce<Record<string, typeof exercises>>((acc, ex) => {
+    const key = ex.section_title?.trim() || (language === 'es' ? 'Sin sección' : 'Unsectioned');
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(ex);
+    return acc;
+  }, {});
+
+  const toggle = (key: string) =>
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  return (
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700">
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          {language === 'es' ? 'Resumen del entrenamiento' : 'Workout summary'}
+        </h3>
+      </div>
+      <div className="divide-y divide-gray-100 dark:divide-gray-700">
+        {Object.entries(sections).map(([sectionTitle, sectionExercises]) => {
+          const isOpen = !!openSections[sectionTitle];
+          return (
+            <div key={sectionTitle}>
+              <button
+                onClick={() => toggle(sectionTitle)}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
+              >
+                <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                  {sectionTitle}
+                </span>
+                <ChevronDown
+                  className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {isOpen && (
+                <div className="pb-2">
+                  {sectionExercises.map((ex, i) => (
+                    <div key={i} className="px-4 pt-1">
+                      <p className="text-sm text-gray-700 dark:text-gray-300 font-medium pl-3">
+                        {ex.exercise_name}
+                      </p>
+                      {ex.set_lines.map((sl, j) => (
+                        <p key={j} className="text-xs text-gray-500 dark:text-gray-400 pl-6">
+                          {sl.sets}x{sl.reps}
+                        </p>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
