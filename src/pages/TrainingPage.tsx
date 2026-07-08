@@ -638,6 +638,7 @@ export default function TrainingPage() {
             source: 'endurance_planner',
             exercises: [],
             type: 'endurance_plan',
+            endurance_workout_data: w,
             planner_source: ep.planner_source,
             estimated_duration_minutes: duration,
             estimated_impulse: tss || undefined,
@@ -1129,10 +1130,6 @@ export default function TrainingPage() {
     if ((workout as any).type === 'endurance_plan') {
       const raw = (workout as any).endurance_workout_data;
       const w = workout as any;
-      // DEBUG: log all available data to console
-      console.log('[EndurancePlan] raw object:', raw);
-      console.log('[EndurancePlan] w.description:', w.description);
-      console.log('[EndurancePlan] raw?.description:', raw?.description);
       // Normalize: raw plan-day objects have description+steps in one text blob; db rows have steps as a jsonb array
       // Use raw?.description (full original text) first; w.description is already pre-cleaned so use as fallback
       const rawDescription: string = raw?.description || '';
