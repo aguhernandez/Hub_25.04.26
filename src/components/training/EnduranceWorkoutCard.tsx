@@ -277,6 +277,9 @@ interface Props {
 
 export default function EnduranceWorkoutCard({ workout, language, initialExpanded = false, showFitExport = false, onStartWorkout, onLogWorkout, onLogDifferentWorkout }: Props) {
   const [expanded, setExpanded] = useState(initialExpanded);
+  // DEBUG
+  console.log('[EnduranceWorkoutCard] description:', workout.description);
+  console.log('[EnduranceWorkoutCard] full workout:', workout);
   const [fitExporting, setFitExporting] = useState(false);
   const [fitExportMsg, setFitExportMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showFitInfo, setShowFitInfo] = useState(false);
