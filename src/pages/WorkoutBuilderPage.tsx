@@ -97,7 +97,7 @@ export default function WorkoutBuilderPage() {
   const [loading, setLoading] = useState(false);
   const [showVideoPreview, setShowVideoPreview] = useState(false);
   const [exerciseHistory, setExerciseHistory] = useState<Map<string, { maxWeight: number; maxDate: string }>>(new Map());
-  const [sections, setSections] = useState<Array<{ id: string; title: string; emoji: string; color: string; isEditing: boolean }>>([]);
+  const [sections, setSections] = useState<Array<{ id: string; title: string; color: string; isEditing: boolean }>>([]);
   const [selectedSection, setSelectedSection] = useState<string>('');
   const [sessionNotes, setSessionNotes] = useState('');
   const [showStrengthEstimator, setShowStrengthEstimator] = useState(false);
@@ -169,15 +169,15 @@ export default function WorkoutBuilderPage() {
 
   const initializeSections = () => {
     const defaultSections = [
-      { id: '1', title: language === 'es' ? 'Movilidad' : 'Mobility', emoji: '⭐️', color: 'green', isEditing: false },
-      { id: '2', title: language === 'es' ? 'Entrada en Calor' : 'Warm-up', emoji: '⭐️', color: 'green', isEditing: false },
-      { id: '3', title: language === 'es' ? 'Evaluación Rápida' : 'Pre-session Check', emoji: '📊', color: 'green', isEditing: false },
-      { id: '4', title: language === 'es' ? 'Parte Principal' : 'Main Work', emoji: '⭐️', color: 'blue', isEditing: false },
-      { id: '5', title: language === 'es' ? 'Trabajo Secundario' : 'Secondary Work', emoji: '⭐️', color: 'blue', isEditing: false },
-      { id: '6', title: language === 'es' ? 'Superseries / Circuitos' : 'Superset / Complex', emoji: '🔄', color: 'blue', isEditing: false },
-      { id: '7', title: language === 'es' ? 'Acondicionamiento' : 'Conditioning', emoji: '💪', color: 'blue', isEditing: false },
-      { id: '8', title: language === 'es' ? 'Accesorios / Preventivo' : 'Auxiliary / Prehab', emoji: '⭐️', color: 'orange', isEditing: false },
-      { id: '9', title: language === 'es' ? 'Vuelta a la Calma' : 'Cool Down', emoji: '⭐️', color: 'orange', isEditing: false },
+      { id: '1', title: language === 'es' ? 'Movilidad' : 'Mobility', color: 'green', isEditing: false },
+      { id: '2', title: language === 'es' ? 'Entrada en Calor' : 'Warm-up', color: 'green', isEditing: false },
+      { id: '3', title: language === 'es' ? 'Evaluación Rápida' : 'Pre-session Check', color: 'green', isEditing: false },
+      { id: '4', title: language === 'es' ? 'Parte Principal' : 'Main Work', color: 'blue', isEditing: false },
+      { id: '5', title: language === 'es' ? 'Trabajo Secundario' : 'Secondary Work', color: 'blue', isEditing: false },
+      { id: '6', title: language === 'es' ? 'Superseries / Circuitos' : 'Superset / Complex', color: 'blue', isEditing: false },
+      { id: '7', title: language === 'es' ? 'Acondicionamiento' : 'Conditioning', color: 'blue', isEditing: false },
+      { id: '8', title: language === 'es' ? 'Accesorios / Preventivo' : 'Auxiliary / Prehab', color: 'orange', isEditing: false },
+      { id: '9', title: language === 'es' ? 'Vuelta a la Calma' : 'Cool Down', color: 'orange', isEditing: false },
     ];
     setSections(defaultSections);
   };
@@ -432,16 +432,16 @@ export default function WorkoutBuilderPage() {
     if (selectedSection) {
       const section = sections.find(s => s.id === selectedSection);
       if (section) {
-        sectionTitle = `${section.emoji} ${section.title}`;
+        sectionTitle = section.title;
       } else {
         // Default section if selectedSection not found
         const defaultSection = sections.find(s => s.id === '4');
-        sectionTitle = defaultSection ? `${defaultSection.emoji} ${defaultSection.title}` : '⭐️ Main Work';
+        sectionTitle = defaultSection ? defaultSection.title : 'Main Work';
       }
     } else {
       // No section selected - use default "Main Work" section (id=4)
       const defaultSection = sections.find(s => s.id === '4');
-      sectionTitle = defaultSection ? `${defaultSection.emoji} ${defaultSection.title}` : '⭐️ Main Work';
+      sectionTitle = defaultSection ? defaultSection.title : 'Main Work';
     }
 
     const newExercise: AdvancedWorkoutExercise = {
@@ -465,7 +465,7 @@ export default function WorkoutBuilderPage() {
     const section = sections.find(s => s.id === sectionId);
     if (!section) return;
 
-    const sectionFullTitle = `${section.emoji} ${section.title}`;
+    const sectionFullTitle = section.title;
     setSections(sections.filter(s => s.id !== sectionId));
     setWorkoutExercises(workoutExercises.filter(ex => ex.section_title !== sectionFullTitle));
     success(language === 'es' ? `Bloque "${section.title}" eliminado` : `Block "${section.title}" deleted`);
@@ -475,8 +475,8 @@ export default function WorkoutBuilderPage() {
     const oldSection = sections.find(s => s.id === sectionId);
     if (!oldSection) return;
 
-    const oldTitle = `${oldSection.emoji} ${oldSection.title}`;
-    const newFullTitle = `${oldSection.emoji} ${newTitle}`;
+    const oldTitle = oldSection.title;
+    const newFullTitle = newTitle;
 
     setSections(sections.map(s =>
       s.id === sectionId ? { ...s, title: newTitle, isEditing: false } : s
@@ -561,13 +561,13 @@ export default function WorkoutBuilderPage() {
     let sectionTitle: string;
     if (selectedSection) {
       const section = sections.find(s => s.id === selectedSection);
-      sectionTitle = section ? `${section.emoji} ${section.title}` : (() => {
+      sectionTitle = section ? section.title : (() => {
         const def = sections.find(s => s.id === '4');
-        return def ? `${def.emoji} ${def.title}` : '⭐️ Main Work';
+        return def ? def.title : 'Main Work';
       })();
     } else {
       const def = sections.find(s => s.id === '4');
-      sectionTitle = def ? `${def.emoji} ${def.title}` : '⭐️ Main Work';
+      sectionTitle = def ? def.title : 'Main Work';
     }
     const newCircuit: WorkoutCircuit = {
       id: `circuit_${Date.now()}`,
@@ -641,7 +641,7 @@ export default function WorkoutBuilderPage() {
 
       // Flatten set_lines into individual exercise entries
       // Sort exercises by section order before assigning order_index
-      const sectionOrder = sections.map(s => `${s.emoji} ${s.title}`);
+      const sectionOrder = sections.map(s => s.title);
       const sortedExercises = [...workoutExercises].sort((a, b) => {
         const aTitle = a.section_title || sectionOrder[0] || '';
         const bTitle = b.section_title || sectionOrder[0] || '';
@@ -1023,7 +1023,7 @@ export default function WorkoutBuilderPage() {
                     <option value="">{language === 'es' ? 'Seleccionar bloque...' : 'Select block...'}</option>
                     {sections.map(section => (
                       <option key={section.id} value={section.id}>
-                        {section.emoji} {section.title}
+                        {section.title}
                       </option>
                     ))}
                   </select>
@@ -1185,7 +1185,7 @@ export default function WorkoutBuilderPage() {
                 // First group exercises by section
                 const grouped = workoutExercises.reduce((acc, ex, index) => {
                   const defaultSection = sections.find(s => s.id === '4');
-                  const defaultTitle = defaultSection ? `${defaultSection.emoji} ${defaultSection.title}` : '⭐️ Main Work';
+                  const defaultTitle = defaultSection ? defaultSection.title : 'Main Work';
                   const sectionTitle = ex.section_title || defaultTitle;
                   if (!acc[sectionTitle]) {
                     acc[sectionTitle] = [];
@@ -1197,7 +1197,7 @@ export default function WorkoutBuilderPage() {
                 // Order sections according to the sections array order
                 const orderedSections = sections
                   .map(section => {
-                    const fullTitle = `${section.emoji} ${section.title}`;
+                    const fullTitle = section.title;
                     return {
                       title: fullTitle,
                       items: grouped[fullTitle] || [],
@@ -1207,7 +1207,7 @@ export default function WorkoutBuilderPage() {
                   .filter(section => section.items.length > 0);
 
                 // Add any exercises that don't match defined sections (orphaned exercises)
-                const definedSectionTitles = sections.map(s => `${s.emoji} ${s.title}`);
+                const definedSectionTitles = sections.map(s => s.title);
                 Object.keys(grouped).forEach(groupTitle => {
                   if (!definedSectionTitles.includes(groupTitle)) {
                     orderedSections.push({
@@ -1309,7 +1309,6 @@ export default function WorkoutBuilderPage() {
                   <div className="flex items-center gap-2">
                     {section.isEditing ? (
                       <>
-                        <span className="text-lg">{section.emoji}</span>
                         <input
                           type="text"
                           value={section.title}
@@ -1359,7 +1358,6 @@ export default function WorkoutBuilderPage() {
                             <MoveDown className="w-3 h-3" />
                           </button>
                         </div>
-                        <span className="text-lg">{section.emoji}</span>
                         <span className="flex-1 text-sm font-medium text-gray-900 dark:text-white">
                           {section.title}
                         </span>
@@ -1601,7 +1599,7 @@ interface WorkoutSummaryPanelProps {
     set_lines: Array<{ sets: number; reps: string }>;
     order_index: number;
   }>;
-  sections: Array<{ id: string; title: string; emoji: string }>;
+  sections: Array<{ id: string; title: string }>;
   language: string;
 }
 
@@ -1613,7 +1611,7 @@ function WorkoutSummaryPanel({ exercises, sections, language }: WorkoutSummaryPa
   // Build a canonical order map: full section_title string → position index
   const sectionOrder = new Map<string, number>();
   sections.forEach((s, i) => {
-    sectionOrder.set(`${s.emoji} ${s.title}`, i);
+    sectionOrder.set(s.title, i);
   });
 
   const grouped = exercises.reduce<Record<string, typeof exercises>>((acc, ex) => {
