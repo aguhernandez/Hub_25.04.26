@@ -1231,28 +1231,32 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
 
       {/* ── Main Tab Bar ── */}
       <div className="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-        <div className="flex">
+        <div className="flex w-full">
           <button
             onClick={() => setMainTab('academy')}
-            className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all border-b-2 ${
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3.5 transition-all border-b-2 ${
               mainTab === 'academy'
                 ? 'border-[#fdda36] text-gray-900 dark:text-white'
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
             }`}
           >
-            <GraduationCap className="w-4 h-4" />
-            {language === 'es' ? 'Academia' : 'Academy'}
+            <GraduationCap className="w-4 h-4 flex-shrink-0" />
+            <span style={{ fontFamily: "'Krona One', sans-serif", fontSize: '0.9375rem' }}>
+              {language === 'es' ? 'Academia' : 'Academy'}
+            </span>
           </button>
           <button
             onClick={() => setMainTab('performance-pills')}
-            className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all border-b-2 ${
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3.5 transition-all border-b-2 ${
               mainTab === 'performance-pills'
                 ? 'border-[#fdda36] text-gray-900 dark:text-white'
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
             }`}
           >
-            <Zap className="w-4 h-4" />
-            {language === 'es' ? 'Píldoras de Rendimiento' : 'Performance Pills'}
+            <Zap className="w-4 h-4 flex-shrink-0" />
+            <span style={{ fontFamily: "'Krona One', sans-serif", fontSize: '0.9375rem' }}>
+              {language === 'es' ? 'Píldoras de Rendimiento' : 'Performance Pills'}
+            </span>
           </button>
         </div>
       </div>
