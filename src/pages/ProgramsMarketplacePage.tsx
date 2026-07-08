@@ -196,6 +196,14 @@ export default function ProgramsMarketplacePage() {
 
         if (wErr || !newWorkout) continue;
 
+        await supabase.from('athlete_workouts').insert({
+          athlete_id: athleteId,
+          workout_id: newWorkout.id,
+          scheduled_date: formatDateLocal(dayDate),
+          status: 'pending',
+          source: 'program',
+        });
+
         const exercises = day.program_day_workouts.map((pdw: any, idx: number) => ({
           workout_id: newWorkout.id,
           exercise_id: pdw.exercise_id,
@@ -794,7 +802,7 @@ function AssignProgramModal({
           start_date: startDate,
           assigned_date: formatDateLocal(new Date()),
           status: 'active',
-        }, { onConflict: 'athlete_id,program_product_id,start_date' });
+        }, { onConflict: 'athlete_id,program_product_id,assigned_date' });
 
         await copyWorkouts(program.id, startDate, athleteId);
       }
