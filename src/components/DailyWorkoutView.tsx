@@ -531,6 +531,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
 
       if (deleteError) {
         console.error('Error deleting previous training logs:', deleteError);
+        return;
       }
 
       await supabase.from('training_logs').insert(trainingLogs);
@@ -709,6 +710,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
 
       if (deleteError) {
         console.error('Error deleting previous training logs:', deleteError);
+        return;
       }
 
       await supabase.from('training_logs').insert(trainingLogs);
