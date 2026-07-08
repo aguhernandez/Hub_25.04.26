@@ -665,6 +665,7 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
   const [featuredCourse, setFeaturedCourse] = useState<Course | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'courses' | 'tags'>('courses');
+  const [mainTab, setMainTab] = useState<'academy' | 'performance-pills'>('academy');
   const [showCompleted, setShowCompleted] = useState(false);
 
   const [allTags, setAllTags] = useState<TagItem[]>([]);
@@ -1226,7 +1227,44 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
   const restCourses = activeCourses.filter(c => c.id !== filteredFeatured?.id);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-0">
+
+      {/* ── Main Tab Bar ── */}
+      <div className="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+        <div className="flex">
+          <button
+            onClick={() => setMainTab('academy')}
+            className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all border-b-2 ${
+              mainTab === 'academy'
+                ? 'border-[#fdda36] text-gray-900 dark:text-white'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+            }`}
+          >
+            <GraduationCap className="w-4 h-4" />
+            {language === 'es' ? 'Academia' : 'Academy'}
+          </button>
+          <button
+            onClick={() => setMainTab('performance-pills')}
+            className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold transition-all border-b-2 ${
+              mainTab === 'performance-pills'
+                ? 'border-[#fdda36] text-gray-900 dark:text-white'
+                : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+            }`}
+          >
+            <Zap className="w-4 h-4" />
+            {language === 'es' ? 'Píldoras de Rendimiento' : 'Performance Pills'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Sliding content panels ── */}
+      <div className="overflow-hidden">
+        <div
+          className="flex transition-transform duration-300 ease-in-out"
+          style={{ transform: mainTab === 'academy' ? 'translateX(0%)' : 'translateX(-100%)' }}
+        >
+          {/* ── PANEL 1: Academy ── */}
+          <div className="min-w-full space-y-8 py-8">
 
       {/* ── Header ── */}
       <div className="relative overflow-hidden rounded-2xl bg-gray-900 p-8 text-white">
@@ -1736,21 +1774,15 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
       </>
       )}
 
+          </div>{/* end Academy panel */}
+
+          {/* ── PANEL 2: Performance Pills ── */}
+          <div className="min-w-full py-8">
+
       {/* ══════════════════════════════════════════════
           PERFORMANCE PILLS SECTION
       ══════════════════════════════════════════════ */}
-      {activeTab === 'courses' && (
-        <div className="mt-12">
-
-          {/* Divider */}
-          <div className="flex items-center gap-4 mb-8">
-            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-            <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-full border border-gray-200 dark:border-gray-700">
-              <BookOpen className="w-4 h-4 text-[#514163] dark:text-[#fdda36]" />
-              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{language === 'es' ? 'Píldoras de Rendimiento' : 'Performance Pills'}</span>
-            </div>
-            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-          </div>
+      <div className="mt-4 px-0">
 
           {/* Article detail view */}
           {selectedArticle ? (
@@ -2107,7 +2139,10 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
             </>
           )}
         </div>
-      )}
+
+          </div>{/* end Performance Pills panel */}
+        </div>{/* end flex slider */}
+      </div>{/* end overflow-hidden */}
 
       {/* Article Editor Modal */}
       {showEditor && (
