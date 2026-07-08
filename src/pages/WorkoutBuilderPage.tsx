@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAthlete } from '../contexts/AthleteContext';
 import { supabase } from '../lib/supabase';
-import { Dumbbell, Plus, Save, Users, Calendar, Search, X, Play, Trash2, CreditCard as Edit2, Check, GripVertical, MoveUp, MoveDown, Calculator, Layers } from 'lucide-react';
+import { Dumbbell, Plus, Save, Users, Calendar, Search, X, Play, Trash2, CreditCard as Edit2, Check, GripVertical, MoveUp, MoveDown, Calculator, Layers, AlertTriangle } from 'lucide-react';
 import AdvancedExerciseBuilder from '../components/training/AdvancedExerciseBuilder';
 import StrengthEstimator from '../components/training/StrengthEstimator';
 import CircuitPanelInline from '../components/training/CircuitPanelInline';
@@ -73,6 +74,7 @@ export default function WorkoutBuilderPage() {
   const { profile } = useAuth();
   const { language } = useLanguage();
   const { toast, hideToast, success, error, warning } = useToast();
+  const { selectedAthleteId: ctxAthleteId, selectedAthleteName: ctxAthleteName, setSelectedAthlete: setCtxAthlete } = useAthlete();
   const [workoutName, setWorkoutName] = useState('');
   const [workoutDescription, setWorkoutDescription] = useState('');
   const [exercises, setExercises] = useState<Exercise[]>([]);
@@ -105,6 +107,7 @@ export default function WorkoutBuilderPage() {
   const [pendingTagIds, setPendingTagIds] = useState<string[]>([]);
   const [workoutCircuits, setWorkoutCircuits] = useState<WorkoutCircuit[]>([]);
   const [addPanelTab, setAddPanelTab] = useState<'exercise' | 'circuit'>('exercise');
+  const [pendingAthleteChange, setPendingAthleteChange] = useState<string | null>(null);
 
   useEffect(() => {
     initializeSections();
@@ -114,6 +117,13 @@ export default function WorkoutBuilderPage() {
       loadMemberships();
     }
   }, [profile]);
+
+  useEffect(() => {
+    if (ctxAthleteId && athletes.length > 0 && !selectedAthlete) {
+      const found = athletes.find(a => a.id === ctxAthleteId);
+      if (found) setSelectedAthlete(ctxAthleteId);
+    }
+  }, [ctxAthleteId, athletes]);
 
   useEffect(() => {
     loadExercises();
@@ -135,7 +145,10 @@ export default function WorkoutBuilderPage() {
         setWorkoutDescription('');
         setWorkoutExercises([]);
         setSessionNotes('');
-        setSelectedAthlete('');
+        // Don't clear athlete if context has one — preserve cross-view selection
+        if (!ctxAthleteId) {
+          setSelectedAthlete('');
+        }
         setSelectedTeam('');
         setSelectedMembership('');
         sessionStorage.removeItem('workout_scheduled_date');
@@ -305,6 +318,23 @@ export default function WorkoutBuilderPage() {
         .eq('role', 'athlete')
         .order('full_name');
       setAthletes(data || []);
+    }
+  };
+
+  const hasUnsavedChanges = workoutName.trim() !== '' || workoutExercises.length > 0 || workoutCircuits.length > 0;
+
+  const applyAthleteChange = (newId: string) => {
+    setSelectedAthlete(newId);
+    const found = athletes.find(a => a.id === newId);
+    if (found) setCtxAthlete(newId, found.full_name || found.email);
+  };
+
+  const handleAthleteDropdownChange = (newId: string) => {
+    if (newId === selectedAthlete) return;
+    if (hasUnsavedChanges && newId !== '') {
+      setPendingAthleteChange(newId);
+    } else {
+      applyAthleteChange(newId);
     }
   };
 
@@ -767,6 +797,44 @@ export default function WorkoutBuilderPage() {
           onClose={hideToast}
         />
       )}
+
+      {pendingAthleteChange !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {language === 'es' ? 'Cambiar atleta' : 'Change athlete'}
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
+              {language === 'es'
+                ? 'Tienes cambios sin guardar. ¿Deseas continuar y cambiar el atleta? Se perderán los cambios actuales.'
+                : 'You have unsaved changes. Are you sure you want to switch athletes? Your current changes will be lost.'}
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setPendingAthleteChange(null)}
+                className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                {language === 'es' ? 'Cancelar' : 'Cancel'}
+              </button>
+              <button
+                onClick={() => {
+                  applyAthleteChange(pendingAthleteChange!);
+                  setPendingAthleteChange(null);
+                }}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-amber-500 hover:bg-amber-600 text-white transition-colors"
+              >
+                {language === 'es' ? 'Cambiar de todas formas' : 'Switch anyway'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -1389,7 +1457,7 @@ export default function WorkoutBuilderPage() {
                     </label>
                     <select
                       value={selectedAthlete}
-                      onChange={(e) => setSelectedAthlete(e.target.value)}
+                      onChange={(e) => handleAthleteDropdownChange(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                     >
                       <option value="">{language === 'es' ? 'Sin asignar' : 'Unassigned'}</option>
