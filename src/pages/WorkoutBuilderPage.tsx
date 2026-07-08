@@ -1561,6 +1561,7 @@ export default function WorkoutBuilderPage() {
 
           <WorkoutSummaryPanel
             exercises={workoutExercises}
+            sections={sections}
             language={language}
           />
 
@@ -1598,21 +1599,36 @@ interface WorkoutSummaryPanelProps {
     exercise_name: string;
     section_title?: string;
     set_lines: Array<{ sets: number; reps: string }>;
+    order_index: number;
   }>;
+  sections: Array<{ id: string; title: string; emoji: string }>;
   language: string;
 }
 
-function WorkoutSummaryPanel({ exercises, language }: WorkoutSummaryPanelProps) {
+function WorkoutSummaryPanel({ exercises, sections, language }: WorkoutSummaryPanelProps) {
   const [openSections, setOpenSections] = React.useState<Record<string, boolean>>({});
 
   if (exercises.length === 0) return null;
 
-  const sections = exercises.reduce<Record<string, typeof exercises>>((acc, ex) => {
+  // Build a canonical order map: full section_title string → position index
+  const sectionOrder = new Map<string, number>();
+  sections.forEach((s, i) => {
+    sectionOrder.set(`${s.emoji} ${s.title}`, i);
+  });
+
+  const grouped = exercises.reduce<Record<string, typeof exercises>>((acc, ex) => {
     const key = ex.section_title?.trim() || (language === 'es' ? 'Sin sección' : 'Unsectioned');
     if (!acc[key]) acc[key] = [];
     acc[key].push(ex);
     return acc;
   }, {});
+
+  // Sort section keys by canonical position, then by first-appearance order for unknowns
+  const sortedKeys = Object.keys(grouped).sort((a, b) => {
+    const posA = sectionOrder.has(a) ? sectionOrder.get(a)! : 999;
+    const posB = sectionOrder.has(b) ? sectionOrder.get(b)! : 999;
+    return posA - posB;
+  });
 
   const toggle = (key: string) =>
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -1625,7 +1641,8 @@ function WorkoutSummaryPanel({ exercises, language }: WorkoutSummaryPanelProps) 
         </h3>
       </div>
       <div className="divide-y divide-gray-100 dark:divide-gray-700">
-        {Object.entries(sections).map(([sectionTitle, sectionExercises]) => {
+        {sortedKeys.map((sectionTitle) => {
+          const sectionExercises = grouped[sectionTitle].slice().sort((a, b) => a.order_index - b.order_index);
           const isOpen = !!openSections[sectionTitle];
           return (
             <div key={sectionTitle}>
