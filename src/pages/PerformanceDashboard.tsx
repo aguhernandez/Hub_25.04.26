@@ -59,6 +59,7 @@ interface RecentSession {
   total_volume?: number;
   session_rpe?: number;
   duration_minutes?: number;
+  workout_name?: string;
   // External activity fields
   name?: string;
   sport_type?: string;
@@ -215,7 +216,7 @@ export default function PerformanceDashboard() {
     // Load gym sessions
     const { data: gymSessions, error: gymError } = await supabase
       .from('performance_sessions')
-      .select('id, session_date, total_volume, session_rpe, duration_minutes, athlete_workout_id')
+      .select('id, session_date, total_volume, session_rpe, duration_minutes, athlete_workout_id, athlete_workouts!athlete_workout_id(workout_id, workouts(name))')
       .eq('athlete_id', targetAthleteId)
       .order('session_date', { ascending: false })
       .limit(15);
@@ -243,6 +244,8 @@ export default function PerformanceDashboard() {
     // Add gym sessions
     if (gymSessions) {
       gymSessions.forEach(session => {
+        const aw = (session as any).athlete_workouts;
+        const workoutName = aw?.workouts?.name as string | undefined;
         allSessions.push({
           id: session.id,
           session_date: session.session_date,
@@ -251,6 +254,7 @@ export default function PerformanceDashboard() {
           session_rpe: session.session_rpe,
           duration_minutes: session.duration_minutes,
           athlete_workout_id: session.athlete_workout_id,
+          workout_name: workoutName,
         } as any);
       });
     }
@@ -1337,7 +1341,7 @@ export default function PerformanceDashboard() {
                           </div>
                           <div className="text-left">
                             <p className="font-semibold text-gray-900 dark:text-white">
-                              {language === 'es' ? 'Entrenamiento de Fuerza' : 'Strength Training'}
+                              {session.workout_name || (language === 'es' ? 'Entrenamiento de Fuerza' : 'Strength Training')}
                             </p>
                             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                               <Calendar className="w-3.5 h-3.5" />
@@ -1551,7 +1555,7 @@ function SessionDetailsModal({ session, onClose, language, formatDuration, forma
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                    {language === 'es' ? 'Entrenamiento de Fuerza' : 'Strength Training'}
+                    {session.workout_name || (language === 'es' ? 'Entrenamiento de Fuerza' : 'Strength Training')}
                   </h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {new Date(session.session_date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
