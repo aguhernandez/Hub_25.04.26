@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bike, PersonStanding, Waves, Dumbbell, Clock, Zap, ChevronDown, ChevronUp, RotateCcw, Play, Target, Activity, FileText, ClipboardCheck, CheckCircle2, ArrowLeftRight, Download, Share2, Info, AlertTriangle } from 'lucide-react';
+import { Bike, PersonStanding, Waves, Dumbbell, Clock, Zap, ChevronDown, ChevronUp, RotateCcw, Play, Target, Activity, ClipboardCheck, CheckCircle2, ArrowLeftRight, Download, Share2, Info, AlertTriangle } from 'lucide-react';
 import { exportFitWorkout } from '../../utils/fit/exportFitFile';
 import ActivityShareCard from './ActivityShareCard';
 
@@ -346,6 +346,9 @@ export default function EnduranceWorkoutCard({ workout, language, initialExpande
                 {workout.planner_source}
                 {workout.sub_discipline ? ` · ${workout.sub_discipline}` : ''}
               </p>
+              {workout.description && (
+                <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed mt-1 whitespace-pre-line">{workout.description}</p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -385,15 +388,6 @@ export default function EnduranceWorkoutCard({ workout, language, initialExpande
 
       {expanded && (
         <div className="border-t border-cyan-100 dark:border-cyan-900/50">
-          {workout.description && (
-            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/40 border-b border-gray-100 dark:border-gray-800">
-              <div className="flex items-start gap-2">
-                <FileText className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{workout.description}</p>
-              </div>
-            </div>
-          )}
-
           {workout.notes && workout.notes !== workout.description && (
             <div className="px-4 py-2.5 bg-amber-50 dark:bg-amber-900/10 border-b border-amber-100 dark:border-amber-900/30">
               <p className="text-xs text-amber-700 dark:text-amber-400">{workout.notes}</p>
