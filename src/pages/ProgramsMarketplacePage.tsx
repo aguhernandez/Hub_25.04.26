@@ -163,7 +163,7 @@ export default function ProgramsMarketplacePage() {
     }
   };
 
-  const copyProgramWorkoutsToAthlete = async (programId: string, startDateStr: string, athleteId: string) => {
+  const copyProgramWorkoutsToAthlete = async (programId: string, startDateStr: string, athleteId: string, trainerId?: string) => {
     const { data: weeks } = await supabase
       .from('program_weeks')
       .select(`id, week_number, program_days(id, day_number, day_name, program_day_workouts(*, exercise:exercises(id, exercise)))`)
@@ -187,9 +187,7 @@ export default function ProgramsMarketplacePage() {
           .insert({
             name: day.day_name || `Week ${week.week_number} - Day ${day.day_number}`,
             description: `${selectedProgram?.title || 'Program'} — Week ${week.week_number}`,
-            athlete_id: athleteId,
-            scheduled_date: formatDateLocal(dayDate),
-            status: 'pending',
+            trainer_id: trainerId || user?.id,
           })
           .select()
           .single();
@@ -202,6 +200,8 @@ export default function ProgramsMarketplacePage() {
           scheduled_date: formatDateLocal(dayDate),
           status: 'pending',
           source: 'program',
+          trainer_id: trainerId || user?.id,
+          assignment_type: 'individual',
         });
 
         const exercises = day.program_day_workouts.map((pdw: any, idx: number) => ({
@@ -714,7 +714,7 @@ function AssignProgramModal({
   onClose: () => void;
   onAssigned: (msg: string) => void;
   onError: (msg: string) => void;
-  copyWorkouts: (programId: string, startDate: string, athleteId: string) => Promise<void>;
+  copyWorkouts: (programId: string, startDate: string, athleteId: string, trainerId?: string) => Promise<void>;
 }) {
   const { user, profile } = useAuth();
   const [athletes, setAthletes] = useState<{ id: string; full_name: string; avatar_url: string | null }[]>([]);
@@ -804,7 +804,7 @@ function AssignProgramModal({
           status: 'active',
         }, { onConflict: 'athlete_id,program_product_id,assigned_date' });
 
-        await copyWorkouts(program.id, startDate, athleteId);
+        await copyWorkouts(program.id, startDate, athleteId, user!.id);
       }
 
       onAssigned(
