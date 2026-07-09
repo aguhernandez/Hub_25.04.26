@@ -65,6 +65,76 @@ async function resolveAthlete(athleteId: string | null, athleteEmail: string | n
   return null;
 }
 
+// ── Sync helpers ───────────────────────────────────────────────────────────────
+
+async function logSyncEvent(
+  athleteId: string,
+  plannerSource: string,
+  action: string,
+  workoutId: string | null,
+  externalId: string | null,
+  details: Record<string, any>
+) {
+  await supabaseAdmin.from("sync_changelog").insert({
+    athlete_id: athleteId,
+    planner_source: plannerSource,
+    action,
+    workout_id: workoutId,
+    external_id: externalId,
+    details,
+  }).then(() => {});
+}
+
+async function upsertSyncMetadata(
+  athleteId: string,
+  plannerSource: string,
+  plannerType: string,
+  status: "synced" | "pending" | "error",
+  workoutsCount: number,
+  dateRangeStart: string | null,
+  dateRangeEnd: string | null
+) {
+  await supabaseAdmin.from("sync_metadata").upsert({
+    athlete_id: athleteId,
+    planner_source: plannerSource,
+    planner_type: plannerType,
+    status,
+    last_push_at: new Date().toISOString(),
+    workouts_count: workoutsCount,
+    date_range_start: dateRangeStart,
+    date_range_end: dateRangeEnd,
+    updated_at: new Date().toISOString(),
+  }, {
+    onConflict: "athlete_id,planner_source",
+  }).then(() => {});
+}
+
+// Delete all workouts for an athlete+source within a date range, returning deleted external_ids
+async function deleteWorkoutsInRange(
+  athleteId: string,
+  plannerSource: string,
+  startDate: string,
+  endDate: string
+): Promise<{ id: string; external_id: string | null; name: string }[]> {
+  const { data: toDelete } = await supabaseAdmin
+    .from("external_endurance_workouts")
+    .select("id, external_id, name")
+    .eq("athlete_id", athleteId)
+    .eq("planner_source", plannerSource)
+    .gte("scheduled_date", startDate)
+    .lte("scheduled_date", endDate);
+
+  if (!toDelete || toDelete.length === 0) return [];
+
+  const ids = toDelete.map((r: any) => r.id);
+  await supabaseAdmin
+    .from("external_endurance_workouts")
+    .delete()
+    .in("id", ids);
+
+  return toDelete;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -198,6 +268,126 @@ Deno.serve(async (req: Request) => {
     // ── POST /push-to-hub (endurance planner) ──────────────────────────
     if (req.method === "POST" && plannerInfo.planner_type === "endurance") {
       const body = await req.json();
+
+      // ── SYNC PUSH: full date-range replacement (source of truth) ──────
+      // When the planner sends { sync: true, date_range: { start, end }, workouts: [...] }
+      // we delete all existing workouts in that range first, then insert fresh ones.
+      // This ensures Hub always reflects the planner's exact state (including deletions).
+      if (body.sync === true && body.date_range && Array.isArray(body.workouts)) {
+        const { start, end } = body.date_range;
+        if (!start || !end) {
+          return new Response(JSON.stringify({ error: "date_range.start and date_range.end are required for sync push" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        await logSyncEvent(athleteId, plannerInfo.planner_name, "push_start", null, null, {
+          date_range: { start, end },
+          incoming_count: body.workouts.length,
+        });
+
+        // Delete existing workouts in range — Endurance Planner is source of truth
+        const deleted = await deleteWorkoutsInRange(athleteId, plannerInfo.planner_name, start, end);
+        for (const d of deleted) {
+          await logSyncEvent(athleteId, plannerInfo.planner_name, "workout_deleted", d.id, d.external_id, {
+            name: d.name,
+            reason: "replaced_by_sync_push",
+          });
+        }
+
+        // Insert fresh workouts
+        const saved: any[] = [];
+        const errors: any[] = [];
+
+        for (const w of body.workouts) {
+          if (!w.scheduled_date) {
+            errors.push({ name: w.name || "unknown", error: "scheduled_date is required" });
+            continue;
+          }
+          try {
+            const extId = w.id || w.external_id || w.external_workout_id || null;
+            const record: Record<string, any> = {
+              athlete_id: athleteId,
+              planner_source: plannerInfo.planner_name,
+              name: w.name || "Endurance Workout",
+              sport: w.sport || "cycling",
+              sub_discipline: w.sub_discipline || null,
+              description: w.description || null,
+              intensity_basis: w.intensity_basis || "power",
+              scheduled_date: String(w.scheduled_date).substring(0, 10),
+              scheduled_time: w.scheduled_time || null,
+              estimated_duration_minutes: w.estimated_duration_minutes ?? null,
+              estimated_impulse: w.estimated_impulse || null,
+              status: w.status || "planned",
+              steps: w.steps || [],
+              updated_at: new Date().toISOString(),
+            };
+            if (extId) {
+              record.external_id = extId;
+              record.external_workout_id = extId;
+            }
+
+            const { data: inserted, error: insertErr } = await supabaseAdmin
+              .from("external_endurance_workouts")
+              .insert(record)
+              .select("id, scheduled_date, name, updated_at")
+              .single();
+
+            if (insertErr) throw insertErr;
+            saved.push(inserted);
+
+            await logSyncEvent(athleteId, plannerInfo.planner_name, "workout_upserted", inserted.id, extId, {
+              name: w.name,
+              scheduled_date: w.scheduled_date,
+            });
+          } catch (e: any) {
+            errors.push({ name: w.name, error: e.message });
+          }
+        }
+
+        const finalStatus = errors.length === 0 ? "synced" : "error";
+        const allDates = body.workouts
+          .map((w: any) => w.scheduled_date)
+          .filter(Boolean)
+          .sort();
+
+        await upsertSyncMetadata(
+          athleteId,
+          plannerInfo.planner_name,
+          "endurance",
+          finalStatus,
+          saved.length,
+          allDates[0] ?? start,
+          allDates[allDates.length - 1] ?? end
+        );
+
+        await logSyncEvent(athleteId, plannerInfo.planner_name, "push_complete", null, null, {
+          saved: saved.length,
+          deleted: deleted.length,
+          errors: errors.length,
+          date_range: { start, end },
+        });
+
+        await supabaseAdmin.from("external_planner_access_log").insert({
+          planner_token_id: plannerInfo.id,
+          athlete_id: athleteId,
+          action: "write",
+          endpoint: "push-to-hub/endurance-sync",
+          status_code: 200,
+        }).then(() => {});
+
+        return new Response(JSON.stringify({
+          success: errors.length === 0,
+          saved,
+          deleted: deleted.length,
+          errors,
+          message: `Sync complete: ${saved.length} saved, ${deleted.length} deleted, ${errors.length} error(s)`,
+          synced_at: new Date().toISOString(),
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
       // Helper: save a single workout record, upsert if external_id present
       async function saveWorkout(w: Record<string, any>): Promise<any> {

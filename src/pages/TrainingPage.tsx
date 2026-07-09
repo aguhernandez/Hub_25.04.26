@@ -141,6 +141,7 @@ export default function TrainingPage() {
   const [reassignSourceWorkout, setReassignSourceWorkout] = useState<EnduranceWorkout | null>(null);
   const [logReassignTarget, setLogReassignTarget] = useState<{ workout: EnduranceWorkout; executedOnDate: string; originalPlannedDay: string } | null>(null);
   const [selectedGPSActivity, setSelectedGPSActivity] = useState<{ id: string | null; data: any } | null>(null);
+  const [syncStatus, setSyncStatus] = useState<{ last_push_at: string | null; planner_source: string | null; status: string | null } | null>(null);
 
   useEffect(() => {
     loadWorkouts();
@@ -164,6 +165,72 @@ export default function TrainingPage() {
       .maybeSingle()
       .then(({ data }) => setActivePlan(data ?? null));
   }, [profile?.id, effectiveAthleteId]);
+
+  // Load latest sync metadata for the current athlete
+  const loadSyncStatus = async (athleteId: string) => {
+    const { data } = await supabase
+      .from('sync_metadata')
+      .select('last_push_at, planner_source, status')
+      .eq('athlete_id', athleteId)
+      .eq('planner_type', 'endurance')
+      .order('last_push_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setSyncStatus(data ?? null);
+  };
+
+  // Realtime subscription: re-fetch workouts when external_endurance_workouts changes
+  useEffect(() => {
+    if (!effectiveAthleteId) return;
+
+    loadSyncStatus(effectiveAthleteId);
+
+    const channel = supabase
+      .channel(`endurance-sync-${effectiveAthleteId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'external_endurance_workouts',
+          filter: `athlete_id=eq.${effectiveAthleteId}`,
+        },
+        () => {
+          loadWorkouts();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'sync_metadata',
+          filter: `athlete_id=eq.${effectiveAthleteId}`,
+        },
+        (payload) => {
+          const r = payload.new as any;
+          setSyncStatus({ last_push_at: r.last_push_at, planner_source: r.planner_source, status: r.status });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'sync_metadata',
+          filter: `athlete_id=eq.${effectiveAthleteId}`,
+        },
+        (payload) => {
+          const r = payload.new as any;
+          setSyncStatus({ last_push_at: r.last_push_at, planner_source: r.planner_source, status: r.status });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [effectiveAthleteId]);
 
   const checkTodayWellness = async () => {
     const today = formatDateLocal(new Date());
@@ -1535,6 +1602,42 @@ export default function TrainingPage() {
           Track your workouts and progress
         </p>
       </div>
+
+      {/* Endurance Planner sync status badge */}
+      {syncStatus?.last_push_at && (
+        <div className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm border ${
+          syncStatus.status === 'synced'
+            ? 'bg-cyan-50 dark:bg-cyan-900/20 border-cyan-200 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300'
+            : syncStatus.status === 'error'
+            ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+            : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300'
+        }`}>
+          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+            syncStatus.status === 'synced'
+              ? 'bg-cyan-500 animate-pulse'
+              : syncStatus.status === 'error'
+              ? 'bg-red-500'
+              : 'bg-amber-500 animate-pulse'
+          }`} />
+          <span className="font-medium">
+            {syncStatus.planner_source || (language === 'es' ? 'Endurance Planner' : 'Endurance Planner')}
+          </span>
+          <span className="opacity-60 hidden sm:inline">·</span>
+          <span className="opacity-70 hidden sm:inline">
+            {syncStatus.status === 'synced'
+              ? (language === 'es' ? 'Sincronizado' : 'Synced')
+              : syncStatus.status === 'error'
+              ? (language === 'es' ? 'Error de sync' : 'Sync error')
+              : (language === 'es' ? 'Pendiente' : 'Pending')}
+          </span>
+          <span className="opacity-50 ml-auto text-xs">
+            {language === 'es' ? 'Último push:' : 'Last push:'}{' '}
+            {new Date(syncStatus.last_push_at).toLocaleString(language === 'es' ? 'es-ES' : 'en-US', {
+              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            })}
+          </span>
+        </div>
+      )}
 
       {/* QUICK ACTIONS — Wellness · Assessment · Plan con IA · Coaching */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
