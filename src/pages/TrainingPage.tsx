@@ -142,6 +142,8 @@ export default function TrainingPage() {
   const [logReassignTarget, setLogReassignTarget] = useState<{ workout: EnduranceWorkout; executedOnDate: string; originalPlannedDay: string } | null>(null);
   const [selectedGPSActivity, setSelectedGPSActivity] = useState<{ id: string | null; data: any } | null>(null);
   const [syncStatus, setSyncStatus] = useState<{ last_push_at: string | null; planner_source: string | null; status: string | null } | null>(null);
+  const [deletingPlanIds, setDeletingPlanIds] = useState<Set<string>>(new Set());
+  const [staledPlanIds, setStaledPlanIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadWorkouts();
@@ -179,6 +181,14 @@ export default function TrainingPage() {
     setSyncStatus(data ?? null);
   };
 
+  // Delete a weekly endurance plan and remove all its day-entries from the calendar
+  const deleteEndurancePlan = async (planWeekId: string, workoutKey: string) => {
+    setDeletingPlanIds(prev => new Set([...prev, workoutKey]));
+    await supabase.from('external_endurance_plans').delete().eq('id', planWeekId);
+    setDeletingPlanIds(prev => { const n = new Set(prev); n.delete(workoutKey); return n; });
+    setWorkouts(prev => prev.filter(w => (w as any).plan_week_id !== planWeekId));
+  };
+
   // Realtime subscription: re-fetch workouts when external_endurance_workouts changes
   useEffect(() => {
     if (!effectiveAthleteId) return;
@@ -197,6 +207,30 @@ export default function TrainingPage() {
         },
         () => {
           loadWorkouts();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'external_endurance_plans',
+          filter: `athlete_id=eq.${effectiveAthleteId}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            const deletedId = (payload.old as any)?.id;
+            if (deletedId) {
+              // Mark all day-entries from this week as stale then remove them
+              setStaledPlanIds(prev => new Set([...prev, deletedId]));
+              setTimeout(() => {
+                setStaledPlanIds(prev => { const n = new Set(prev); n.delete(deletedId); return n; });
+                setWorkouts(prev => prev.filter(w => (w as any).plan_week_id !== deletedId));
+              }, 1500);
+            }
+          } else {
+            loadWorkouts();
+          }
         }
       )
       .on(
@@ -1054,31 +1088,56 @@ export default function TrainingPage() {
                 })()}
                 {dayWorkouts.map(workout => (
                   <div key={workout.id} className="relative group">
-                    {workout.type === 'endurance_plan' ? (
-                      <div
-                        onClick={(e) => { e.stopPropagation(); openWorkoutModal(workout); }}
-                        className={`w-full text-xs p-2 pl-3 rounded text-left relative ${getEnduranceColor(workout).bg} ${getEnduranceColor(workout).text} border-l-2 transition-colors cursor-pointer`}
-                        style={{ borderLeftColor: getEnduranceColor(workout).border }}
-                      >
-                        <div className="flex items-center gap-1 mb-0.5">
-                          <Activity className="w-3 h-3 flex-shrink-0 opacity-60" />
-                          <span className="font-semibold truncate">{workout.name}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 opacity-70 flex-wrap">
-                          {(workout as any).estimated_duration_minutes > 0 && (
-                            <span>{(workout as any).estimated_duration_minutes >= 60
-                              ? `${Math.floor((workout as any).estimated_duration_minutes / 60)}h${(workout as any).estimated_duration_minutes % 60 > 0 ? `${(workout as any).estimated_duration_minutes % 60}m` : ''}`
-                              : `${(workout as any).estimated_duration_minutes}min`}</span>
+                    {workout.type === 'endurance_plan' ? (() => {
+                      const planWeekId = (workout as any).plan_week_id as string | undefined;
+                      const isStale = planWeekId ? staledPlanIds.has(planWeekId) : false;
+                      const isDeleting = deletingPlanIds.has(workout.id);
+                      if (isStale) {
+                        return (
+                          <div className="w-full text-xs p-2 pl-3 rounded border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center gap-1.5 animate-pulse">
+                            <Flag className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">{language === 'es' ? 'Eliminado en el origen' : 'Removed from source'}</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="relative group/ep">
+                          <div
+                            onClick={(e) => { e.stopPropagation(); openWorkoutModal(workout); }}
+                            className={`w-full text-xs p-2 pl-3 pr-7 rounded text-left relative ${getEnduranceColor(workout).bg} ${getEnduranceColor(workout).text} border-l-2 transition-colors cursor-pointer`}
+                            style={{ borderLeftColor: getEnduranceColor(workout).border }}
+                          >
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <Activity className="w-3 h-3 flex-shrink-0 opacity-60" />
+                              <span className="font-semibold truncate">{workout.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 opacity-70 flex-wrap">
+                              {(workout as any).estimated_duration_minutes > 0 && (
+                                <span>{(workout as any).estimated_duration_minutes >= 60
+                                  ? `${Math.floor((workout as any).estimated_duration_minutes / 60)}h${(workout as any).estimated_duration_minutes % 60 > 0 ? `${(workout as any).estimated_duration_minutes % 60}m` : ''}`
+                                  : `${(workout as any).estimated_duration_minutes}min`}</span>
+                              )}
+                              {(workout as any).target_zones?.length > 0 && (
+                                <span>· {(workout as any).target_zones.join(' ')}</span>
+                              )}
+                            </div>
+                            {workout.status === 'completed' && (
+                              <CheckCircle2 className="absolute bottom-1 right-1 w-3.5 h-3.5 text-teal-500 dark:text-teal-400" />
+                            )}
+                          </div>
+                          {planWeekId && (
+                            <button
+                              disabled={isDeleting}
+                              onClick={(e) => { e.stopPropagation(); deleteEndurancePlan(planWeekId, workout.id); }}
+                              className="absolute top-1 right-1 p-0.5 opacity-0 group-hover/ep:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-opacity text-red-500 dark:text-red-400 disabled:opacity-30"
+                              title={language === 'es' ? 'Eliminar' : 'Delete'}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
                           )}
-                          {(workout as any).target_zones?.length > 0 && (
-                            <span>· {(workout as any).target_zones.join(' ')}</span>
-                          )}
                         </div>
-                        {workout.status === 'completed' && (
-                          <CheckCircle2 className="absolute bottom-1 right-1 w-3.5 h-3.5 text-teal-500 dark:text-teal-400" />
-                        )}
-                      </div>
-                    ) : (
+                      );
+                    })() : (
                     <div
                       draggable
                       onDragStart={(e) => handleDragStart(e, workout)}
@@ -1106,7 +1165,7 @@ export default function TrainingPage() {
                       )}
                     </div>
                     )}
-                    {workout.type !== 'race_plan' && workout.source !== 'race_plan' && (
+                    {workout.type !== 'race_plan' && workout.type !== 'endurance_plan' && workout.source !== 'race_plan' && (
                     <button
                       onClick={() => setContextMenuWorkout(contextMenuWorkout === workout.id ? null : workout.id)}
                       className="absolute top-1 right-1 p-1 opacity-0 group-hover:opacity-100 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded transition-opacity"
@@ -1114,7 +1173,7 @@ export default function TrainingPage() {
                       <MoreVertical className="w-3 h-3" />
                     </button>
                     )}
-                    {contextMenuWorkout === workout.id && workout.type !== 'race_plan' && (
+                    {contextMenuWorkout === workout.id && workout.type !== 'race_plan' && workout.type !== 'endurance_plan' && (
                       <div className="absolute right-0 top-8 z-10 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 min-w-[160px]">
                         <button
                           onClick={() => handleEditWorkout(workout)}

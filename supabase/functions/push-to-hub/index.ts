@@ -540,6 +540,45 @@ Deno.serve(async (req: Request) => {
 
       if (error) throw error;
 
+      // Delete all OTHER future plans from this planner for this athlete.
+      // The just-pushed week is the source of truth; any future weeks not re-pushed
+      // are considered deleted by the planner.
+      const today = new Date().toISOString().substring(0, 10);
+      const { data: stalePlans } = await supabaseAdmin
+        .from("external_endurance_plans")
+        .delete()
+        .eq("athlete_id", athleteId)
+        .eq("planner_source", plannerInfo.planner_name)
+        .gte("week_start_date", today)
+        .neq("id", data.id)
+        .select("id, week_start_date");
+
+      const deletedCount = stalePlans?.length ?? 0;
+
+      if (deletedCount > 0) {
+        await logSyncEvent(athleteId, plannerInfo.planner_name, "stale_plans_deleted", null, null, {
+          deleted_ids: stalePlans!.map((p: any) => p.id),
+          deleted_weeks: stalePlans!.map((p: any) => p.week_start_date),
+          reason: "weekly_plan_push_replaced_future_weeks",
+        });
+      }
+
+      // Count workouts in this plan for sync metadata
+      const planDays: any[] = (plan_data as any)?.days ?? [];
+      const workoutsInPlan = planDays.filter((d: any) =>
+        d && (d.workout_name || d.name || d.type || (d.steps && d.steps.length > 0))
+      ).length;
+
+      await upsertSyncMetadata(
+        athleteId,
+        plannerInfo.planner_name,
+        "endurance",
+        "synced",
+        workoutsInPlan,
+        week_start_date,
+        week_start_date
+      );
+
       await supabaseAdmin.from("external_planner_access_log").insert({
         planner_token_id: plannerInfo.id,
         athlete_id: athleteId,
@@ -551,7 +590,8 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({
         success: true,
         record: data,
-        message: `Endurance plan for week ${week_start_date} saved to Hub successfully`,
+        stale_plans_deleted: deletedCount,
+        message: `Endurance plan for week ${week_start_date} saved to Hub successfully${deletedCount > 0 ? ` (${deletedCount} stale future plan(s) removed)` : ""}`,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
