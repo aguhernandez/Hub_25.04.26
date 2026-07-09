@@ -71,7 +71,7 @@ serve(async (req) => {
       .insert({
         athlete_id,
         program_product_id: program_id,
-        amount_paid: Math.round(program.price * 100),
+        price_paid: program.price,
         currency: program.currency.toLowerCase(),
         status: 'pending',
       })
@@ -111,10 +111,10 @@ serve(async (req) => {
       },
     });
 
-    // Update purchase with checkout session ID
+    // Store session ID for reference (payment_id column)
     await supabaseClient
       .from('program_purchases')
-      .update({ stripe_checkout_session_id: session.id })
+      .update({ payment_id: session.id })
       .eq('id', purchase.id);
 
     return new Response(

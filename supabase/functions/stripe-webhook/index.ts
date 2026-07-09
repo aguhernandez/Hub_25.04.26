@@ -9,144 +9,181 @@ const corsHeaders = {
 interface StripeEvent {
   id: string;
   type: string;
-  data: {
-    object: any;
-  };
+  data: { object: any };
 }
 
+// ── Structured logger ──────────────────────────────────────────────────────────
+function log(level: 'INFO' | 'WARN' | 'ERROR', step: string, data?: any) {
+  const entry = { level, step, ts: new Date().toISOString(), ...(data ?? {}) };
+  if (level === 'ERROR') {
+    console.error(JSON.stringify(entry));
+  } else {
+    console.log(JSON.stringify(entry));
+  }
+}
+
+// ── Main handler ───────────────────────────────────────────────────────────────
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  );
   const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  try {
-    console.log('🎯 Webhook called! Method:', req.method);
-    console.log('🔑 Headers:', Object.fromEntries(req.headers.entries()));
+  log('INFO', 'webhook_received', { method: req.method });
 
-    // Get raw body as text for signature verification
-    const body = await req.text();
-    console.log('📦 Body length:', body.length);
+  const body = await req.text();
+  log('INFO', 'body_read', { bytes: body.length });
 
-    // Verify webhook signature if secret is configured
-    if (webhookSecret) {
-      const signature = req.headers.get('stripe-signature');
-      if (!signature) {
-        console.error('❌ No Stripe signature found');
-        return new Response(
-          JSON.stringify({ error: 'No signature' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      // Note: For production, implement proper signature verification with Stripe library
-      console.log('✅ Webhook signature present');
+  // ── Signature verification ─────────────────────────────────────────────────
+  const signature = req.headers.get('stripe-signature');
+  if (webhookSecret) {
+    if (!signature) {
+      log('ERROR', 'signature_missing');
+      return new Response(
+        JSON.stringify({ error: 'Missing stripe-signature header' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
     }
+    log('INFO', 'signature_present', { sig_prefix: signature.slice(0, 20) });
+  } else {
+    log('WARN', 'signature_check_skipped', { reason: 'STRIPE_WEBHOOK_SECRET not configured' });
+  }
 
-    // Parse the event
-    const event: StripeEvent = JSON.parse(body);
+  // ── Parse event ────────────────────────────────────────────────────────────
+  let event: StripeEvent;
+  try {
+    event = JSON.parse(body);
+  } catch (parseErr: any) {
+    log('ERROR', 'body_parse_failed', { error: parseErr.message });
+    return new Response(
+      JSON.stringify({ error: 'Invalid JSON body' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
 
-    console.log('📨 Received Stripe event:', event.type, 'ID:', event.id);
+  log('INFO', 'event_parsed', { event_id: event.id, event_type: event.type });
 
-    // Log the event to database
-    await supabase.from('stripe_webhook_events').insert({
-      event_id: event.id,
-      event_type: event.type,
-      raw_payload: event,
-      processed: false,
-    });
+  // ── Idempotency: skip already-processed events ─────────────────────────────
+  const { data: existing } = await supabase
+    .from('stripe_webhook_events')
+    .select('id, processed')
+    .eq('event_id', event.id)
+    .maybeSingle();
 
-    // Process different event types
+  if (existing?.processed) {
+    log('INFO', 'event_already_processed', { event_id: event.id });
+    return new Response(
+      JSON.stringify({ received: true, skipped: 'already processed' }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
+  // ── Log event to DB (upsert for retries) ──────────────────────────────────
+  await supabase.from('stripe_webhook_events').upsert(
+    { event_id: event.id, event_type: event.type, raw_payload: event, processed: false },
+    { onConflict: 'event_id' },
+  );
+
+  // ── Route event ────────────────────────────────────────────────────────────
+  let processingError: string | null = null;
+  try {
     switch (event.type) {
       case 'checkout.session.completed':
         await handleCheckoutCompleted(supabase, event);
         break;
-      
       case 'customer.subscription.created':
       case 'invoice.paid':
         await handleSubscriptionActive(supabase, event);
         break;
-      
       case 'customer.subscription.updated':
         await handleSubscriptionUpdated(supabase, event);
         break;
-      
       case 'customer.subscription.deleted':
       case 'invoice.payment_failed':
         await handleSubscriptionCanceled(supabase, event);
         break;
-      
       default:
-        console.log('ℹ️ Unhandled event type:', event.type);
+        log('INFO', 'event_unhandled', { event_type: event.type });
     }
-
-    // Mark event as processed
-    await supabase
-      .from('stripe_webhook_events')
-      .update({ processed: true, processed_at: new Date().toISOString() })
-      .eq('event_id', event.id);
-
-    return new Response(
-      JSON.stringify({ received: true }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  } catch (error: any) {
-    console.error('❌ Webhook error:', error.message);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+  } catch (err: any) {
+    processingError = `${err.message}\n${err.stack ?? ''}`;
+    log('ERROR', 'event_processing_failed', {
+      event_id: event.id,
+      event_type: event.type,
+      error: err.message,
+      stack: err.stack,
+    });
   }
+
+  // ── Mark event processed (or store error) ─────────────────────────────────
+  await supabase
+    .from('stripe_webhook_events')
+    .update({
+      processed: !processingError,
+      processed_at: processingError ? null : new Date().toISOString(),
+      error_message: processingError,
+    })
+    .eq('event_id', event.id);
+
+  // Always return 200 so Stripe doesn't retry on processing errors
+  log('INFO', 'webhook_complete', { event_id: event.id, success: !processingError });
+  return new Response(
+    JSON.stringify({ received: true }),
+    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+  );
 });
 
+// ── checkout.session.completed ─────────────────────────────────────────────────
 async function handleCheckoutCompleted(supabase: any, event: StripeEvent) {
   const session = event.data.object;
-  console.log('💰 Processing checkout completion:', session.id);
+  log('INFO', 'checkout_session_received', {
+    session_id: session.id,
+    customer_id: session.customer,
+    customer_email: session.customer_email || session.customer_details?.email,
+    metadata: session.metadata,
+    amount_total: session.amount_total,
+    currency: session.currency,
+  });
 
-  // Check if this is a program purchase
   if (session.metadata?.type === 'program_purchase') {
     await handleProgramPurchaseCompleted(supabase, session);
     return;
   }
-
-  // Check if this is a membership subscription
   if (session.metadata?.type === 'membership_subscription') {
     await handleMembershipSubscriptionCreated(supabase, session);
     return;
   }
 
+  // Generic product purchase path
   const customerEmail = session.customer_email || session.customer_details?.email;
   const priceId = session.line_items?.data?.[0]?.price?.id || session.metadata?.price_id;
 
   if (!customerEmail) {
-    console.error('❌ No customer email found');
+    log('ERROR', 'checkout_no_email', { session_id: session.id });
     return;
   }
 
-  // Find user by email
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('id, email, full_name')
+    .select('id, email')
     .eq('email', customerEmail)
     .maybeSingle();
 
   if (profileError) {
-    console.error('❌ Error finding user:', profileError);
+    log('ERROR', 'checkout_profile_lookup_failed', { error: profileError.message });
     return;
   }
 
   let userId = profile?.id;
 
-  // If user doesn't exist, create one
   if (!userId) {
-    console.log('👤 Creating new user for:', customerEmail);
-    
-    // Create auth user with temporary password
+    log('INFO', 'checkout_creating_user', { email: customerEmail });
     const tempPassword = Math.random().toString(36).slice(-12) + 'Aa1!';
-    
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: customerEmail,
       password: tempPassword,
@@ -156,17 +193,14 @@ async function handleCheckoutCompleted(supabase: any, event: StripeEvent) {
         needs_password_reset: true,
       },
     });
-
     if (authError) {
-      console.error('❌ Error creating user:', authError);
+      log('ERROR', 'checkout_user_create_failed', { error: authError.message });
       return;
     }
-
     userId = authData.user.id;
-    console.log('✅ User created:', userId);
+    log('INFO', 'checkout_user_created', { user_id: userId });
   }
 
-  // Find product by price_id
   const { data: product, error: productError } = await supabase
     .from('stripe_products')
     .select('*')
@@ -174,31 +208,24 @@ async function handleCheckoutCompleted(supabase: any, event: StripeEvent) {
     .maybeSingle();
 
   if (productError || !product) {
-    console.error('❌ Product not found for price_id:', priceId);
+    log('ERROR', 'checkout_product_not_found', { price_id: priceId, error: productError?.message });
     return;
   }
 
-  console.log('📦 Found product:', product.name, 'Type:', product.type);
+  log('INFO', 'checkout_product_found', { product_id: product.id, product_name: product.name, type: product.type });
 
-  // Calculate end_date based on product type
   let endDate = null;
   let nextBillingDate = null;
-
   if (product.type === 'program' && product.duration_weeks) {
     const start = new Date();
     endDate = new Date(start);
-    endDate.setDate(endDate.getDate() + (product.duration_weeks * 7));
+    endDate.setDate(endDate.getDate() + product.duration_weeks * 7);
   } else if (product.type === 'membership') {
-    if (product.billing_cycle === 'monthly') {
-      nextBillingDate = new Date();
-      nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
-    } else if (product.billing_cycle === 'yearly') {
-      nextBillingDate = new Date();
-      nextBillingDate.setFullYear(nextBillingDate.getFullYear() + 1);
-    }
+    nextBillingDate = new Date();
+    if (product.billing_cycle === 'monthly') nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
+    else if (product.billing_cycle === 'yearly') nextBillingDate.setFullYear(nextBillingDate.getFullYear() + 1);
   }
 
-  // Create purchase record
   const { error: purchaseError } = await supabase.from('user_purchases').insert({
     user_id: userId,
     product_id: product.id,
@@ -217,130 +244,341 @@ async function handleCheckoutCompleted(supabase: any, event: StripeEvent) {
   });
 
   if (purchaseError) {
-    console.error('❌ Error creating purchase:', purchaseError);
+    log('ERROR', 'checkout_purchase_insert_failed', { error: purchaseError.message });
     return;
   }
 
-  console.log('✅ Purchase activated for user:', userId);
-
-  // TODO: Send notification/email to user
+  log('INFO', 'checkout_generic_purchase_activated', { user_id: userId, product_id: product.id });
 }
 
-async function handleSubscriptionUpdated(supabase: any, event: StripeEvent) {
-  console.log('🔄 Processing subscription update');
-  const subscription = event.data.object;
-  
-  const { error } = await supabase
-    .from('user_purchases')
-    .update({
-      next_billing_date: new Date(subscription.current_period_end * 1000).toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('stripe_subscription_id', subscription.id);
-
-  if (error) {
-    console.error('❌ Error updating subscription:', error);
-  }
-}
-
+// ── Program purchase flow ──────────────────────────────────────────────────────
 async function handleProgramPurchaseCompleted(supabase: any, session: any) {
-  console.log('🎓 Processing program purchase completion');
+  const { purchase_id, program_id, athlete_id } = session.metadata ?? {};
 
-  const { purchase_id, program_id, athlete_id } = session.metadata;
+  log('INFO', 'program_purchase_start', {
+    session_id: session.id,
+    purchase_id,
+    program_id,
+    athlete_id,
+    payment_intent: session.payment_intent,
+    amount_total: session.amount_total,
+  });
 
   if (!purchase_id || !program_id || !athlete_id) {
-    console.error('❌ Missing metadata for program purchase');
+    log('ERROR', 'program_purchase_missing_metadata', {
+      has_purchase_id: !!purchase_id,
+      has_program_id: !!program_id,
+      has_athlete_id: !!athlete_id,
+    });
     return;
   }
 
-  // Update purchase status to completed
-  const { error: updateError } = await supabase
+  // ── Idempotency: skip if already completed ─────────────────────────────────
+  const { data: existingPurchase, error: fetchErr } = await supabase
+    .from('program_purchases')
+    .select('id, status')
+    .eq('id', purchase_id)
+    .maybeSingle();
+
+  if (fetchErr) {
+    log('ERROR', 'program_purchase_fetch_failed', { error: fetchErr.message, purchase_id });
+    throw fetchErr;
+  }
+
+  if (!existingPurchase) {
+    log('ERROR', 'program_purchase_not_found', { purchase_id });
+    return;
+  }
+
+  if (existingPurchase.status === 'completed') {
+    log('INFO', 'program_purchase_already_completed', { purchase_id });
+    return;
+  }
+
+  // ── Fetch program details ──────────────────────────────────────────────────
+  const { data: program, error: programErr } = await supabase
+    .from('program_products')
+    .select('id, title, duration_weeks, trainer_id')
+    .eq('id', program_id)
+    .maybeSingle();
+
+  if (programErr || !program) {
+    log('ERROR', 'program_product_not_found', { program_id, error: programErr?.message });
+    throw new Error(`Program ${program_id} not found: ${programErr?.message}`);
+  }
+
+  log('INFO', 'program_product_found', {
+    program_id: program.id,
+    title: program.title,
+    duration_weeks: program.duration_weeks,
+    trainer_id: program.trainer_id,
+  });
+
+  // ── Verify athlete exists ──────────────────────────────────────────────────
+  const { data: athlete, error: athleteErr } = await supabase
+    .from('profiles')
+    .select('id, email, full_name')
+    .eq('id', athlete_id)
+    .maybeSingle();
+
+  if (athleteErr || !athlete) {
+    log('ERROR', 'athlete_not_found', { athlete_id, error: athleteErr?.message });
+    throw new Error(`Athlete ${athlete_id} not found`);
+  }
+
+  log('INFO', 'athlete_found', { athlete_id: athlete.id, email: athlete.email });
+
+  // ── Update program_purchases to completed ──────────────────────────────────
+  const { error: updateErr } = await supabase
     .from('program_purchases')
     .update({
       status: 'completed',
-      stripe_payment_intent_id: session.payment_intent,
-      purchased_at: new Date().toISOString(),
+      payment_id: session.payment_intent || session.id,
+      purchase_date: new Date().toISOString(),
     })
     .eq('id', purchase_id);
 
-  if (updateError) {
-    console.error('❌ Error updating program purchase:', updateError);
-    return;
+  if (updateErr) {
+    log('ERROR', 'program_purchase_update_failed', { error: updateErr.message, purchase_id });
+    throw updateErr;
   }
 
-  console.log('✅ Program purchase completed:', purchase_id);
-  // The trigger will automatically create the athlete_program record
+  log('INFO', 'program_purchase_updated', { purchase_id, status: 'completed' });
+
+  // ── Upsert athlete_programs (idempotent) ───────────────────────────────────
+  const startDate = new Date().toISOString().split('T')[0];
+  const { data: athleteProgram, error: apErr } = await supabase
+    .from('athlete_programs')
+    .upsert(
+      {
+        athlete_id,
+        program_product_id: program_id,
+        purchase_id,
+        trainer_id: program.trainer_id ?? null,
+        start_date: startDate,
+        assigned_date: startDate,
+        status: 'active',
+      },
+      { onConflict: 'athlete_id,program_product_id,assigned_date', ignoreDuplicates: true },
+    )
+    .select('id')
+    .maybeSingle();
+
+  if (apErr) {
+    log('ERROR', 'athlete_program_upsert_failed', { error: apErr.message });
+    throw apErr;
+  }
+
+  log('INFO', 'athlete_program_upserted', { athlete_program_id: athleteProgram?.id });
+
+  // ── Copy workouts to athlete_workouts ──────────────────────────────────────
+  const workedOut = await copyProgramWorkouts(supabase, program_id, program.title, startDate, athlete_id, program.trainer_id);
+  log('INFO', 'program_workouts_copied', { days_created: workedOut });
+
+  // ── Create invoice ─────────────────────────────────────────────────────────
+  await createInvoice(supabase, {
+    user_id: athlete_id,
+    amount: (session.amount_total ?? 0) / 100,
+    currency: session.currency || 'usd',
+    description: `${program.title} — Training Program`,
+    payment_id: session.payment_intent || session.id,
+  });
+
+  log('INFO', 'program_purchase_flow_complete', {
+    purchase_id,
+    program_id,
+    athlete_id,
+    days_created: workedOut,
+  });
 }
 
-async function handleMembershipSubscriptionCreated(supabase: any, session: any) {
-  console.log('💎 Processing membership subscription creation');
+// ── Copy program workouts to athlete_workouts ──────────────────────────────────
+async function copyProgramWorkouts(
+  supabase: any,
+  programId: string,
+  programTitle: string,
+  startDateStr: string,
+  athleteId: string,
+  trainerId: string | null,
+): Promise<number> {
+  // Idempotency: skip if already copied
+  const { count: existing } = await supabase
+    .from('athlete_workouts')
+    .select('id', { count: 'exact', head: true })
+    .eq('athlete_id', athleteId)
+    .eq('source', 'program')
+    .gte('scheduled_date', startDateStr);
 
-  const { user_id, membership_id, billing_cycle } = session.metadata;
+  const { data: weeks } = await supabase
+    .from('program_weeks')
+    .select(`
+      id, week_number,
+      program_days(id, day_number, day_name,
+        program_day_workouts(id, exercise_id, sets, reps, rir, rest_seconds, notes, order_index, load)
+      )
+    `)
+    .eq('program_product_id', programId)
+    .order('week_number');
+
+  if (!weeks?.length) {
+    log('WARN', 'workouts_copy_no_weeks', { program_id: programId });
+    return 0;
+  }
+
+  const start = new Date(startDateStr + 'T12:00:00');
+  let daysCreated = 0;
+
+  for (const week of weeks) {
+    const weekOffset = (week.week_number - 1) * 7;
+    for (const day of (week.program_days ?? [])) {
+      if (!day.program_day_workouts?.length) continue;
+
+      const dayDate = new Date(start);
+      dayDate.setDate(dayDate.getDate() + weekOffset + (day.day_number - 1));
+      const scheduledDate = dayDate.toISOString().split('T')[0];
+
+      // Idempotency per day: skip if this exact day already exists
+      const { count: dayExists } = await supabase
+        .from('athlete_workouts')
+        .select('id', { count: 'exact', head: true })
+        .eq('athlete_id', athleteId)
+        .eq('source', 'program')
+        .eq('scheduled_date', scheduledDate);
+
+      if ((dayExists ?? 0) > 0) continue;
+
+      // Create the workout definition
+      const { data: workout, error: wErr } = await supabase
+        .from('workouts')
+        .insert({
+          trainer_id: trainerId,
+          name: day.day_name || `Week ${week.week_number} - Day ${day.day_number}`,
+          description: `${programTitle} — Week ${week.week_number}`,
+        })
+        .select('id')
+        .single();
+
+      if (wErr || !workout) {
+        log('ERROR', 'workouts_copy_insert_failed', {
+          error: wErr?.message,
+          week: week.week_number,
+          day: day.day_number,
+        });
+        continue;
+      }
+
+      // Link workout to athlete
+      const { error: awErr } = await supabase.from('athlete_workouts').insert({
+        athlete_id: athleteId,
+        workout_id: workout.id,
+        scheduled_date: scheduledDate,
+        status: 'pending',
+        source: 'program',
+        trainer_id: trainerId,
+        assignment_type: 'individual',
+      });
+
+      if (awErr) {
+        log('ERROR', 'athlete_workouts_insert_failed', { error: awErr.message, scheduled_date: scheduledDate });
+        continue;
+      }
+
+      // Copy exercises
+      const exercises = day.program_day_workouts.map((pdw: any, idx: number) => ({
+        workout_id: workout.id,
+        exercise_id: pdw.exercise_id,
+        sets: pdw.sets ?? 3,
+        reps: pdw.reps != null ? String(pdw.reps) : '8-10',
+        rest_seconds: pdw.rest_seconds ?? 90,
+        notes: pdw.notes ?? null,
+        order_index: pdw.order_index ?? idx,
+        rir: pdw.rir ?? null,
+      }));
+
+      if (exercises.length > 0) {
+        const { error: exErr } = await supabase.from('workout_exercises').insert(exercises);
+        if (exErr) {
+          log('WARN', 'workout_exercises_insert_failed', { error: exErr.message, workout_id: workout.id });
+        }
+      }
+
+      daysCreated++;
+    }
+  }
+
+  return daysCreated;
+}
+
+// ── Membership subscription created ───────────────────────────────────────────
+async function handleMembershipSubscriptionCreated(supabase: any, session: any) {
+  log('INFO', 'membership_subscription_start', {
+    session_id: session.id,
+    metadata: session.metadata,
+  });
+
+  const { user_id, membership_id, billing_cycle } = session.metadata ?? {};
 
   if (!user_id || !membership_id) {
-    console.error('❌ Missing metadata for membership subscription');
+    log('ERROR', 'membership_subscription_missing_metadata', { user_id, membership_id });
     return;
   }
 
-  // Get subscription details
-  const subscriptionId = session.subscription;
-
-  // Get membership details for invoice
   const { data: membership } = await supabase
     .from('memberships')
     .select('name, price, currency')
     .eq('id', membership_id)
     .maybeSingle();
 
-  // Create membership access record
-  const { error: accessError } = await supabase
-    .from('membership_access')
-    .insert({
-      membership_id: membership_id,
-      user_id: user_id,
-      assigned_by: user_id, // Self-assigned via purchase
-      start_date: new Date().toISOString(),
-      status: 'active',
-      source: 'stripe',
-      stripe_customer_id: session.customer,
-      stripe_subscription_id: subscriptionId,
-      stripe_checkout_session_id: session.id,
-      notes: `Subscribed via Stripe (${billing_cycle})`,
-    });
+  const { error: accessError } = await supabase.from('membership_access').insert({
+    membership_id,
+    user_id,
+    assigned_by: user_id,
+    start_date: new Date().toISOString(),
+    status: 'active',
+    source: 'stripe',
+    stripe_customer_id: session.customer,
+    stripe_subscription_id: session.subscription,
+    stripe_checkout_session_id: session.id,
+    notes: `Subscribed via Stripe (${billing_cycle})`,
+  });
 
   if (accessError) {
-    console.error('❌ Error creating membership access:', accessError);
-    return;
+    log('ERROR', 'membership_access_insert_failed', { error: accessError.message });
+    throw accessError;
   }
 
-  console.log('✅ Membership access created for user:', user_id);
+  log('INFO', 'membership_access_created', { user_id, membership_id });
 
-  // Create invoice
   await createInvoice(supabase, {
     user_id,
     amount: session.amount_total / 100,
     currency: session.currency || membership?.currency || 'usd',
     description: `${membership?.name || 'Membership'} subscription - ${billing_cycle}`,
-    stripe_session_id: session.id,
-    stripe_subscription_id: subscriptionId,
-    metadata: {
-      membership_id,
-      billing_cycle,
-      customer_name: session.customer_details?.name,
-    }
+    payment_id: session.id,
   });
 
-  console.log('✅ Invoice created for membership subscription');
+  log('INFO', 'membership_subscription_complete', { user_id, membership_id });
 }
 
-async function handleSubscriptionActive(supabase: any, event: StripeEvent) {
-  console.log('🔄 Processing subscription activation');
-
+// ── Subscription updated ───────────────────────────────────────────────────────
+async function handleSubscriptionUpdated(supabase: any, event: StripeEvent) {
   const subscription = event.data.object;
-  const metadata = subscription.metadata;
+  log('INFO', 'subscription_updated', { subscription_id: subscription.id });
 
-  if (metadata?.type === 'membership_subscription' || metadata?.membership_id) {
-    // Membership stays active — end_date is informational only, does not expire membership
+  const { error } = await supabase
+    .from('user_purchases')
+    .update({ next_billing_date: new Date(subscription.current_period_end * 1000).toISOString() })
+    .eq('stripe_subscription_id', subscription.id);
+
+  if (error) log('ERROR', 'subscription_update_failed', { error: error.message });
+}
+
+// ── Subscription active (invoice.paid) ────────────────────────────────────────
+async function handleSubscriptionActive(supabase: any, event: StripeEvent) {
+  const subscription = event.data.object;
+  log('INFO', 'subscription_active', { subscription_id: subscription.id });
+
+  if (subscription.metadata?.membership_id || subscription.metadata?.type === 'membership_subscription') {
     const { error } = await supabase
       .from('membership_access')
       .update({
@@ -349,23 +587,18 @@ async function handleSubscriptionActive(supabase: any, event: StripeEvent) {
       })
       .eq('stripe_subscription_id', subscription.id);
 
-    if (error) {
-      console.error('❌ Error updating membership access:', error);
-    } else {
-      console.log('✅ Membership access updated for subscription:', subscription.id);
-    }
+    if (error) log('ERROR', 'membership_access_update_failed', { error: error.message });
+    else log('INFO', 'membership_access_renewed', { subscription_id: subscription.id });
   }
 }
 
+// ── Subscription canceled ─────────────────────────────────────────────────────
 async function handleSubscriptionCanceled(supabase: any, event: StripeEvent) {
-  console.log('❌ Processing subscription cancellation');
   const subscription = event.data.object;
+  const stripeSubId = subscription.id || subscription.subscription;
+  log('INFO', 'subscription_canceled', { subscription_id: stripeSubId, event_type: event.type });
 
-  // For membership subscriptions: cancel the paid tier and revert user to Inicia (free)
   if (subscription.metadata?.membership_id || subscription.metadata?.type === 'membership_subscription') {
-    const stripeSubId = subscription.id || subscription.subscription;
-
-    // Find the user this subscription belongs to
     const { data: accessRow } = await supabase
       .from('membership_access')
       .select('user_id')
@@ -373,17 +606,11 @@ async function handleSubscriptionCanceled(supabase: any, event: StripeEvent) {
       .maybeSingle();
 
     if (accessRow?.user_id) {
-      // Cancel the paid membership record
       await supabase
         .from('membership_access')
-        .update({
-          status: 'canceled',
-          end_date: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
+        .update({ status: 'canceled', end_date: new Date().toISOString() })
         .eq('stripe_subscription_id', stripeSubId);
 
-      // Revert user to Inicia free tier
       const { data: iniciaData } = await supabase
         .from('memberships')
         .select('id')
@@ -400,94 +627,69 @@ async function handleSubscriptionCanceled(supabase: any, event: StripeEvent) {
           source: 'manual',
           notes: 'Reverted to Inicia after Stripe subscription canceled',
         });
-        console.log('✅ User reverted to Inicia after cancellation:', accessRow.user_id);
+        log('INFO', 'membership_reverted_to_inicia', { user_id: accessRow.user_id });
       }
     } else {
-      console.log('⚠️ No membership_access found for subscription:', stripeSubId);
+      log('WARN', 'subscription_canceled_no_access_row', { subscription_id: stripeSubId });
     }
     return;
   }
 
-  // Non-membership subscriptions (programs, etc.)
   const { error } = await supabase
     .from('user_purchases')
-    .update({
-      status: 'canceled',
-      end_date: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('stripe_subscription_id', subscription.id || subscription.subscription);
+    .update({ status: 'canceled', end_date: new Date().toISOString() })
+    .eq('stripe_subscription_id', stripeSubId);
 
-  if (error) {
-    console.error('❌ Error canceling subscription:', error);
-  }
+  if (error) log('ERROR', 'user_purchase_cancel_failed', { error: error.message });
 }
 
-async function createInvoice(supabase: any, invoiceData: {
+// ── Invoice creation ───────────────────────────────────────────────────────────
+async function createInvoice(supabase: any, data: {
   user_id: string;
   amount: number;
   currency: string;
   description: string;
-  stripe_session_id?: string;
-  stripe_subscription_id?: string;
-  metadata?: any;
+  payment_id?: string;
 }) {
-  console.log('📄 Creating invoice for user:', invoiceData.user_id);
+  log('INFO', 'invoice_create_start', { user_id: data.user_id, amount: data.amount });
 
-  // Get user profile for invoice details
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('full_name, email')
-    .eq('id', invoiceData.user_id)
-    .maybeSingle();
-
-  // Generate invoice number
-  const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-
+  const invoiceNumber = `INV-${Date.now()}-${Math.random().toString(36).slice(2, 9).toUpperCase()}`;
   const today = new Date().toISOString().split('T')[0];
 
-  // Create invoice with correct column names
   const { data: invoice, error: invoiceError } = await supabase
     .from('invoices')
     .insert({
       invoice_number: invoiceNumber,
-      issued_by: invoiceData.user_id,
-      issued_to: invoiceData.user_id,
+      issued_by: data.user_id,
+      issued_to: data.user_id,
       issue_date: today,
       due_date: today,
       status: 'paid',
-      subtotal: invoiceData.amount,
+      subtotal: data.amount,
       tax_rate: 0,
       tax_amount: 0,
-      total: invoiceData.amount,
-      currency: invoiceData.currency.toUpperCase(),
+      total: data.amount,
+      currency: data.currency.toUpperCase(),
       payment_method: 'stripe',
       payment_date: today,
-      notes: invoiceData.description,
+      notes: data.description,
     })
-    .select()
+    .select('id')
     .single();
 
   if (invoiceError) {
-    console.error('❌ Error creating invoice:', invoiceError);
+    log('ERROR', 'invoice_insert_failed', { error: invoiceError.message });
     return null;
   }
 
-  // Create invoice items with correct column names
-  const { error: itemError } = await supabase
-    .from('invoice_items')
-    .insert({
-      invoice_id: invoice.id,
-      description: invoiceData.description,
-      quantity: 1,
-      unit_price: invoiceData.amount,
-      total: invoiceData.amount,
-    });
+  await supabase.from('invoice_items').insert({
+    invoice_id: invoice.id,
+    description: data.description,
+    quantity: 1,
+    unit_price: data.amount,
+    total: data.amount,
+  });
 
-  if (itemError) {
-    console.error('❌ Error creating invoice items:', itemError);
-  }
-
-  console.log('✅ Invoice created:', invoiceNumber);
+  log('INFO', 'invoice_created', { invoice_number: invoiceNumber, invoice_id: invoice.id });
   return invoice;
 }
