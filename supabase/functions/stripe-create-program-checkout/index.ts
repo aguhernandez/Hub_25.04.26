@@ -100,6 +100,7 @@ serve(async (req) => {
         },
       ],
       mode: 'payment',
+      allow_promotion_codes: true,
       success_url: `${req.headers.get('origin')}/programs?success=true`,
       cancel_url: `${req.headers.get('origin')}/programs?canceled=true`,
       metadata: {
