@@ -1103,10 +1103,22 @@ export default function TrainingPage() {
                       return (
                         <div className="relative group/ep">
                           <div
-                            onClick={(e) => { e.stopPropagation(); openWorkoutModal(workout); }}
-                            className={`w-full text-xs p-2 pl-3 pr-7 rounded text-left relative ${getEnduranceColor(workout).bg} ${getEnduranceColor(workout).text} border-l-2 transition-colors cursor-pointer`}
+                            draggable
+                            onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, workout); }}
+                            onDragEnd={handleDragEnd}
+                            onClick={(e) => {
+                              if ((e.target as HTMLElement).closest('.grip-handle')) return;
+                              e.stopPropagation();
+                              openWorkoutModal(workout);
+                            }}
+                            className={`w-full text-xs p-2 pl-6 pr-7 rounded text-left relative ${getEnduranceColor(workout).bg} ${getEnduranceColor(workout).text} border-l-2 transition-all cursor-pointer ${
+                              draggedWorkout?.id === workout.id ? 'opacity-50 scale-95' : ''
+                            }`}
                             style={{ borderLeftColor: getEnduranceColor(workout).border }}
                           >
+                            <div className="grip-handle absolute left-1 top-1/2 -translate-y-1/2 cursor-move">
+                              <GripVertical className="w-3 h-3 opacity-30" />
+                            </div>
                             <div className="flex items-center gap-1 mb-0.5">
                               <Activity className="w-3 h-3 flex-shrink-0 opacity-60" />
                               <span className="font-semibold truncate">{workout.name}</span>
@@ -1383,6 +1395,37 @@ export default function TrainingPage() {
     }
   };
 
+  // Move a single day from an external endurance plan to a new date.
+  // workoutId format: "endurance-plan-{UUID}-{dayIndex}"
+  const handleEndurancePlanMove = async (workoutId: string, newDate: string) => {
+    const lastDash = workoutId.lastIndexOf('-');
+    const dayIndex = parseInt(workoutId.substring(lastDash + 1), 10);
+    const planWeekId = workoutId.substring('endurance-plan-'.length, lastDash);
+    if (isNaN(dayIndex) || !planWeekId) return;
+
+    try {
+      const { data: planRow } = await supabase
+        .from('external_endurance_plans')
+        .select('plan_data')
+        .eq('id', planWeekId)
+        .maybeSingle();
+
+      if (!planRow?.plan_data?.days?.[dayIndex]) return;
+
+      const days = [...planRow.plan_data.days];
+      days[dayIndex] = { ...days[dayIndex], date: newDate };
+
+      const { error } = await supabase
+        .from('external_endurance_plans')
+        .update({ plan_data: { ...planRow.plan_data, days } })
+        .eq('id', planWeekId);
+
+      if (!error) await loadWorkouts();
+    } catch (err) {
+      console.error('Error moving endurance plan day:', err);
+    }
+  };
+
   const calculateTotalVolume = async () => {
     if (!profile?.id) return;
 
@@ -1573,7 +1616,11 @@ export default function TrainingPage() {
     const currentDateStr = draggedWorkout.scheduled_date;
 
     if (targetDateStr !== currentDateStr) {
-      await handleWorkoutMove(draggedWorkout.id, targetDateStr);
+      if (draggedWorkout.type === 'endurance_plan') {
+        await handleEndurancePlanMove(draggedWorkout.id, targetDateStr);
+      } else {
+        await handleWorkoutMove(draggedWorkout.id, targetDateStr);
+      }
     }
 
     setDraggedWorkout(null);
@@ -2891,6 +2938,7 @@ export default function TrainingPage() {
           }}
           workout={logWorkoutTarget}
           language={language}
+          executedOnDate={logWorkoutTarget.scheduled_date}
           onSaved={() => {
             loadWorkouts();
           }}
