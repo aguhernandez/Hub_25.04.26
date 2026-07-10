@@ -1632,8 +1632,12 @@ Deno.serve(async (req: Request) => {
     // GET /planner-hub-api/completed-workouts
     // Endurance Planner: reads manually logged completed endurance workouts
     // These are submitted by the athlete via "Log Workout" in the Hub app.
-    // Each record includes: duration_seconds, time_in_zones (always seconds),
-    // intervals, rpe, effort, source, wellness (null if not submitted)
+    // Each record includes full execution details:
+    //   - duration_seconds, time_in_zones (seconds per zone), intervals (block-by-block)
+    //   - rpe, effort, source, wellness (energy_level, pain_level, mood, notes)
+    //   - plan_week_id, plan_day_index (links back to the planner week/day)
+    //   - gps_activity: GPS map data from external_activities matched by date+athlete
+    //     (map_polyline, start_latlng, end_latlng, avg HR, power, distance, elevation)
     // Query params: date_from, date_to, limit (default 50)
     // ──────────────────────────────────────────────────────────────────
     if (endpoint === "completed-workouts" && req.method === "GET") {
@@ -1643,7 +1647,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: completedWorkouts, error } = await supabaseAdmin
         .from("endurance_completed_workouts")
-        .select("id, planned_workout_id, scheduled_date, sport, workout_name, duration_seconds, time_in_zones, intervals, rpe, effort, source, wellness, notes, created_at")
+        .select("id, planned_workout_id, plan_week_id, plan_day_index, scheduled_date, sport, workout_name, duration_seconds, time_in_zones, intervals, rpe, effort, source, wellness, notes, created_at")
         .eq("athlete_id", athleteId)
         .gte("scheduled_date", dateFrom)
         .lte("scheduled_date", dateTo)
@@ -1652,15 +1656,117 @@ Deno.serve(async (req: Request) => {
 
       if (error) throw error;
 
-      const totalDuration = (completedWorkouts || []).reduce((s: number, w: any) => s + (w.duration_seconds || 0), 0);
+      // Fetch GPS activities for matching dates so the planner gets map + HR/power data
+      const workoutDates = [...new Set((completedWorkouts || []).map((w: any) => w.scheduled_date as string))];
+      let activitiesByDate: Record<string, any[]> = {};
+
+      if (workoutDates.length > 0) {
+        const { data: activities } = await supabaseAdmin
+          .from("external_activities")
+          .select(`
+            id,
+            source,
+            external_id,
+            sport_type,
+            name,
+            local_date,
+            start_time,
+            duration_seconds,
+            elapsed_time_seconds,
+            distance_meters,
+            elevation_gain_meters,
+            average_speed_mps,
+            max_speed_mps,
+            average_heartrate,
+            max_heartrate,
+            has_heartrate,
+            average_power,
+            average_watts,
+            weighted_avg_watts,
+            max_watts,
+            average_cadence,
+            calories,
+            kilojoules,
+            map_polyline,
+            map_summary_polyline,
+            start_latlng,
+            end_latlng,
+            trainer,
+            timezone,
+            device_name,
+            streams_fetched
+          `)
+          .eq("user_id", athleteId)
+          .in("local_date", workoutDates)
+          .is("deleted_at", null)
+          .order("start_time", { ascending: true });
+
+        for (const act of activities || []) {
+          const d = act.local_date as string;
+          if (!activitiesByDate[d]) activitiesByDate[d] = [];
+          activitiesByDate[d].push(act);
+        }
+      }
+
+      // Attach best-matching GPS activity to each completed workout
+      const enriched = (completedWorkouts || []).map((w: any) => {
+        const dayActivities: any[] = activitiesByDate[w.scheduled_date] || [];
+
+        // Match by sport type first, then fall back to any activity on that day
+        const sportNorm = (s: string) => (s || "").toLowerCase().replace(/[^a-z]/g, "");
+        const wSport = sportNorm(w.sport);
+        const matched =
+          dayActivities.find((a: any) => sportNorm(a.sport_type) === wSport) ||
+          dayActivities[0] ||
+          null;
+
+        let gpsActivity = null;
+        if (matched) {
+          gpsActivity = {
+            id: matched.id,
+            source: matched.source,
+            external_id: matched.external_id,
+            name: matched.name,
+            sport_type: matched.sport_type,
+            start_time: matched.start_time,
+            duration_seconds: matched.duration_seconds,
+            elapsed_time_seconds: matched.elapsed_time_seconds,
+            distance_meters: matched.distance_meters,
+            elevation_gain_meters: matched.elevation_gain_meters,
+            average_speed_mps: matched.average_speed_mps,
+            max_speed_mps: matched.max_speed_mps,
+            average_heartrate: matched.average_heartrate,
+            max_heartrate: matched.max_heartrate,
+            has_heartrate: matched.has_heartrate,
+            average_power: matched.average_power ?? matched.average_watts,
+            weighted_avg_power: matched.weighted_avg_watts,
+            max_power: matched.max_watts,
+            average_cadence: matched.average_cadence,
+            calories: matched.calories,
+            kilojoules: matched.kilojoules,
+            map_polyline: matched.map_polyline || null,
+            map_summary_polyline: matched.map_summary_polyline || null,
+            start_latlng: matched.start_latlng || null,
+            end_latlng: matched.end_latlng || null,
+            trainer: matched.trainer,
+            timezone: matched.timezone,
+            device_name: matched.device_name,
+            streams_available: matched.streams_fetched === true,
+          };
+        }
+
+        return { ...w, gps_activity: gpsActivity };
+      });
+
+      const totalDuration = enriched.reduce((s: number, w: any) => s + (w.duration_seconds || 0), 0);
       const avgRpe = (() => {
-        const withRpe = (completedWorkouts || []).filter((w: any) => w.rpe != null);
+        const withRpe = enriched.filter((w: any) => w.rpe != null);
         if (withRpe.length === 0) return null;
         return Math.round((withRpe.reduce((s: number, w: any) => s + w.rpe, 0) / withRpe.length) * 10) / 10;
       })();
 
       const timeInZonesTotals: Record<string, number> = {};
-      for (const w of completedWorkouts || []) {
+      for (const w of enriched) {
         const tiz = w.time_in_zones || {};
         for (const [zone, secs] of Object.entries(tiz)) {
           timeInZonesTotals[zone] = (timeInZonesTotals[zone] || 0) + (secs as number);
@@ -1673,17 +1779,20 @@ Deno.serve(async (req: Request) => {
         athlete_id: athleteId,
         date_from: dateFrom,
         date_to: dateTo,
-        completed_workouts: completedWorkouts || [],
+        completed_workouts: enriched,
         summary: {
-          count: (completedWorkouts || []).length,
+          count: enriched.length,
           total_duration_seconds: totalDuration,
           avg_rpe: avgRpe,
           time_in_zones_totals: timeInZonesTotals,
+          with_gps: enriched.filter((w: any) => w.gps_activity !== null).length,
         },
         contract: {
-          time_in_zones: "always in seconds (absolute)",
+          time_in_zones: "always in seconds (absolute), keyed as z1-z7",
+          intervals: "block-by-block array with step_type, planned_duration_sec, actual_duration_sec, zone, state, notes",
+          wellness: "null if athlete did not submit feedback; otherwise {energy_level, pain_level, mood, notes}",
+          gps_activity: "null if no external_activities record found for athlete on that date; map_polyline is encoded polyline",
           source_values: ["manual_block_based", "quick_log"],
-          wellness: "null if athlete did not submit wellness at time of logging",
         },
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
