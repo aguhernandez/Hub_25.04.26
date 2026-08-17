@@ -24,7 +24,31 @@ export default function CourseDetail({ courseId, onBack }: CourseDetailProps) {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No session');
 
-        const url = `https://academy.asciende.pro/course/${encodeURIComponent(courseId)}?embedded=true`;
+        // Get satellite token so Academy recognizes the Hub session
+        const tokenRes = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-session-token`,
+          {
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+
+        let satelliteToken: string | null = null;
+        if (tokenRes.ok) {
+          const tokenData = await tokenRes.json();
+          if (tokenData.success && tokenData.token) {
+            satelliteToken = tokenData.token;
+          }
+        }
+
+        const params = new URLSearchParams({ embedded: 'true' });
+        if (satelliteToken) {
+          params.set('token', satelliteToken);
+        }
+
+        const url = `https://academy.asciende.pro/course/${encodeURIComponent(courseId)}?${params.toString()}`;
         if (cancelled) return;
         setIframeSrc(url);
       } catch (err) {
