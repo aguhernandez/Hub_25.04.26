@@ -4,6 +4,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useAthlete } from '../contexts/AthleteContext';
 import { supabase } from '../lib/supabase';
 import { Dumbbell, Plus, Save, Users, Calendar, Search, X, Play, Trash2, Calculator, Layers, AlertTriangle, ChevronDown, MoveUp, MoveDown } from 'lucide-react';
+import BackButton from '../components/BackButton';
 import AdvancedExerciseBuilder from '../components/training/AdvancedExerciseBuilder';
 import BlockOrderBuilder, { type BlockInstance } from '../components/training/BlockOrderBuilder';
 import StrengthEstimator from '../components/training/StrengthEstimator';
@@ -780,6 +781,7 @@ export default function WorkoutBuilderPage() {
       )}
 
       <div className="space-y-6">
+      <BackButton />
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
           <Dumbbell className="w-8 h-8 text-[#fdda36]" />

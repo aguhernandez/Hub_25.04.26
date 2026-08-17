@@ -18,6 +18,7 @@ import {
   FlaskConical, Download, X, CheckCircle2, Zap, Heart,
   Activity, User, Mountain,
 } from 'lucide-react';
+import BackButton from '../components/BackButton';
 
 interface Athlete {
   id: string;
@@ -213,6 +214,8 @@ export default function BiologicalPassportPage() {
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6 max-w-screen-2xl mx-auto">
+
+      <BackButton />
 
       {/* Page header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">

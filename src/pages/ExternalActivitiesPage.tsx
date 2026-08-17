@@ -2,27 +2,9 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { StravaClient, ExternalActivity, SyncResult } from '../utils/stravaClient';
-import {
-  Activity,
-  Filter,
-  Import,
-  AlertCircle,
-  Calendar,
-  Clock,
-  TrendingUp,
-  Heart,
-  Zap,
-  Mountain,
-  Trash2,
-  Edit,
-  ChevronDown,
-  ChevronUp,
-  CheckCircle,
-  RefreshCw,
-  RotateCcw,
-  Archive,
-} from 'lucide-react';
+import { Activity, Filter, Import, AlertCircle, Calendar, Clock, TrendingUp, Heart, Zap, Mountain, Trash2, CreditCard as Edit, ChevronDown, ChevronUp, CheckCircle, RefreshCw, RotateCcw, Archive } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import BackButton from '../components/BackButton';
 
 interface DuplicateWarning {
   external_activity_id: string;
@@ -243,6 +225,7 @@ export default function ExternalActivitiesPage() {
 
   return (
     <div className="space-y-6">
+      <BackButton />
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <div>

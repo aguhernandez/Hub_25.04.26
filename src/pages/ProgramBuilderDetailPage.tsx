@@ -9,6 +9,7 @@ import { Play } from 'lucide-react';
 import ProgramHeader from '../components/program-builder/ProgramHeader';
 import WeekSelector from '../components/program-builder/WeekSelector';
 import { Loader2, Plus, CreditCard as Edit2, Copy, Trash2, Calendar, Search, X } from 'lucide-react';
+import BackButton from '../components/BackButton';
 import AdvancedExerciseBuilder from '../components/training/AdvancedExerciseBuilder';
 
 interface ProgramProduct {
@@ -568,6 +569,10 @@ export default function ProgramBuilderDetailPage({ programId }: Props) {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Toast toast={toast} onHide={hideToast} />
+
+      <div className="p-4">
+        <BackButton />
+      </div>
 
       <ProgramHeader
         programTitle={program.title}

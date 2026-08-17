@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useToast } from '../hooks/useToast';
 import Toast from '../components/Toast';
 import { Package, Calendar, DollarSign, Video, Target, Users, ShoppingCart, Check, X, Crown, Trash2, CreditCard as Edit2, Plus, Search, Filter, ChevronRight, Dumbbell, Clock, Star, UserPlus, BookOpen, TrendingUp, ExternalLink } from 'lucide-react';
+import BackButton from '../components/BackButton';
 
 interface ProgramProduct {
   id: string;

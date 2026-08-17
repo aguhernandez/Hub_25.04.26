@@ -126,6 +126,24 @@ function App() {
   };
 
   const [currentPage, setCurrentPage] = useState<Page>(getInitialPage());
+  const navHistoryRef = useRef<Page[]>([]);
+
+  const navigateToPage = useCallback((page: Page) => {
+    setCurrentPage(prev => {
+      navHistoryRef.current.push(prev);
+      return page;
+    });
+  }, []);
+
+  const navigateBack = useCallback(() => {
+    const prev = navHistoryRef.current.pop();
+    if (prev) {
+      setCurrentPage(prev);
+    } else {
+      const fallback: Page = profile?.role === 'admin' ? 'admin' : 'dashboard';
+      setCurrentPage(fallback);
+    }
+  }, [profile]);
 
   useEffect(() => {
     if (profile) {
@@ -139,7 +157,7 @@ function App() {
   useEffect(() => {
     const handleNavigate = (e: any) => {
       if (typeof e.detail === 'object' && e.detail.page) {
-        setCurrentPage(e.detail.page);
+        navigateToPage(e.detail.page);
         if (e.detail.programId) {
           setProgramId(e.detail.programId);
         }
@@ -147,12 +165,21 @@ function App() {
           setRacePlanId(e.detail.racePlanId);
         }
       } else {
-        setCurrentPage(e.detail);
+        navigateToPage(e.detail);
         setProgramId(null);
       }
     };
     window.addEventListener('navigate', handleNavigate);
-    return () => window.removeEventListener('navigate', handleNavigate);
+
+    const handleNavigateBack = () => {
+      navigateBack();
+    };
+    window.addEventListener('navigate-back', handleNavigateBack);
+
+    return () => {
+      window.removeEventListener('navigate', handleNavigate);
+      window.removeEventListener('navigate-back', handleNavigateBack);
+    };
   }, [currentPage]);
 
   // Handle deep-link callback from system browser after Google OAuth on native apps
@@ -205,6 +232,37 @@ function App() {
 
     return () => { cleanup?.(); };
   }, []);
+
+  // Capacitor hardware back button + swipe gesture (native platforms)
+  useEffect(() => {
+    if (!user) return;
+    let backCleanup: (() => void) | undefined;
+
+    (async () => {
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        if (!Capacitor.isNativePlatform()) return;
+
+        const { App: CapApp } = await import('@capacitor/app');
+        const listener = await CapApp.addListener('backButton', () => {
+          navigateBack();
+        });
+        backCleanup = () => { listener.remove(); };
+      } catch { /* not native or plugin unavailable */ }
+    })();
+
+    return () => { backCleanup?.(); };
+  }, [user, navigateBack]);
+
+  // Browser back button support
+  useEffect(() => {
+    if (!user) return;
+    const handlePopState = () => {
+      navigateBack();
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [user, navigateBack]);
 
   // If already authenticated and a satellite redirect param is present, forward immediately with a token
   useEffect(() => {
