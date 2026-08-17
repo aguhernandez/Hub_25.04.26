@@ -15,8 +15,6 @@ export default function CourseDetail({ courseId, onBack }: CourseDetailProps) {
   const [iframeSrc, setIframeSrc] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const ACADEMY_ORIGIN = 'https://academy.asciende.pro';
-
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -50,7 +48,7 @@ export default function CourseDetail({ courseId, onBack }: CourseDetailProps) {
           params.set('token', satelliteToken);
         }
 
-        const url = `${ACADEMY_ORIGIN}/course/${encodeURIComponent(courseId)}?${params.toString()}`;
+        const url = `https://academy.asciende.pro/course/${encodeURIComponent(courseId)}?${params.toString()}`;
         if (cancelled) return;
         setIframeSrc(url);
       } catch (err) {
@@ -65,12 +63,24 @@ export default function CourseDetail({ courseId, onBack }: CourseDetailProps) {
 
   useEffect(() => {
     function handleMessage(event: MessageEvent) {
-      if (event.origin !== ACADEMY_ORIGIN) return;
       const data = event.data;
       if (!data || data.type !== 'ASCIENDE_STRIPE_CHECKOUT') return;
       const checkoutUrl = typeof data.checkoutUrl === 'string' ? data.checkoutUrl : '';
-      if (!checkoutUrl.startsWith('https://checkout.stripe.com/')) return;
-      window.top.location.href = checkoutUrl;
+      if (!checkoutUrl) {
+        console.warn('[Hub] ASCIENDE_STRIPE_CHECKOUT received without checkoutUrl');
+        return;
+      }
+      try {
+        const parsed = new URL(checkoutUrl);
+        if (parsed.hostname !== 'checkout.stripe.com') {
+          console.warn('[Hub] checkoutUrl is not a Stripe URL:', checkoutUrl);
+          return;
+        }
+      } catch {
+        console.warn('[Hub] checkoutUrl is not a valid URL:', checkoutUrl);
+        return;
+      }
+      window.open(checkoutUrl, '_blank');
     }
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
