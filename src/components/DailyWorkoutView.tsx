@@ -11,6 +11,7 @@ import WorkoutShareCard from './training/WorkoutShareCard';
 import { updateATPComplianceForWorkout } from '../utils/atpIntegration';
 import Toast from './Toast';
 import { useToast } from '../hooks/useToast';
+import DeleteWorkoutModal from './DeleteWorkoutModal';
 
 interface SetLine {
   id: string;
@@ -81,6 +82,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
   const [showSessionScreen, setShowSessionScreen] = useState(false);
   const [videoModal, setVideoModal] = useState<{ url: string; name: string; description?: string } | null>(null);
   const [showShareCard, setShowShareCard] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   useEffect(() => {
     loadDailyWorkout();
@@ -850,8 +852,13 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
     }
   };
 
-  const handleDeleteWorkout = async () => {
+  const handleDeleteWorkout = () => {
+    setShowDeleteModal(true);
+  };
+
+  const confirmDeleteWorkout = async () => {
     if (!workout?.id) return;
+    setShowDeleteModal(false);
 
     try {
       const { error: deleteError } = await supabase
@@ -861,7 +868,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
 
       if (deleteError) throw deleteError;
 
-      success(language === 'es' ? 'Entrenamiento eliminado' : 'Workout deleted');
+      success(language === 'es' ? 'Entrenamiento eliminado correctamente' : 'Workout deleted successfully');
 
       window.dispatchEvent(new Event('workout-history-refresh'));
 
@@ -871,6 +878,25 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       console.error('Error deleting workout:', err);
       error(err.message || (language === 'es' ? 'Error al eliminar entrenamiento' : 'Error deleting workout'), 5000);
     }
+  };
+
+  const getDeleteModalInfo = () => {
+    if (!workout) return { name: '', date: '', duration: '' };
+
+    const name =
+      workout.type === 'extra' || workout.type === 'external' || workout.type === 'endurance_plan'
+        ? workout.name
+        : workout.source === 'trainingpeaks'
+        ? (workout.external_title || 'TrainingPeaks Workout')
+        : (workout.workouts?.name || (language === 'es' ? 'Entrenamiento' : 'Workout'));
+
+    const date = formatDate(selectedDate);
+
+    const duration = workout.workouts?.duration_minutes
+      ? `${workout.workouts.duration_minutes} min`
+      : workout.duration || '';
+
+    return { name, date, duration };
   };
 
   const updateSetTracking = (exerciseId: string, setNumber: number, field: keyof SetTracking, value: any) => {
@@ -1145,22 +1171,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
                 )}
               </div>
               <button
-                onClick={async () => {
-                  if (workout?.id) {
-                    try {
-                      await supabase
-                        .from('athlete_workouts')
-                        .delete()
-                        .eq('id', workout.id);
-
-                      success(language === 'es' ? 'Entrenamiento eliminado' : 'Workout deleted');
-                      window.dispatchEvent(new Event('workout-history-refresh'));
-                      onWorkoutUpdate();
-                    } catch (err: any) {
-                      error(err.message || (language === 'es' ? 'Error al eliminar' : 'Error deleting'), 5000);
-                    }
-                  }
-                }}
+                onClick={() => setShowDeleteModal(true)}
                 className="p-1 text-red-500 hover:text-red-700 transition-colors"
                 title={language === 'es' ? 'Borrar sesión' : 'Delete session'}
               >
@@ -1643,6 +1654,15 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
           </div>
         </div>
       )}
+
+      <DeleteWorkoutModal
+        open={showDeleteModal}
+        workoutName={getDeleteModalInfo().name}
+        workoutDate={getDeleteModalInfo().date}
+        workoutDuration={getDeleteModalInfo().duration}
+        onConfirm={confirmDeleteWorkout}
+        onCancel={() => setShowDeleteModal(false)}
+      />
     </>
   );
 }

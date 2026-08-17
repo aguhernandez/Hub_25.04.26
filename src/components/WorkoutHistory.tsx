@@ -5,6 +5,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../hooks/useToast';
 import { TrendingUp, Calendar, Weight, ChevronDown, ChevronUp, Dumbbell, Search, Trash2, Activity, Bike } from 'lucide-react';
 import { getExerciseName } from '../utils/exerciseI18n';
+import DeleteWorkoutModal from './DeleteWorkoutModal';
 
 interface WorkoutHistoryItem {
   id: string;
@@ -65,6 +66,7 @@ export default function WorkoutHistory() {
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: string; name: string; date: string; duration: string; tableName: string } | null>(null);
 
   useEffect(() => {
     if (profile?.id) {
@@ -479,27 +481,18 @@ export default function WorkoutHistory() {
                       </div>
                     </button>
                     <button
-                      onClick={async () => {
-                        try {
-                          let tableName = 'athlete_workouts';
-                          if (item.type === 'extra') tableName = 'extra_training_logs';
-                          if (item.type === 'external') tableName = 'external_activities';
-
-                          const { error: deleteError } = await supabase
-                            .from(tableName)
-                            .delete()
-                            .eq('id', item.id);
-
-                          if (deleteError) throw deleteError;
-
-                          success(language === 'es' ? 'Actividad eliminada' : 'Activity deleted');
-                          await loadHistory();
-                          await loadExerciseHistory();
-                          await loadProgress();
-                        } catch (err: any) {
-                          console.error('Error deleting activity:', err);
-                          error(err.message || (language === 'es' ? 'Error al eliminar' : 'Failed to delete activity'), 5000);
-                        }
+                      onClick={() => {
+                        let tableName = 'athlete_workouts';
+                        if (item.type === 'extra') tableName = 'extra_training_logs';
+                        if (item.type === 'external') tableName = 'external_activities';
+                        setDeleteTarget({
+                          id: item.id,
+                          type: item.type,
+                          name: item.workout_name,
+                          date: item.scheduled_date,
+                          duration: item.duration || '',
+                          tableName,
+                        });
                       }}
                       className="p-2 text-red-500 hover:text-red-700 transition-colors"
                       title={language === 'es' ? 'Eliminar actividad' : 'Delete activity'}
@@ -772,23 +765,15 @@ export default function WorkoutHistory() {
                                 </span>
                               )}
                               <button
-                                onClick={async () => {
-                                  try {
-                                    const { error: deleteError } = await supabase
-                                      .from('training_logs')
-                                      .delete()
-                                      .eq('id', record.id);
-
-                                    if (deleteError) throw deleteError;
-
-                                    success(language === 'es' ? 'Registro eliminado' : 'Record deleted');
-                                    await loadExerciseHistory();
-                                    await loadHistory();
-                                    await loadProgress();
-                                  } catch (err: any) {
-                                    console.error('Error deleting record:', err);
-                                    error(err.message || (language === 'es' ? 'Error al eliminar' : 'Failed to delete record'), 5000);
-                                  }
+                                onClick={() => {
+                                  setDeleteTarget({
+                                    id: record.id,
+                                    type: 'record',
+                                    name: exercise.exercise_name,
+                                    date: record.date,
+                                    duration: `${record.weight} kg × ${record.reps} reps`,
+                                    tableName: 'training_logs',
+                                  });
                                 }}
                                 className="opacity-0 group-hover:opacity-100 p-1 text-red-500 hover:text-red-700 transition-all"
                                 title="Delete record"
@@ -811,6 +796,34 @@ export default function WorkoutHistory() {
           </div>
         </div>
       </div>
+      {deleteTarget && (
+        <DeleteWorkoutModal
+          open={true}
+          workoutName={deleteTarget.name}
+          workoutDate={deleteTarget.date}
+          workoutDuration={deleteTarget.duration}
+          onConfirm={async () => {
+            try {
+              const { error: deleteError } = await supabase
+                .from(deleteTarget.tableName)
+                .delete()
+                .eq('id', deleteTarget.id);
+
+              if (deleteError) throw deleteError;
+
+              success(language === 'es' ? 'Entrenamiento eliminado correctamente' : 'Workout deleted successfully');
+              await loadHistory();
+              await loadExerciseHistory();
+              await loadProgress();
+            } catch (err: any) {
+              console.error('Error deleting:', err);
+              error(err.message || (language === 'es' ? 'Error al eliminar' : 'Failed to delete'), 5000);
+            }
+            setDeleteTarget(null);
+          }}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }
