@@ -15,6 +15,8 @@ export default function CourseDetail({ courseId, onBack }: CourseDetailProps) {
   const [iframeSrc, setIframeSrc] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const ACADEMY_ORIGIN = 'https://academy.asciende.pro';
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -48,7 +50,7 @@ export default function CourseDetail({ courseId, onBack }: CourseDetailProps) {
           params.set('token', satelliteToken);
         }
 
-        const url = `https://academy.asciende.pro/course/${encodeURIComponent(courseId)}?${params.toString()}`;
+        const url = `${ACADEMY_ORIGIN}/course/${encodeURIComponent(courseId)}?${params.toString()}`;
         if (cancelled) return;
         setIframeSrc(url);
       } catch (err) {
@@ -60,6 +62,19 @@ export default function CourseDetail({ courseId, onBack }: CourseDetailProps) {
     })();
     return () => { cancelled = true; };
   }, [courseId]);
+
+  useEffect(() => {
+    function handleMessage(event: MessageEvent) {
+      if (event.origin !== ACADEMY_ORIGIN) return;
+      const data = event.data;
+      if (!data || data.type !== 'ASCIENDE_STRIPE_CHECKOUT') return;
+      const checkoutUrl = typeof data.checkoutUrl === 'string' ? data.checkoutUrl : '';
+      if (!checkoutUrl.startsWith('https://checkout.stripe.com/')) return;
+      window.top.location.href = checkoutUrl;
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   if (loading) {
     return (
