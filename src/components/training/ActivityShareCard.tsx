@@ -1,0 +1,1136 @@
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Share2, Download, X, CheckCircle, MapPin, Clock, Zap, Mountain, QrCode, Copy } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
+import asciendeLogoSrc from '../../assets/Asciendelogo.png';
+
+const PRODUCTION_URL = 'https://hub.asciende.pro';
+
+const KRONA_ONE_URL = 'https://fonts.gstatic.com/s/kronaone/v14/jAnEgHdjHcjgfIb1ZcUCMY-h.woff2';
+const FONT_NAME = 'Krona One';
+const FONT_FALLBACK = 'sans-serif';
+
+const TILE_SIZE = 256;
+const OSM_URL = 'https://tile.openstreetmap.org';
+
+function lon2tile(lon: number, z: number) { return ((lon + 180) / 360) * Math.pow(2, z); }
+function lat2tile(lat: number, z: number) {
+  const r = (lat * Math.PI) / 180;
+  return ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * Math.pow(2, z);
+}
+
+function fitZoom(minLat: number, maxLat: number, minLon: number, maxLon: number, w: number, h: number): number {
+  const pad = 0.25;
+  const dLat = maxLat - minLat || 0.001;
+  const dLon = maxLon - minLon || 0.001;
+  for (let z = 17; z >= 1; z--) {
+    const x1 = lon2tile(minLon - dLon * pad, z) * TILE_SIZE;
+    const x2 = lon2tile(maxLon + dLon * pad, z) * TILE_SIZE;
+    const y1 = lat2tile(maxLat + dLat * pad, z) * TILE_SIZE;
+    const y2 = lat2tile(minLat - dLat * pad, z) * TILE_SIZE;
+    if ((x2 - x1) <= w && (y2 - y1) <= h) return z;
+  }
+  return 1;
+}
+
+function latLonToPx(lat: number, lon: number, z: number): [number, number] {
+  return [lon2tile(lon, z) * TILE_SIZE, lat2tile(lat, z) * TILE_SIZE];
+}
+
+function loadTile(x: number, y: number, z: number): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('tile fail'));
+    img.src = `${OSM_URL}/${z}/${x}/${y}.png`;
+  });
+}
+
+async function renderMapTiles(
+  ctx: CanvasRenderingContext2D,
+  points: Array<{ latitude: number; longitude: number }>,
+  dx: number, dy: number, dw: number, dh: number
+): Promise<{ zoom: number; ox: number; oy: number } | null> {
+  if (points.length < 2) return null;
+  const lats = points.map(p => p.latitude);
+  const lons = points.map(p => p.longitude);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+
+  const zoom = fitZoom(minLat, maxLat, minLon, maxLon, dw, dh);
+  const cLat = (minLat + maxLat) / 2;
+  const cLon = (minLon + maxLon) / 2;
+  const [cpx, cpy] = latLonToPx(cLat, cLon, zoom);
+  const ox = cpx - dw / 2;
+  const oy = cpy - dh / 2;
+
+  const txMin = Math.floor(ox / TILE_SIZE);
+  const txMax = Math.floor((ox + dw) / TILE_SIZE);
+  const tyMin = Math.floor(oy / TILE_SIZE);
+  const tyMax = Math.floor((oy + dh) / TILE_SIZE);
+  const maxT = Math.pow(2, zoom);
+
+  const promises: Promise<{ img: HTMLImageElement; tx: number; ty: number } | null>[] = [];
+  for (let tx = txMin; tx <= txMax; tx++) {
+    for (let ty = tyMin; ty <= tyMax; ty++) {
+      const wx = ((tx % maxT) + maxT) % maxT;
+      if (ty < 0 || ty >= maxT) continue;
+      promises.push(loadTile(wx, ty, zoom).then(img => ({ img, tx, ty })).catch(() => null));
+    }
+  }
+  const tiles = await Promise.all(promises);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(dx, dy, dw, dh);
+  ctx.clip();
+  for (const t of tiles) {
+    if (!t) continue;
+    ctx.drawImage(t.img, dx + t.tx * TILE_SIZE - ox, dy + t.ty * TILE_SIZE - oy, TILE_SIZE, TILE_SIZE);
+  }
+  ctx.restore();
+  return { zoom, ox, oy };
+}
+
+function projectOnTiles(
+  points: Array<{ latitude: number; longitude: number }>,
+  zoom: number, ox: number, oy: number, dx: number, dy: number
+): Array<[number, number]> {
+  return points.map(p => {
+    const [px, py] = latLonToPx(p.latitude, p.longitude, zoom);
+    return [dx + px - ox, dy + py - oy];
+  });
+}
+
+const SPORT_META: Record<string, { label: string; labelEs: string; color: string }> = {
+  run:             { label: 'Run',             labelEs: 'Carrera',          color: '#f5c400' },
+  trail_run:       { label: 'Trail Run',       labelEs: 'Trail Run',        color: '#84cc16' },
+  road_bike:       { label: 'Road Bike',       labelEs: 'Bicicleta Ruta',   color: '#3b82f6' },
+  mountain_bike:   { label: 'Mountain Bike',   labelEs: 'Bicicleta MTB',    color: '#f97316' },
+  gravel_bike:     { label: 'Gravel Bike',     labelEs: 'Gravel',           color: '#a3e635' },
+  open_water_swim: { label: 'Open Water Swim', labelEs: 'Aguas Abiertas',   color: '#06b6d4' },
+  swim:            { label: 'Swimming',        labelEs: 'Natacion',         color: '#06b6d4' },
+  hike:            { label: 'Hike',            labelEs: 'Senderismo',       color: '#d97706' },
+  nordic_ski:      { label: 'Nordic Ski',      labelEs: 'Esqui Nordico',    color: '#7dd3fc' },
+};
+
+export interface ActivityShareData {
+  sportType: string;
+  title: string;
+  distanceKm: number;
+  durationSeconds: number;
+  elevationGainM: number;
+  date?: string;
+  gpsPoints?: Array<{ latitude: number; longitude: number; altitude?: number }>;
+}
+
+interface ActivityShareCardProps {
+  activityData: ActivityShareData;
+  onClose: () => void;
+}
+
+type CardType = 'map' | 'transparent' | 'story';
+
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function projectPoints(
+  points: Array<{ latitude: number; longitude: number }>,
+  x: number, y: number, w: number, h: number, pad = 40
+): Array<[number, number]> {
+  if (points.length < 2) return [];
+  const lats = points.map((p) => p.latitude);
+  const lons = points.map((p) => p.longitude);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+  const dLat = maxLat - minLat || 0.0001;
+  const dLon = maxLon - minLon || 0.0001;
+  const availW = w - pad * 2;
+  const availH = h - pad * 2;
+  const scale = Math.min(availW / dLon, availH / dLat);
+  const usedW = dLon * scale;
+  const usedH = dLat * scale;
+  const offX = x + pad + (availW - usedW) / 2;
+  const offY = y + pad + (availH - usedH) / 2;
+  return points.map((p) => [
+    offX + (p.longitude - minLon) * scale,
+    offY + usedH - (p.latitude - minLat) * scale,
+  ]);
+}
+
+function samplePoints<T>(arr: T[], maxPoints: number): T[] {
+  if (arr.length <= maxPoints) return arr;
+  const step = arr.length / maxPoints;
+  return Array.from({ length: maxPoints }, (_, i) => arr[Math.round(i * step)]);
+}
+
+function drawRoute(
+  ctx: CanvasRenderingContext2D,
+  projected: Array<[number, number]>,
+  color: string,
+  lineWidth = 4,
+  glowSize = 20
+) {
+  if (projected.length < 2) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  ctx.shadowColor = color + '88';
+  ctx.shadowBlur = glowSize;
+  ctx.beginPath();
+  ctx.moveTo(projected[0][0], projected[0][1]);
+  for (let i = 1; i < projected.length; i++) ctx.lineTo(projected[i][0], projected[i][1]);
+  ctx.strokeStyle = color + '30';
+  ctx.lineWidth = lineWidth * 4;
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.moveTo(projected[0][0], projected[0][1]);
+  for (let i = 1; i < projected.length; i++) ctx.lineTo(projected[i][0], projected[i][1]);
+  ctx.strokeStyle = color + '55';
+  ctx.lineWidth = lineWidth * 2;
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(projected[0][0], projected[0][1]);
+  for (let i = 1; i < projected.length; i++) ctx.lineTo(projected[i][0], projected[i][1]);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.stroke();
+
+  ctx.fillStyle = '#22c55e';
+  ctx.beginPath();
+  ctx.arc(projected[0][0], projected[0][1], lineWidth * 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  const last = projected[projected.length - 1];
+  ctx.fillStyle = '#ef4444';
+  ctx.beginPath();
+  ctx.arc(last[0], last[1], lineWidth * 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawIcon(ctx: CanvasRenderingContext2D, type: string, cx: number, cy: number, size: number, color: string) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = size * 0.15;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const r = size / 2;
+
+  if (type === 'distance') {
+    ctx.beginPath();
+    ctx.arc(cx, cy - r * 0.3, r * 0.5, Math.PI, 0);
+    ctx.lineTo(cx, cy + r * 0.7);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy - r * 0.3, r * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'time') {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r * 0.35);
+    ctx.lineTo(cx, cy);
+    ctx.lineTo(cx + r * 0.25, cy + r * 0.15);
+    ctx.stroke();
+  } else if (type === 'pace') {
+    ctx.beginPath();
+    ctx.moveTo(cx + r * 0.15, cy - r * 0.7);
+    ctx.lineTo(cx - r * 0.25, cy - r * 0.05);
+    ctx.lineTo(cx + r * 0.1, cy - r * 0.05);
+    ctx.lineTo(cx - r * 0.15, cy + r * 0.7);
+    ctx.stroke();
+  } else if (type === 'elevation') {
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.7, cy + r * 0.5);
+    ctx.lineTo(cx - r * 0.1, cy - r * 0.5);
+    ctx.lineTo(cx + r * 0.15, cy - r * 0.1);
+    ctx.lineTo(cx + r * 0.7, cy - r * 0.6);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawLogoOrText(
+  ctx: CanvasRenderingContext2D,
+  logoImg: HTMLImageElement | null,
+  cx: number, cy: number,
+  maxW: number, maxH: number,
+  fontFamily: string
+) {
+  if (logoImg && logoImg.naturalWidth > 0) {
+    const aspect = logoImg.naturalWidth / logoImg.naturalHeight;
+    let w = maxW;
+    let h = w / aspect;
+    if (h > maxH) { h = maxH; w = h * aspect; }
+    ctx.drawImage(logoImg, cx - w / 2, cy - h / 2, w, h);
+  } else {
+    ctx.fillStyle = '#fdda36';
+    ctx.font = `bold ${Math.min(maxH * 0.6, 36)}px ${fontFamily}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ASCIENDE', cx, cy);
+    ctx.textBaseline = 'alphabetic';
+  }
+}
+
+export default function ActivityShareCard({ activityData, onClose }: ActivityShareCardProps) {
+  const { profile } = useAuth();
+  const { language } = useLanguage();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const logoImgRef = useRef<HTMLImageElement | null>(null);
+  const [activeProject, setActiveProject] = useState<any>(null);
+  const [shareMode, setShareMode] = useState<'profile' | 'project'>('profile');
+  const [cardType, setCardType] = useState<CardType>('map');
+  const [sharing, setSharing] = useState(false);
+  const [shared, setShared] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedOk, setSavedOk] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
+  const [fontLoaded, setFontLoaded] = useState(false);
+  const [logoLoaded, setLogoLoaded] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
+
+  const sport = SPORT_META[activityData.sportType] ?? SPORT_META['run'];
+  const f = (w: string) => `${w} ${FONT_NAME}, ${FONT_FALLBACK}`;
+
+  useEffect(() => {
+    const font = new FontFace(FONT_NAME, `url(${KRONA_ONE_URL})`);
+    font.load().then((loaded) => {
+      document.fonts.add(loaded);
+      setFontLoaded(true);
+    }).catch(() => setFontLoaded(true));
+  }, []);
+
+  useEffect(() => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => { logoImgRef.current = img; setLogoLoaded(true); };
+    img.onerror = () => { setLogoLoaded(true); };
+    img.src = asciendeLogoSrc;
+  }, []);
+
+  useEffect(() => {
+    if (!profile?.id) { setReady(true); return; }
+    supabase
+      .from('athlete_support_projects')
+      .select('id, title, short_phrase, slug')
+      .eq('athlete_id', profile.id)
+      .eq('status', 'active')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) { setActiveProject(data); setShareMode('project'); }
+        setReady(true);
+      });
+  }, [profile?.id]);
+
+  const fmtDuration = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
+
+  const fmtDate = () => {
+    const d = activityData.date ? new Date(activityData.date + 'T12:00:00') : new Date();
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yy = d.getFullYear();
+    return `${dd}/${mm}/${yy}`;
+  };
+
+  const getPace = useCallback(() => {
+    if (!activityData.distanceKm || !activityData.durationSeconds) return null;
+    const isBike = ['road_bike', 'mountain_bike', 'gravel_bike'].includes(activityData.sportType);
+    if (isBike) {
+      return { value: ((activityData.distanceKm / activityData.durationSeconds) * 3600).toFixed(1), unit: 'km/h' };
+    }
+    const minPerKm = activityData.durationSeconds / 60 / activityData.distanceKm;
+    const mins = Math.floor(minPerKm);
+    const secs = Math.round((minPerKm - mins) * 60);
+    return { value: `${mins}:${String(secs).padStart(2, '0')}`, unit: 'min/km' };
+  }, [activityData]);
+
+  const getShareUrl = () => {
+    const slug = (profile as any)?.public_profile_slug || profile?.id || '';
+    return (shareMode === 'project' && activeProject)
+      ? `${PRODUCTION_URL}/athlete/${slug}/project/${activeProject.slug}`
+      : `${PRODUCTION_URL}/athlete/${slug}`;
+  };
+
+  const getShareUrlShort = () => {
+    const slug = (profile as any)?.public_profile_slug || profile?.id || '';
+    return (shareMode === 'project' && activeProject)
+      ? `hub.asciende.pro/athlete/${slug}/project/${activeProject.slug}`
+      : `hub.asciende.pro/athlete/${slug}`;
+  };
+
+  const getCtaTitle = () => {
+    if (shareMode === 'project' && activeProject) {
+      return language === 'es' ? 'Apoya Mi Proyecto' : 'Support My Project';
+    }
+    return language === 'es' ? 'Sigue Mi Progreso' : 'Follow My Journey';
+  };
+
+  const getStatsArray = () => {
+    const pace = getPace();
+    return [
+      { icon: 'distance', value: activityData.distanceKm.toFixed(2), label: 'km' },
+      { icon: 'time', value: fmtDuration(activityData.durationSeconds), label: language === 'es' ? 'Tiempo' : 'Time' },
+      { icon: 'pace', value: pace?.value || '--', label: pace?.unit || 'min/km' },
+      { icon: 'elevation', value: activityData.elevationGainM > 0 ? `${Math.round(activityData.elevationGainM)}m` : '--', label: 'D+' },
+    ];
+  };
+
+  // ─── Card Type 1: MAP ───────────────────────────────────────────────
+  const drawMapCard = useCallback(async (ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, W, H);
+
+    const pts = activityData.gpsPoints;
+    const mapH = H * 0.65;
+
+    if (pts && pts.length >= 2) {
+      const sampled = samplePoints(pts, 1500);
+      try {
+        const result = await renderMapTiles(ctx, sampled, 0, 0, W, mapH);
+        ctx.fillStyle = 'rgba(10, 10, 30, 0.25)';
+        ctx.fillRect(0, 0, W, mapH);
+        if (result) {
+          const projected = projectOnTiles(sampled, result.zoom, result.ox, result.oy, 0, 0);
+          drawRoute(ctx, projected, sport.color, 5, 28);
+        }
+      } catch {
+        const projected = projectPoints(sampled, 0, 0, W, mapH, 60);
+        drawRoute(ctx, projected, sport.color, 5, 28);
+      }
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.font = f('400 24px');
+      ctx.textAlign = 'center';
+      ctx.fillText(language === 'es' ? 'Sin ruta GPS' : 'No GPS route', W / 2, mapH / 2);
+    }
+
+    const fadeStart = mapH * 0.5;
+    const grad = ctx.createLinearGradient(0, fadeStart, 0, mapH + 60);
+    grad.addColorStop(0, 'rgba(26, 26, 46, 0)');
+    grad.addColorStop(0.6, 'rgba(26, 26, 46, 0.85)');
+    grad.addColorStop(1, 'rgba(26, 26, 46, 1)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, fadeStart, W, mapH + 60 - fadeStart);
+
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, mapH + 60, W, H - mapH - 60);
+
+    const dateText = fmtDate();
+    ctx.font = f('400 26px');
+    const dateW = ctx.measureText(dateText).width;
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    roundRect(ctx, 50, 42, dateW + 36, 46, 23);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.textAlign = 'left';
+    ctx.fillText(dateText, 68, 74);
+
+    const sportLabel = (language === 'es' ? sport.labelEs : sport.label).toUpperCase();
+    ctx.font = f('700 22px');
+    const sportW = ctx.measureText(sportLabel).width;
+    ctx.fillStyle = sport.color + '33';
+    roundRect(ctx, W - 68 - sportW - 36, 42, sportW + 36, 46, 23);
+    ctx.fill();
+    ctx.fillStyle = sport.color;
+    ctx.textAlign = 'right';
+    ctx.fillText(sportLabel, W - 68, 74);
+
+    const bottomY = mapH - 20;
+    const colW = (W - 120 - 40) / 2;
+    const leftX = 60;
+    const rightX = leftX + colW + 40;
+
+    const stats = getStatsArray();
+    const statSpacing = 110;
+    stats.forEach((s, i) => {
+      const sy = bottomY + i * statSpacing;
+      drawIcon(ctx, s.icon, leftX + 24, sy + 20, 28, sport.color);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = f('700 56px');
+      ctx.textAlign = 'left';
+      ctx.fillText(s.value, leftX + 56, sy + 24);
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.font = f('400 28px');
+      ctx.fillText(s.label, leftX + 56, sy + 64);
+    });
+
+    const ctaTitle = getCtaTitle();
+    const ctaUrl = getShareUrlShort();
+    ctx.fillStyle = '#fdda36';
+    ctx.font = f('700 36px');
+    ctx.textAlign = 'left';
+    const ctaTitleLines = wrapText(ctx, ctaTitle, colW);
+    let ctaTextY = bottomY + 20;
+    ctaTitleLines.forEach((line) => {
+      ctx.fillText(line, rightX, ctaTextY);
+      ctaTextY += 48;
+    });
+
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = `400 24px ${FONT_FALLBACK}`;
+    const urlLines = wrapText(ctx, ctaUrl, colW);
+    ctaTextY += 8;
+    urlLines.forEach((line) => {
+      ctx.fillText(line, rightX, ctaTextY);
+      ctaTextY += 32;
+    });
+
+    const logoY = ctaTextY + 60;
+    drawLogoOrText(ctx, logoImgRef.current, rightX + colW / 2, logoY, colW * 0.85, 100, f('700 48px'));
+  }, [activityData, language, sport, shareMode, activeProject, profile]);
+
+  // ─── Card Type 2: TRANSPARENT (sticker for Instagram Stories) ───────
+  const drawTransparentCard = useCallback((ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    // Clear to fully transparent — no background fill
+    ctx.clearRect(0, 0, W, H);
+
+    const sportLabel = (language === 'es' ? sport.labelEs : sport.label).toUpperCase();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = f('700 44px');
+    ctx.textAlign = 'center';
+    ctx.fillText(sportLabel, W / 2, 100);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(W * 0.2, 135);
+    ctx.lineTo(W * 0.8, 135);
+    ctx.stroke();
+
+    const stats = getStatsArray();
+    let statY = 240;
+    const statGap = 210;
+
+    stats.forEach((s) => {
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.font = f('400 30px');
+      ctx.textAlign = 'center';
+      ctx.fillText(s.label, W / 2, statY);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = f('700 84px');
+      ctx.fillText(s.value, W / 2, statY + 90);
+
+      statY += statGap;
+    });
+
+    const routeY = statY + 20;
+    const routeH = 320;
+    const pts = activityData.gpsPoints;
+    if (pts && pts.length >= 2) {
+      const sampled = samplePoints(pts, 1200);
+      const projected = projectPoints(sampled, 80, routeY, W - 160, routeH, 30);
+      drawRoute(ctx, projected, sport.color, 5, 28);
+    }
+
+    const ctaY = routeY + routeH + 80;
+    ctx.fillStyle = '#fdda36';
+    ctx.font = f('700 38px');
+    ctx.textAlign = 'center';
+    ctx.fillText(getCtaTitle(), W / 2, ctaY);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = `400 26px ${FONT_FALLBACK}`;
+    ctx.fillText(getShareUrlShort(), W / 2, ctaY + 46);
+
+    drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 180, W * 0.45, 100, f('700 44px'));
+  }, [activityData, language, sport, shareMode, activeProject, profile]);
+
+  // ─── Card Type 3: STORY ─────────────────────────────────────────────
+  const drawStoryCard = useCallback(async (ctx: CanvasRenderingContext2D, W: number, H: number) => {
+    // Clear to transparent
+    ctx.clearRect(0, 0, W, H);
+
+    const cardPad = 60;
+    const cardX = cardPad;
+    const cardY = 80;
+    const cardW = W - cardPad * 2;
+    const cardH = 700;
+    const cardR = 36;
+    const mapMargin = 20;
+    const statsH = 110;
+    const mapX = cardX + mapMargin;
+    const mapY = cardY + mapMargin;
+    const mapW = cardW - mapMargin * 2;
+    const mapH = cardH - statsH - mapMargin * 2;
+
+    // Draw card background with rounded clip
+    ctx.save();
+    roundRect(ctx, cardX, cardY, cardW, cardH, cardR);
+    ctx.clip();
+
+    const pts = activityData.gpsPoints;
+    if (pts && pts.length >= 2) {
+      const sampled = samplePoints(pts, 1500);
+      try {
+        const result = await renderMapTiles(ctx, sampled, mapX, mapY, mapW, mapH);
+        // Dark overlay on the map tiles
+        ctx.fillStyle = 'rgba(10, 10, 30, 0.25)';
+        ctx.fillRect(mapX, mapY, mapW, mapH);
+        if (result) {
+          const projected = projectOnTiles(sampled, result.zoom, result.ox, result.oy, mapX, mapY);
+          drawRoute(ctx, projected, sport.color, 4, 20);
+        }
+      } catch {
+        // Fallback: vector route on dark background
+        ctx.fillStyle = 'rgba(20,20,40,0.9)';
+        ctx.fillRect(mapX, mapY, mapW, mapH);
+        const projected = projectPoints(sampled, mapX, mapY, mapW, mapH, 40);
+        drawRoute(ctx, projected, sport.color, 4, 20);
+      }
+    } else {
+      ctx.fillStyle = 'rgba(20,20,40,0.9)';
+      ctx.fillRect(mapX, mapY, mapW, mapH);
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.font = f('400 24px');
+      ctx.textAlign = 'center';
+      ctx.fillText(language === 'es' ? 'Sin ruta GPS' : 'No GPS route', cardX + cardW / 2, cardY + cardH / 2 - 40);
+    }
+
+    // Stats bar at bottom of card
+    ctx.fillStyle = 'rgba(10,10,30,0.75)';
+    ctx.fillRect(cardX, cardY + cardH - statsH, cardW, statsH);
+
+    ctx.restore();
+
+    // Card border
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, cardX, cardY, cardW, cardH, cardR);
+    ctx.stroke();
+
+    const stats = getStatsArray();
+    const rowY = cardY + cardH - statsH / 2 - 14;
+    const colW = cardW / stats.length;
+
+    stats.forEach((s, i) => {
+      const cx = cardX + colW * i + colW / 2;
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.font = f('400 22px');
+      ctx.textAlign = 'center';
+      ctx.fillText(s.label, cx, rowY);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = f('700 38px');
+      ctx.fillText(s.value, cx, rowY + 48);
+    });
+
+    const infoY = cardY + cardH + 70;
+    const sportLabelFull = (language === 'es' ? sport.labelEs : sport.label);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = f('700 48px');
+    ctx.textAlign = 'center';
+    ctx.fillText(sportLabelFull, W / 2, infoY);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = f('400 30px');
+    ctx.fillText(fmtDate(), W / 2, infoY + 56);
+
+    const ctaY = infoY + 130;
+    ctx.fillStyle = '#fdda36';
+    ctx.font = f('700 38px');
+    ctx.fillText(getCtaTitle(), W / 2, ctaY);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = `400 26px ${FONT_FALLBACK}`;
+    ctx.fillText(getShareUrlShort(), W / 2, ctaY + 46);
+
+    // Logo 20px lower than previous position
+    drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 200, W * 0.45, 100, f('700 44px'));
+  }, [activityData, language, sport, shareMode, activeProject, profile]);
+
+  const generateCard = useCallback(async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const W = 1080;
+    const H = 1920;
+    canvas.width = W;
+    canvas.height = H;
+
+    if (cardType === 'map') await drawMapCard(ctx, W, H);
+    else if (cardType === 'transparent') drawTransparentCard(ctx, W, H);
+    else await drawStoryCard(ctx, W, H);
+  }, [cardType, drawMapCard, drawTransparentCard, drawStoryCard]);
+
+  useEffect(() => {
+    if (!ready || !fontLoaded || !logoLoaded) return;
+    const raf = requestAnimationFrame(() => generateCard());
+    return () => cancelAnimationFrame(raf);
+  }, [ready, fontLoaded, logoLoaded, generateCard]);
+
+  // ─── Save to Camera Roll ─────────────────────────────────────────
+  const handleSaveToGallery = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas || saving) return;
+
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      const dateStr = activityData.date || new Date().toISOString().split('T')[0];
+      const fileName = `asciende-${activityData.sportType}-${dateStr}.png`;
+
+      let platform = 'web';
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        if (Capacitor.isNativePlatform()) platform = Capacitor.getPlatform();
+      } catch { /* web */ }
+
+      if (platform === 'ios' || platform === 'android') {
+        const { Media } = await import('@capacitor-community/media');
+
+        // Request permission first (this prompts the user on first use)
+        try {
+          await (Media as any).getPermissions?.();
+        } catch {
+          // Older versions don't have getPermissions — savePhoto will prompt
+        }
+
+        const base64 = await canvasToBase64(canvas);
+
+        // Save directly to Camera Roll (default album if Asciende album fails)
+        let albumId: string | undefined;
+        try {
+          const { albums } = await Media.getAlbums();
+          const existing = albums.find((a: any) =>
+            a.name?.toLowerCase() === 'asciende'
+          );
+          if (existing) {
+            albumId = existing.identifier ?? existing.id;
+          } else {
+            const created = await Media.createAlbum({ name: 'Asciende' });
+            albumId = created.identifier ?? created.id;
+          }
+        } catch {
+          // Album ops failed — save to default Camera Roll
+        }
+
+        await Media.savePhoto({
+          path: `data:image/png;base64,${base64}`,
+          albumIdentifier: albumId,
+          fileName,
+        } as any);
+
+        setSavedOk(true);
+        setTimeout(() => setSavedOk(false), 3000);
+      } else {
+        // Web: trigger file download
+        const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        setSavedOk(true);
+        setTimeout(() => setSavedOk(false), 2500);
+      }
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        if (e?.message?.includes('denied') || e?.message?.includes('permission')) {
+          setSaveError(language === 'es'
+            ? 'Permiso denegado. Habilita en Ajustes.'
+            : 'Permission denied. Enable in Settings.');
+        } else {
+          setSaveError(language === 'es' ? 'No se pudo guardar' : 'Could not save');
+        }
+        setTimeout(() => setSaveError(null), 4000);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const canvasToBase64 = (canvas: HTMLCanvasElement): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (!blob) { reject(new Error('toBlob failed')); return; }
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = reader.result as string;
+          resolve(dataUrl.split(',')[1]);
+        };
+        reader.onerror = () => reject(new Error('FileReader failed'));
+        reader.readAsDataURL(blob);
+      }, 'image/png');
+    });
+  };
+
+  // ─── Share: Try Instagram Stories sticker first, then native share ──
+  const handleShare = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    setSharing(true);
+    try {
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        if (Capacitor.isNativePlatform()) {
+          const base64 = await canvasToBase64(canvas);
+          if (base64) {
+            const { default: InstagramStories } = await import('../../plugins/instagram-stories');
+            await InstagramStories.shareSticker({
+              stickerImage: base64,
+              appId: 'pro.asciende.app',
+              backgroundTopColor: '#000000',
+              backgroundBottomColor: '#1a1a2e',
+            });
+            setShared(true);
+            setTimeout(() => setShared(false), 3000);
+            return;
+          }
+        }
+      } catch {
+        // Instagram not installed or sticker failed -- fall through to native share sheet
+      }
+
+      const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
+      if (!blob) return;
+
+      const dateStr = activityData.date || new Date().toISOString().split('T')[0];
+      const file = new File([blob], `asciende-${cardType}-${dateStr}.png`, { type: 'image/png' });
+      const shareUrl = getShareUrl();
+      const sportName = language === 'es' ? sport.labelEs : sport.label;
+      const distStr = activityData.distanceKm.toFixed(2);
+
+      const text = (shareMode === 'project' && activeProject)
+        ? (language === 'es'
+          ? `${distStr}km de ${sportName}. Apoya mi proyecto: ${activeProject.title}`
+          : `${distStr}km ${sportName}. Support my project: ${activeProject.title}`)
+        : (language === 'es'
+          ? `${distStr}km de ${sportName}. Sigue mi progreso en Asciende!`
+          : `${distStr}km ${sportName}. Follow my progress on Asciende!`);
+
+      if (navigator.share) {
+        const shareData: ShareData = {
+          title: `${profile?.full_name || 'Athlete'} — ${sportName}`,
+          text,
+          url: shareUrl,
+        };
+        if (navigator.canShare?.({ files: [file] })) {
+          shareData.files = [file];
+        }
+        await navigator.share(shareData);
+        setShared(true);
+        setTimeout(() => setShared(false), 3000);
+      } else {
+        await handleSaveToGallery();
+        await navigator.clipboard.writeText(shareUrl).catch(() => {});
+        setShared(true);
+        setTimeout(() => setShared(false), 3000);
+      }
+    } catch (e: any) {
+      if (e?.name !== 'AbortError') {
+        await handleSaveToGallery();
+      }
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const pace = getPace();
+
+  const CARD_TYPES: { id: CardType; label: string; labelEs: string; desc: string; descEs: string }[] = [
+    { id: 'map', label: 'Map', labelEs: 'Mapa', desc: 'Dark with GPS route', descEs: 'Oscuro con ruta GPS' },
+    { id: 'transparent', label: 'Sticker', labelEs: 'Sticker', desc: 'Transparent for Stories', descEs: 'Transparente para Stories' },
+    { id: 'story', label: 'Story', labelEs: 'Story', desc: 'Card with route', descEs: 'Tarjeta con ruta' },
+  ];
+
+  const handleCopyLink = async () => {
+    const url = getShareUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-neutral-950/80 backdrop-blur-sm flex items-center justify-center z-[60] p-3 overflow-y-auto"
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <div className="bg-white dark:bg-neutral-800 rounded-2xl max-w-lg w-full my-4 shadow-2xl border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: sport.color + '22' }}>
+              <Share2 className="w-4.5 h-4.5" style={{ color: sport.color }} />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-neutral-900 dark:text-white">
+                {language === 'es' ? 'Compartir Actividad' : 'Share Activity'}
+              </h2>
+              <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                {language === 'es' ? sport.labelEs : sport.label} · {activityData.distanceKm.toFixed(2)} km
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-xl transition-colors">
+            <X className="w-5 h-5 text-neutral-500" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3 max-h-[82vh] overflow-y-auto">
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-4 gap-1.5">
+            {[
+              { icon: MapPin,   v: activityData.distanceKm.toFixed(2), l: 'km' },
+              { icon: Clock,    v: fmtDuration(activityData.durationSeconds), l: language === 'es' ? 'Tiempo' : 'Time' },
+              ...(pace ? [{ icon: Zap, v: pace.value, l: pace.unit }] : []),
+              ...(activityData.elevationGainM > 0 ? [{ icon: Mountain, v: `${Math.round(activityData.elevationGainM)}m`, l: 'D+' }] : []),
+            ].slice(0, 4).map(({ icon: Icon, v, l }) => (
+              <div key={l} className="bg-neutral-50 dark:bg-neutral-700/50 rounded-lg p-2 text-center">
+                <Icon className="w-3 h-3 text-neutral-400 mx-auto mb-0.5" />
+                <p className="text-xs font-bold text-neutral-900 dark:text-white leading-none">{v}</p>
+                <p className="text-[9px] text-neutral-500 dark:text-neutral-400 mt-0.5">{l}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Card Type Selector */}
+          <div>
+            <p className="text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-widest mb-1.5">
+              {language === 'es' ? 'Estilo' : 'Style'}
+            </p>
+            <div className="flex gap-1.5">
+              {CARD_TYPES.map((ct) => (
+                <button
+                  key={ct.id}
+                  onClick={() => setCardType(ct.id)}
+                  className={`flex-1 py-2 px-2 rounded-xl text-left border-2 transition-all ${
+                    cardType === ct.id
+                      ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20'
+                      : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300'
+                  }`}
+                >
+                  <p className={`text-[11px] font-bold ${cardType === ct.id ? 'text-amber-700 dark:text-amber-400' : 'text-neutral-700 dark:text-neutral-300'}`}>
+                    {language === 'es' ? ct.labelEs : ct.label}
+                  </p>
+                  <p className="text-[9px] text-neutral-400 mt-0.5">{language === 'es' ? ct.descEs : ct.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Share Mode */}
+          {activeProject && (
+            <div>
+              <p className="text-[10px] font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-widest mb-1.5">
+                {language === 'es' ? 'Mensaje' : 'Message'}
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { mode: 'profile' as const, title: language === 'es' ? 'Sigue mi Progreso' : 'Follow My Journey', sub: language === 'es' ? 'Enlaza a tu perfil' : 'Links to profile' },
+                  { mode: 'project' as const, title: language === 'es' ? 'Apoya mi Proyecto' : 'Support My Project', sub: activeProject.title },
+                ].map(({ mode, title, sub }) => (
+                  <button key={mode} onClick={() => setShareMode(mode)}
+                    className={`p-2.5 rounded-xl border-2 transition-all text-left ${
+                      shareMode === mode
+                        ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20'
+                        : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300'
+                    }`}>
+                    <p className={`font-bold text-[11px] ${shareMode === mode ? 'text-amber-700 dark:text-amber-400' : 'text-neutral-900 dark:text-white'}`}>{title}</p>
+                    <p className="text-[9px] text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">{sub}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Canvas Preview */}
+          <div
+            className="rounded-xl overflow-hidden border border-neutral-200 dark:border-neutral-600"
+            style={cardType === 'map' ? { backgroundColor: '#1a1a2e' } : {
+              backgroundColor: '#1c1c1c',
+              backgroundImage: 'linear-gradient(45deg, #2a2a2a 25%, transparent 25%), linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2a 75%), linear-gradient(-45deg, transparent 75%, #2a2a2a 75%)',
+              backgroundSize: '20px 20px',
+              backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px',
+            }}
+          >
+            {!ready || !fontLoaded || !logoLoaded ? (
+              <div className="h-48 flex items-center justify-center bg-neutral-100 dark:bg-neutral-700">
+                <div className="w-7 h-7 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <canvas ref={canvasRef} className="w-full h-auto block" style={{ maxWidth: '100%' }} />
+            )}
+          </div>
+
+          {/* Actions: Save + Copy Link + Share */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleSaveToGallery}
+              disabled={saving}
+              className={`flex items-center gap-1.5 px-3 py-2.5 border text-xs font-medium rounded-xl transition-all ${
+                savedOk
+                  ? 'border-green-400 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
+                  : saveError
+                  ? 'border-red-400 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20'
+                  : 'border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+              } disabled:opacity-60 disabled:cursor-not-allowed`}
+            >
+              {saving ? (
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : savedOk ? (
+                <CheckCircle className="w-4 h-4" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              {saving
+                ? (language === 'es' ? 'Guardando...' : 'Saving...')
+                : savedOk
+                ? (language === 'es' ? 'Guardado' : 'Saved')
+                : saveError
+                ? saveError
+                : (language === 'es' ? 'Guardar' : 'Save')}
+            </button>
+            <button
+              onClick={() => setShowQR(true)}
+              className="flex items-center gap-1.5 px-3 py-2.5 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 text-xs font-medium rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
+            >
+              <QrCode className="w-4 h-4" />
+              Link
+            </button>
+            <button
+              onClick={handleShare}
+              disabled={sharing}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold rounded-xl transition-all disabled:opacity-60 shadow-lg ${
+                shared
+                  ? 'bg-green-500 text-white shadow-green-500/25'
+                  : 'bg-[#fdda36] text-[#060810] hover:bg-[#ffd01a] shadow-amber-400/25'
+              }`}
+            >
+              {shared ? <CheckCircle className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
+              {sharing
+                ? (language === 'es' ? 'Abriendo...' : 'Opening...')
+                : shared
+                ? (language === 'es' ? 'Listo!' : 'Done!')
+                : (language === 'es' ? 'Compartir' : 'Share')}
+            </button>
+          </div>
+
+          <p className="text-[9px] text-center text-neutral-400 dark:text-neutral-500">
+            {language === 'es'
+              ? 'Compartir abre Instagram Stories directamente (o mas opciones si no esta instalado)'
+              : 'Share opens Instagram Stories directly (or more options if not installed)'}
+          </p>
+        </div>
+      </div>
+
+      {/* QR Code Modal */}
+      {showQR && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[70] p-4"
+          onClick={() => setShowQR(false)}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div
+            className="bg-white dark:bg-neutral-800 rounded-2xl p-6 max-w-xs w-full shadow-2xl border border-neutral-200 dark:border-neutral-700"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-neutral-900 dark:text-white text-sm">
+                {language === 'es' ? 'Codigo QR' : 'QR Code'}
+              </h3>
+              <button onClick={() => setShowQR(false)} className="p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg transition-colors">
+                <X className="w-4 h-4 text-neutral-500" />
+              </button>
+            </div>
+            <div className="bg-white p-3 rounded-xl mb-4 flex items-center justify-center">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(getShareUrl())}`}
+                alt="QR Code"
+                width={200}
+                height={200}
+                className="rounded-lg"
+              />
+            </div>
+            <p className="text-[10px] text-center text-neutral-500 dark:text-neutral-400 break-all mb-3">
+              {getShareUrlShort()}
+            </p>
+            <button
+              onClick={handleCopyLink}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-medium transition-all border ${
+                copied
+                  ? 'border-green-400 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                  : 'border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+              }`}
+            >
+              {copied ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied
+                ? (language === 'es' ? 'Copiado!' : 'Copied!')
+                : (language === 'es' ? 'Copiar enlace' : 'Copy link')}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const test = current ? `${current} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length ? lines : [text];
+}

@@ -1,0 +1,1651 @@
+import { useState, useRef, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { supabase } from '../lib/supabase';
+import { createDemoUsers } from '../utils/createDemoUsers';
+import { PlayCircle, Check, Mail, Lock, User, Activity, Bike, TrendingUp, Waves, Users, Star, Crown, Zap, Eye, EyeOff, Calendar, CircleUser as UserCircle, Camera, Globe, Shield, Dumbbell, Mountain, Trophy, Heart, Timer, Target, Wind, Footprints, Flame } from 'lucide-react';
+import { useToast } from '../hooks/useToast';
+
+export default function AuthPage() {
+  const [isLogin, setIsLogin] = useState(true);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [signupStep, setSignupStep] = useState(1);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
+
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [gender, setGender] = useState('');
+  const [sports, setSports] = useState<string[]>([]);
+  const [otherSport, setOtherSport] = useState('');
+  const [selectedMembership, setSelectedMembership] = useState<string | null>(null);
+
+  const { showToast } = useToast();
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Check for redirect parameter from satellite apps
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const redirect = params.get('redirect');
+    if (redirect) {
+      setRedirectUrl(redirect);
+    }
+  }, []);
+
+  const [physicalObjectives, setPhysicalObjectives] = useState('');
+  const [competitionGoals, setCompetitionGoals] = useState('');
+  const [shortTermGoals, setShortTermGoals] = useState('');
+  const [longTermGoals, setLongTermGoals] = useState('');
+  const [asciendePrograms, setAsciendePrograms] = useState<any[]>([]);
+  const [memberships, setMemberships] = useState<any[]>([
+    {
+      id: '1',
+      name_en: 'Start',
+      name_es: 'Inicia',
+      description_en: 'Perfect to get started',
+      description_es: 'Perfecto para comenzar',
+      price_monthly: '0.00',
+      price_annual: '0.00',
+      features_en: ['Personal training plan', 'Nutrition plan', 'Habit tracking', 'Goal setting', 'Complete anamnesis', 'Anthropometry profile', 'Support athletes'],
+      features_es: ['Plan de entrenamiento personal', 'Plan de nutrición', 'Seguimiento de hábitos', 'Establecimiento de objetivos', 'Anamnesis completa', 'Perfil antropométrico', 'Apoyo a atletas'],
+      is_highlighted: false,
+      is_active: true,
+      is_published: true,
+      display_order: 1
+    },
+    {
+      id: '2',
+      name_en: 'Asciende',
+      name_es: 'Asciende',
+      description_en: 'Most popular plan',
+      description_es: 'Plan más popular',
+      price_monthly: '9.99',
+      price_annual: '99.99',
+      features_en: ['Everything in Start', 'Performance Digest - Scientific knowledge', 'Brand and athlete support', 'Marketplace discounts', 'Teams & Sports access', 'BASE course discounts', 'Performance statistics'],
+      features_es: ['Todo de Start/Inicia', 'Performance Digest - Conocimiento científico', 'Apoyo de marcas y atletas', 'Descuentos en marketplace', 'Acceso a Teams & Sports', 'Descuentos en cursos BASE', 'Estadísticas de rendimiento'],
+      is_highlighted: true,
+      is_active: true,
+      is_published: true,
+      display_order: 2
+    },
+    {
+      id: '3',
+      name_en: 'PRO',
+      name_es: 'PRO',
+      description_en: 'For professional athletes',
+      description_es: 'Para atletas profesionales',
+      price_monthly: '49.99',
+      price_annual: '499.99',
+      features_en: ['Everything in Asciende', 'Sport and level-specific monthly plan', 'Professional coach supervision', '1 monthly 1-on-1 video call', 'Continuous chat support', 'Pre-made training programs', 'Early access to new features', 'Priority response'],
+      features_es: ['Todo de Asciende', 'Plan mensual por deporte y nivel', 'Supervisión profesional de coach', '1 videollamada 1-on-1 mensual', 'Soporte continuo por chat', 'Programas de entrenamiento pre-hechos', 'Acceso anticipado a nuevas funciones', 'Prioridad en respuestas'],
+      is_highlighted: false,
+      is_active: true,
+      is_published: true,
+      display_order: 3
+    }
+  ]);
+  const [showAnnual, setShowAnnual] = useState(false);
+
+  const sportsList = [
+    { id: 'volleyball', name: 'Volleyball', nameEs: 'Vóley', icon: Activity },
+    { id: 'beach_volleyball', name: 'Beach Volleyball', nameEs: 'Beach Vóley', icon: Waves },
+    { id: 'cycling', name: 'Cycling', nameEs: 'Ciclismo', icon: Bike },
+    { id: 'running', name: 'Running', nameEs: 'Running', icon: TrendingUp },
+    { id: 'swimming', name: 'Swimming', nameEs: 'Natación', icon: Waves },
+    { id: 'triathlon', name: 'Triathlon', nameEs: 'Triatlón', icon: Trophy },
+    { id: 'gym', name: 'Gym', nameEs: 'Gym', icon: Dumbbell },
+    { id: 'crossfit', name: 'CrossFit', nameEs: 'CrossFit', icon: Flame },
+    { id: 'hyrox', name: 'Hyrox', nameEs: 'Hyrox', icon: Flame },
+    { id: 'soccer', name: 'Soccer', nameEs: 'Fútbol', icon: Activity },
+    { id: 'basketball', name: 'Basketball', nameEs: 'Básquet', icon: Target },
+    { id: 'tennis', name: 'Tennis', nameEs: 'Tenis', icon: Activity },
+    { id: 'climbing', name: 'Climbing', nameEs: 'Escalada', icon: Mountain },
+    { id: 'martial_arts', name: 'Martial Arts', nameEs: 'Artes Marciales', icon: Target },
+    { id: 'yoga', name: 'Yoga', nameEs: 'Yoga', icon: Heart },
+    { id: 'hiking', name: 'Hiking', nameEs: 'Senderismo', icon: Mountain },
+    { id: 'track_field', name: 'Track & Field', nameEs: 'Atletismo', icon: Footprints },
+    { id: 'boxing', name: 'Boxing', nameEs: 'Boxeo', icon: Target },
+    { id: 'other', name: 'Other', nameEs: 'Otro', icon: Activity },
+  ];
+
+  const { signIn, signUp } = useAuth();
+  const { t, language, setLanguage } = useLanguage();
+
+  useEffect(() => {
+    loadAsciendePrograms();
+    loadMemberships();
+  }, []);
+
+  const loadAsciendePrograms = async () => {
+    const { data } = await supabase
+      .from('training_programs')
+      .select('id, name, description, price, duration_weeks, is_template, category')
+      .eq('is_active', true)
+      .limit(6);
+
+    if (data) {
+      setAsciendePrograms(data);
+    }
+  };
+
+  const loadMemberships = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('memberships')
+        .select('*')
+        .eq('is_active', true)
+        .order('display_order');
+
+      if (error) {
+        console.error('Error loading memberships:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        setMemberships(data);
+      }
+    } catch (err) {
+      console.error('Exception loading memberships:', err);
+    }
+  };
+
+  const testimonials = [
+    {
+      name: 'Sarah Johnson',
+      sport: 'Professional Volleyball',
+      image: 'https://images.pexels.com/photos/1181519/pexels-photo-1181519.jpeg?auto=compress&cs=tinysrgb&w=200',
+      text: language === 'es'
+        ? 'Asciende transformó mi rendimiento completamente.'
+        : 'Asciende transformed my performance completely.',
+      rating: 5
+    },
+    {
+      name: 'Carlos Rodriguez',
+      sport: 'Elite Cyclist',
+      image: 'https://images.pexels.com/photos/1222271/pexels-photo-1222271.jpeg?auto=compress&cs=tinysrgb&w=200',
+      text: language === 'es'
+        ? 'El mejor seguimiento que he usado.'
+        : 'The best tracking I\'ve ever used.',
+      rating: 5
+    }
+  ];
+
+  const plans = [
+    {
+      name: language === 'es' ? 'Básico' : 'Basic',
+      price: 29,
+      features: [
+        language === 'es' ? 'Planes personalizados' : 'Custom plans',
+        language === 'es' ? 'Seguimiento nutrición' : 'Nutrition tracking',
+        language === 'es' ? 'Seguimiento hábitos' : 'Habit tracking'
+      ],
+      icon: Shield
+    },
+    {
+      name: 'Pro',
+      price: 79,
+      popular: true,
+      features: [
+        language === 'es' ? 'Todo en Básico +' : 'Everything in Basic +',
+        language === 'es' ? 'Chat con entrenador' : 'Coach chat',
+        language === 'es' ? 'Análisis avanzado' : 'Advanced analytics'
+      ],
+      icon: Crown
+    },
+    {
+      name: language === 'es' ? 'Élite' : 'Elite',
+      price: 149,
+      features: [
+        language === 'es' ? 'Todo en Pro +' : 'Everything in Pro +',
+        language === 'es' ? 'Entrenador 24/7' : 'Trainer 24/7',
+        language === 'es' ? 'Sesiones ilimitadas' : 'Unlimited sessions'
+      ],
+      icon: Zap
+    }
+  ];
+
+  const handleBasicSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!termsAccepted) {
+      setError(t('auth.termsRequired'));
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError(language === 'es' ? 'Por favor ingresa un email válido' : 'Please enter a valid email');
+      return;
+    }
+
+    // Validate password length
+    if (password.length < 6) {
+      setError(language === 'es' ? 'La contraseña debe tener al menos 6 caracteres' : 'Password must be at least 6 characters');
+      return;
+    }
+
+    // Validate names
+    if (!firstName.trim() || !lastName.trim()) {
+      setError(language === 'es' ? 'Por favor completa nombre y apellido' : 'Please complete first and last name');
+      return;
+    }
+
+    // All validations passed, go to step 2
+    setSignupStep(2);
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      // If there's a redirect URL, use centralized auth endpoint
+      if (redirectUrl) {
+        console.log('🔄 Login with redirect to:', redirectUrl);
+
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auth-login`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            email,
+            password,
+            redirect_url: redirectUrl,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          console.error('❌ Login failed:', data.error);
+          setError(data.error || 'Login failed');
+          setLoading(false);
+          return;
+        }
+
+        console.log('✅ Login successful, redirecting to:', data.redirect_url);
+
+        // ALWAYS redirect if we have a redirect URL (from satellite)
+        if (data.success) {
+          // Wait a bit for cookie to be set
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          // Add session token to redirect URL
+          const finalRedirectUrl = new URL(data.redirect_url || redirectUrl);
+          if (data.token) {
+            finalRedirectUrl.searchParams.set('session_token', data.token);
+          }
+
+          console.log('🔄 Redirecting with token to:', finalRedirectUrl.toString());
+
+          // Redirect back to satellite with token
+          window.location.href = finalRedirectUrl.toString();
+          return;
+        }
+      }
+
+      // Normal login flow for HUB (no redirect)
+      console.log('🔄 Normal HUB login');
+      const { error } = await signIn(email, password);
+      if (error) {
+        console.error('❌ HUB login failed:', error);
+        setError(error.message);
+      } else {
+        console.log('✅ HUB login successful');
+      }
+    } catch (err) {
+      console.error('❌ Login exception:', err);
+      setError('An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        setError(error.message);
+      } else {
+        setResetEmailSent(true);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateAge = (birthDate: string) => {
+    const today = new Date();
+    const birth = new Date(birthDate);
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || !e.target.files[0]) return;
+
+    const file = e.target.files[0];
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert(language === 'es' ? 'La imagen debe ser menor a 5MB' : 'Image must be less than 5MB');
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      alert(language === 'es' ? 'Solo se permiten imágenes' : 'Only images are allowed');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/avatar.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      setAvatarUrl(data.publicUrl);
+
+      await supabase
+        .from('profiles')
+        .update({ avatar_url: data.publicUrl })
+        .eq('id', user.id);
+    } catch (error: any) {
+      console.error('Error uploading avatar:', error);
+      alert(language === 'es' ? `Error: ${error.message}` : `Error: ${error.message}`);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleExtendedProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const fullName = `${firstName} ${lastName}`;
+      const finalSports = sports.includes('other') && otherSport
+        ? sports.filter(s => s !== 'other').concat([otherSport]).join(', ')
+        : sports.join(', ');
+
+      // If there's a redirect URL, use centralized auth endpoint for signup
+      if (redirectUrl) {
+        console.log('🔄 Signup with redirect to:', redirectUrl);
+
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/auth-signup`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            email,
+            password,
+            full_name: fullName,
+            redirect_url: redirectUrl,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          console.error('❌ Signup failed:', data.error);
+          setError(data.error || 'Signup failed');
+          setLoading(false);
+          return;
+        }
+
+        console.log('✅ Signup successful, redirecting to:', data.redirect_url);
+
+        // Show success message briefly
+        showToast(
+          language === 'es'
+            ? 'Cuenta creada! Redirigiendo...'
+            : 'Account created! Redirecting...',
+          'success'
+        );
+
+        // Wait a bit for cookie to be set
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Add session token to redirect URL
+        const finalRedirectUrl = new URL(data.redirect_url || redirectUrl);
+        if (data.token) {
+          finalRedirectUrl.searchParams.set('session_token', data.token);
+        }
+
+        console.log('🔄 Redirecting with token to:', finalRedirectUrl.toString());
+
+        // Redirect back to satellite with token
+        window.location.href = finalRedirectUrl.toString();
+        return;
+      }
+
+      // Normal signup flow for HUB (no redirect)
+      console.log('🔄 Normal HUB signup');
+      const { error, user } = await signUp(email, password, fullName, finalSports);
+
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      if (!user) {
+        setError('Error creating account');
+        return;
+      }
+
+      // Calculate age
+      const age = dateOfBirth ? calculateAge(dateOfBirth) : null;
+
+      // Update profile with ALL collected data
+      await supabase
+        .from('profiles')
+        .update({
+          first_name: firstName,
+          last_name: lastName,
+          date_of_birth: dateOfBirth || null,
+          age: age,
+          gender: gender || null,
+          sport: finalSports || null,
+          physical_objectives: physicalObjectives,
+          competition_goals: competitionGoals,
+          short_term_goals: shortTermGoals,
+          long_term_goals: longTermGoals,
+          objectives: `Physical: ${physicalObjectives}\nCompetition: ${competitionGoals}`,
+          terms_accepted: true,
+          terms_accepted_at: new Date().toISOString(),
+          privacy_accepted: true,
+          privacy_accepted_at: new Date().toISOString(),
+          profile_completed: true
+        })
+        .eq('id', user.id);
+
+      // Check if selected membership is paid
+      const selectedMem = memberships.find(m => m.id === selectedMembership);
+      if (selectedMem && parseFloat(selectedMem.price_monthly || 0) > 0) {
+        // Redirect to Stripe payment
+        showToast(
+          language === 'es'
+            ? 'Redirigiendo al pago...'
+            : 'Redirecting to payment...',
+          'info'
+        );
+
+        // TODO: Call Stripe Edge Function here
+        // For now, just show a message that this needs to be implemented
+        setTimeout(() => {
+          showToast(
+            language === 'es'
+              ? 'Integración de pago pendiente. Cuenta creada correctamente.'
+              : 'Payment integration pending. Account created successfully.',
+            'info'
+          );
+        }, 1500);
+      } else {
+        // Free membership - just complete
+        showToast(
+          language === 'es'
+            ? 'Bienvenido a Asciende! Por favor revisa tu email para validar tu cuenta.'
+            : 'Welcome to Asciende! Please check your email to validate your account.',
+          'success'
+        );
+      }
+
+    } catch (error: any) {
+      console.error('❌ Signup exception:', error);
+      setError(error.message || 'An unexpected error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoalsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) return;
+
+      await supabase
+        .from('profiles')
+        .update({
+          physical_objectives: physicalObjectives,
+          competition_goals: competitionGoals,
+          short_term_goals: shortTermGoals,
+          long_term_goals: longTermGoals,
+          objectives: `Physical: ${physicalObjectives}\nCompetition: ${competitionGoals}`
+        })
+        .eq('id', user.id);
+
+      alert(language === 'es'
+        ? '✅ Perfil completado! Bienvenido a Asciende.'
+        : '✅ Profile completed! Welcome to Asciende.');
+    } catch (error: any) {
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSkip = () => {
+    alert(language === 'es'
+      ? 'Puedes completar tu perfil más tarde en Configuración'
+      : 'You can complete your profile later in Settings');
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col lg:flex-row pb-16">
+      {/* LEFT SIDE - Auth Forms (40%) */}
+      <div className="w-full lg:w-[40%] bg-white dark:bg-gray-800 shadow-2xl overflow-y-auto flex items-center justify-center py-12 pb-20">
+        <div className="w-full max-w-md px-6 lg:px-8 flex flex-col">
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <img
+                src="/logo_transp.png"
+                alt="Asciende"
+                className="h-12 w-auto"
+              />
+              <button
+                onClick={() => setLanguage(language === 'en' ? 'es' : 'en')}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title={language === 'en' ? 'Cambiar a Español' : 'Switch to English'}
+              >
+                <Globe className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {language === 'en' ? 'EN' : 'ES'}
+                </span>
+              </button>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {isLogin ? t('auth.welcomeBack') : t('auth.joinAsciende')}
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              {isLogin ? t('auth.signIn') : t('auth.signUp')}
+            </p>
+          </div>
+
+          {/* Mobile Memberships will be shown AFTER the form */}
+          {false && (isLogin || showForgotPassword) && memberships.length > 0 && (
+            <div className="lg:hidden mb-6 p-4 bg-gradient-to-br from-[#514163] to-[#3a2f4a] rounded-xl">
+              {/* Mobile Toggle */}
+              <div className="flex items-center justify-center gap-2 bg-white/10 p-1 rounded-lg w-fit mx-auto mb-4">
+                <button
+                  onClick={() => setShowAnnual(false)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    !showAnnual
+                      ? 'bg-[#fdda36] text-[#514163] shadow-sm'
+                      : 'text-gray-300'
+                  }`}
+                >
+                  {language === 'es' ? 'Mensual' : 'Monthly'}
+                </button>
+                <button
+                  onClick={() => setShowAnnual(true)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    showAnnual
+                      ? 'bg-[#fdda36] text-[#514163] shadow-sm'
+                      : 'text-gray-300'
+                  }`}
+                >
+                  {language === 'es' ? 'Anual' : 'Annual'}
+                  <span className="ml-1 text-xs font-bold">-20%</span>
+                </button>
+              </div>
+
+              <h3 className="text-lg font-bold text-white text-center mb-3">
+                {language === 'es' ? 'Nuestros Planes' : 'Our Plans'}
+              </h3>
+
+              <div className="space-y-3 max-h-80 overflow-y-auto">
+                {memberships.map((membership) => {
+                  const name = language === 'es' ? membership.name_es : membership.name_en;
+                  const features = language === 'es' ? membership.features_es : membership.features_en;
+                  const price = showAnnual
+                    ? parseFloat(membership.price_annual || 0)
+                    : parseFloat(membership.price_monthly || 0);
+                  const isFree = price === 0;
+                  const monthlyEquivalent = showAnnual && price > 0 ? (price / 12).toFixed(2) : null;
+
+                  return (
+                    <div
+                      key={membership.id}
+                      className={`bg-white/10 backdrop-blur-sm rounded-lg p-3 border-2 transition-all ${
+                        membership.is_highlighted
+                          ? 'border-[#fdda36] shadow-lg'
+                          : 'border-[#fdda36]/20'
+                      }`}
+                    >
+                      {membership.is_highlighted && (
+                        <div className="text-center mb-2">
+                          <span className="inline-block bg-[#fdda36] text-[#514163] px-2 py-0.5 rounded-full text-xs font-bold">
+                            {language === 'es' ? 'MÁS POPULAR' : 'MOST POPULAR'}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <h4 className="text-base font-bold text-white">{name}</h4>
+                          <div className="flex items-baseline gap-1 mt-1">
+                            <span className="text-xl font-bold text-[#fdda36]">
+                              {isFree ? (language === 'es' ? 'GRATIS' : 'FREE') : `$${price}`}
+                            </span>
+                            {!isFree && (
+                              <span className="text-xs text-gray-300">
+                                /{showAnnual ? (language === 'es' ? 'año' : 'year') : (language === 'es' ? 'mes' : 'month')}
+                              </span>
+                            )}
+                          </div>
+                          {monthlyEquivalent && (
+                            <p className="text-xs text-[#fdda36] mt-0.5">
+                              ${monthlyEquivalent}/{language === 'es' ? 'mes' : 'mo'}
+                            </p>
+                          )}
+                        </div>
+                        <Crown className="w-5 h-5 text-[#fdda36]" />
+                      </div>
+
+                      <ul className="space-y-1">
+                        {features?.slice(0, 3).map((feature: string, idx: number) => (
+                          <li key={idx} className="flex items-start gap-1.5 text-xs text-gray-200">
+                            <Check className="w-3 h-3 text-[#fdda36] flex-shrink-0 mt-0.5" />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                        {features?.length > 3 && (
+                          <li className="text-xs text-gray-400 pl-5">
+                            + {features.length - 3} {language === 'es' ? 'más' : 'more'}
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {redirectUrl && (
+            <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 px-3 py-2 rounded-lg text-sm">
+              <p className="font-semibold mb-1">
+                {language === 'es' ? 'Redirigiendo desde:' : 'Redirecting from:'}
+              </p>
+              <p className="text-xs opacity-80 truncate">{redirectUrl}</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-3 py-2 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
+          {showForgotPassword ? (
+            <form className="space-y-4 flex-1" onSubmit={handleForgotPassword}>
+              <div className="mb-4">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">
+                  {language === 'es' ? 'Recuperar Contraseña' : 'Reset Password'}
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {language === 'es'
+                    ? 'Ingresa tu email y te enviaremos un enlace para restablecer tu contraseña.'
+                    : 'Enter your email and we\'ll send you a link to reset your password.'}
+                </p>
+              </div>
+
+              {resetEmailSent ? (
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                  <div className="flex items-start gap-2">
+                    <Check className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-green-700 dark:text-green-300">
+                      <p className="font-semibold mb-1">
+                        {language === 'es' ? 'Email Enviado' : 'Email Sent'}
+                      </p>
+                      <p>
+                        {language === 'es'
+                          ? 'Revisa tu bandeja de entrada y haz clic en el enlace para restablecer tu contraseña.'
+                          : 'Check your inbox and click the link to reset your password.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label htmlFor="reset-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t('labels.email')}
+                  </label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <input
+                      id="reset-email"
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#fdda36] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                      placeholder="you@example.com"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotPassword(false);
+                    setResetEmailSent(false);
+                    setError('');
+                  }}
+                  className="flex-1 py-2.5 px-4 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm"
+                >
+                  {language === 'es' ? 'Volver' : 'Back'}
+                </button>
+                {!resetEmailSent && (
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex-1 py-2.5 px-4 bg-[#fdda36] text-[#514163] rounded-lg font-semibold hover:bg-[#ffd51a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#fdda36] disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                  >
+                    {loading ? (language === 'es' ? 'Enviando...' : 'Sending...') : (language === 'es' ? 'Enviar Enlace' : 'Send Link')}
+                  </button>
+                )}
+              </div>
+            </form>
+          ) : isLogin ? (
+            <form className="space-y-4 flex-1" onSubmit={handleLogin}>
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('labels.email')}
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    id="email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#fdda36] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    placeholder="you@example.com"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('labels.password')}
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#fdda36] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-2.5 px-4 bg-[#fdda36] text-[#514163] rounded-lg font-semibold hover:bg-[#ffd51a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#fdda36] disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+              >
+                {loading ? (language === 'es' ? 'Procesando...' : 'Processing...') : t('auth.signIn')}
+              </button>
+
+              <div className="text-center space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotPassword(true);
+                    setError('');
+                  }}
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-[#514163] dark:hover:text-[#fdda36] hover:underline transition-colors"
+                >
+                  {language === 'es' ? '¿Olvidaste tu contraseña?' : 'Forgot your password?'}
+                </button>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsLogin(false);
+                      setError('');
+                      setSignupStep(1);
+                    }}
+                    className="text-sm text-[#514163] dark:text-[#fdda36] hover:underline"
+                  >
+                    {t('auth.dontHaveAccount')}
+                  </button>
+                </div>
+              </div>
+            </form>
+          ) : signupStep === 1 ? (
+            <form className="space-y-4 flex-1" onSubmit={handleBasicSignup}>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {language === 'es' ? 'Nombre' : 'First Name'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="block w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#fdda36] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    placeholder="John"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {language === 'es' ? 'Apellido' : 'Last Name'}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="block w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#fdda36] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    placeholder="Doe"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('labels.email')}
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#fdda36] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    placeholder="you@example.com"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('labels.password')}
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#fdda36] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    placeholder="••••••••"
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-start">
+                <input
+                  type="checkbox"
+                  id="terms"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  className="mt-1 h-4 w-4 text-[#fdda36] focus:ring-[#fdda36] border-gray-300 rounded"
+                  required
+                />
+                <label htmlFor="terms" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                  {language === 'es' ? (
+                    <>Acepto los <a href="https://asciende.pro/terms" target="_blank" rel="noopener noreferrer" className="text-[#514163] dark:text-[#fdda36] hover:underline">Términos y Condiciones</a></>
+                  ) : (
+                    <>I accept the <a href="https://asciende.pro/terms" target="_blank" rel="noopener noreferrer" className="text-[#514163] dark:text-[#fdda36] hover:underline">Terms and Conditions</a></>
+                  )}
+                </label>
+              </div>
+
+              {error && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded-lg text-sm">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || !termsAccepted}
+                className="w-full py-2.5 px-4 bg-[#fdda36] text-[#514163] rounded-lg font-semibold hover:bg-[#ffd51a] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#fdda36] disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+              >
+                {loading ? (language === 'es' ? 'Creando cuenta...' : 'Creating account...') : (language === 'es' ? 'Crear Cuenta' : 'Create Account')}
+              </button>
+
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => setIsLogin(true)}
+                  className="text-sm text-gray-600 dark:text-gray-400 hover:text-[#514163] dark:hover:text-[#fdda36] transition-colors"
+                >
+                  {t('auth.alreadyHaveAccount')}
+                </button>
+              </div>
+            </form>
+          ) : signupStep === 2 ? (
+            <form className="space-y-4 flex-1" onSubmit={(e) => { e.preventDefault(); setSignupStep(3); }}>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {language === 'es' ? 'Paso 2 de 6: Completa tu perfil' : 'Step 2 of 6: Complete your profile'}
+              </p>
+
+              <div className="flex flex-col items-center py-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="relative mb-3">
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Avatar"
+                      className="w-24 h-24 rounded-full object-cover border-4 border-[#fdda36]"
+                    />
+                  ) : (
+                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#514163] to-[#6d5280] flex items-center justify-center border-4 border-[#fdda36]">
+                      <User className="w-12 h-12 text-white" />
+                    </div>
+                  )}
+                  {uploadingAvatar && (
+                    <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                      <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingAvatar}
+                  className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+                >
+                  <Camera className="w-4 h-4" />
+                  {language === 'es' ? 'Subir Foto' : 'Upload Photo'}
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {language === 'es' ? 'Fecha de Nacimiento' : 'Date of Birth'}
+                </label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="date"
+                    value={dateOfBirth}
+                    onChange={(e) => setDateOfBirth(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#fdda36] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {language === 'es' ? 'Género' : 'Gender'}
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setGender('male')}
+                    className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${
+                      gender === 'male'
+                        ? 'border-[#fdda36] bg-[#fdda36]/10 text-[#514163] dark:text-[#fdda36]'
+                        : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-[#fdda36]/50'
+                    }`}
+                  >
+                    {language === 'es' ? 'Masculino' : 'Male'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGender('female')}
+                    className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${
+                      gender === 'female'
+                        ? 'border-[#fdda36] bg-[#fdda36]/10 text-[#514163] dark:text-[#fdda36]'
+                        : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-[#fdda36]/50'
+                    }`}
+                  >
+                    {language === 'es' ? 'Femenino' : 'Female'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGender('other')}
+                    className={`p-3 rounded-lg border-2 transition-all text-sm font-medium ${
+                      gender === 'other'
+                        ? 'border-[#fdda36] bg-[#fdda36]/10 text-[#514163] dark:text-[#fdda36]'
+                        : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-[#fdda36]/50'
+                    }`}
+                  >
+                    {language === 'es' ? 'Otro' : 'Other'}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  {language === 'es'
+                    ? '* Algunos cálculos están basados en el sexo biológico. Aunque no es obligatorio, ayuda a obtener mejores resultados.'
+                    : '* Some calculations are based on biological sex. While not mandatory, it helps get better results.'}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {language === 'es' ? 'Tus 3 Actividades Principales' : 'Your 3 Main Activities'}
+                  <span className="text-xs text-gray-500 ml-2">
+                    ({language === 'es' ? `Seleccionadas: ${sports.length}/3` : `Selected: ${sports.length}/3`})
+                  </span>
+                </label>
+                <div className="grid grid-cols-4 gap-2 max-h-60 overflow-y-auto">
+                  {sportsList.map((s) => {
+                    const Icon = s.icon;
+                    const isSelected = sports.includes(s.id);
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            setSports(sports.filter(sp => sp !== s.id));
+                            if (s.id === 'other') setOtherSport('');
+                          } else {
+                            if (sports.length < 3) {
+                              setSports([...sports, s.id]);
+                            }
+                          }
+                        }}
+                        className={`p-2 rounded-lg border transition-all text-xs ${
+                          isSelected
+                            ? 'border-[#fdda36] bg-[#fdda36]/10'
+                            : 'border-gray-300 dark:border-gray-600 hover:border-[#fdda36]/50'
+                        }`}
+                      >
+                        <Icon className={`w-5 h-5 mx-auto mb-1 ${
+                          isSelected ? 'text-[#fdda36]' : 'text-gray-600 dark:text-gray-400'
+                        }`} />
+                        <p className="font-medium">{language === 'es' ? s.nameEs : s.name}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {sports.includes('other') && (
+                  <div className="mt-3">
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {language === 'es' ? 'Especifica tu deporte:' : 'Specify your sport:'}
+                    </label>
+                    <input
+                      type="text"
+                      value={otherSport}
+                      onChange={(e) => setOtherSport(e.target.value)}
+                      placeholder={language === 'es' ? 'Ej: Remo, Surf, etc.' : 'E.g: Rowing, Surfing, etc.'}
+                      className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#fdda36] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSignupStep(1)}
+                  className="py-2.5 px-4 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm"
+                >
+                  {language === 'es' ? 'Atrás' : 'Back'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSignupStep(3)}
+                  className="py-2.5 px-4 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 text-sm"
+                >
+                  {language === 'es' ? 'Omitir' : 'Skip'}
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 px-4 bg-[#fdda36] text-[#514163] rounded-lg font-semibold hover:bg-[#ffd51a] transition-colors text-sm"
+                >
+                  {language === 'es' ? 'Continuar' : 'Continue'}
+                </button>
+              </div>
+            </form>
+          ) : signupStep === 3 ? (
+            <form className="space-y-4 flex-1" onSubmit={(e) => { e.preventDefault(); setSignupStep(4); }}>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {language === 'es' ? 'Paso 3 de 4: Tus Objetivos' : 'Step 3 of 4: Your Goals'}
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {language === 'es' ? 'Objetivos Físicos' : 'Physical Objectives'}
+                </label>
+                <textarea
+                  value={physicalObjectives}
+                  onChange={(e) => setPhysicalObjectives(e.target.value)}
+                  rows={3}
+                  placeholder={language === 'es' ? 'Ej: Mejorar resistencia, ganar fuerza...' : 'E.g: Improve endurance, gain strength...'}
+                  className="block w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#fdda36] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {language === 'es' ? 'Objetivos de Competencia' : 'Competition Goals'}
+                </label>
+                <textarea
+                  value={competitionGoals}
+                  onChange={(e) => setCompetitionGoals(e.target.value)}
+                  rows={3}
+                  placeholder={language === 'es' ? 'Ej: Clasificar a campeonato nacional...' : 'E.g: Qualify for nationals...'}
+                  className="block w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#fdda36] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                />
+              </div>
+
+              <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                {language === 'es'
+                  ? '(Puedes modificar estos objetivos más tarde en Habits & Goals)'
+                  : '(You can modify these goals later in Habits & Goals)'}
+              </p>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSignupStep(2)}
+                  className="py-2.5 px-4 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm"
+                >
+                  {language === 'es' ? 'Atrás' : 'Back'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSignupStep(4)}
+                  className="py-2.5 px-4 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 text-sm"
+                >
+                  {language === 'es' ? 'Omitir' : 'Skip'}
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 px-4 bg-[#fdda36] text-[#514163] rounded-lg font-semibold hover:bg-[#ffd51a] transition-colors text-sm"
+                >
+                  {language === 'es' ? 'Continuar' : 'Continue'}
+                </button>
+              </div>
+            </form>
+          ) : signupStep === 4 ? (
+            <form className="space-y-4 flex-1" onSubmit={(e) => { e.preventDefault(); setSignupStep(5); }}>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {language === 'es' ? 'Paso 4 de 4: Metas' : 'Step 4 of 4: Goals'}
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {language === 'es' ? 'Metas a Corto Plazo' : 'Short-term Goals'}
+                  <span className="text-xs text-gray-500 ml-2">(3-6 {language === 'es' ? 'meses' : 'months'})</span>
+                </label>
+                <textarea
+                  value={shortTermGoals}
+                  onChange={(e) => setShortTermGoals(e.target.value)}
+                  rows={3}
+                  placeholder={language === 'es' ? 'Ej: Completar mi primer 10K, perder 5kg...' : 'E.g: Complete my first 10K, lose 5kg...'}
+                  className="block w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#fdda36] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {language === 'es' ? 'Metas a Largo Plazo' : 'Long-term Goals'}
+                  <span className="text-xs text-gray-500 ml-2">(1-2 {language === 'es' ? 'años' : 'years'})</span>
+                </label>
+                <textarea
+                  value={longTermGoals}
+                  onChange={(e) => setLongTermGoals(e.target.value)}
+                  rows={3}
+                  placeholder={language === 'es' ? 'Ej: Correr un maratón, competir a nivel nacional...' : 'E.g: Run a marathon, compete at national level...'}
+                  className="block w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-[#fdda36] focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                />
+              </div>
+
+              <p className="text-xs text-gray-500 dark:text-gray-400 italic">
+                {language === 'es'
+                  ? '(Puedes modificar estas metas más tarde en Habits & Goals)'
+                  : '(You can modify these goals later in Habits & Goals)'}
+              </p>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSignupStep(3)}
+                  className="py-2.5 px-4 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm"
+                >
+                  {language === 'es' ? 'Atrás' : 'Back'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSignupStep(5)}
+                  className="py-2.5 px-4 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 text-sm"
+                >
+                  {language === 'es' ? 'Omitir' : 'Skip'}
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 px-4 bg-[#fdda36] text-[#514163] rounded-lg font-semibold hover:bg-[#ffd51a] transition-colors text-sm"
+                >
+                  {language === 'es' ? 'Continuar' : 'Continue'}
+                </button>
+              </div>
+            </form>
+          ) : signupStep === 5 ? (
+            <form className="space-y-4 flex-1" onSubmit={handleExtendedProfile}>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {language === 'es' ? 'Paso 6 de 6: Elige tu Membresía' : 'Step 6 of 6: Choose your Membership'}
+              </p>
+
+              <div className="space-y-3">
+                {memberships.map((membership) => {
+                  const name = language === 'es' ? membership.name_es : membership.name_en;
+                  const features = language === 'es' ? membership.features_es : membership.features_en;
+                  const priceMonthly = parseFloat(membership.price_monthly || 0);
+
+                  const isSelected = selectedMembership === membership.id;
+
+                  return (
+                    <div
+                      key={membership.id}
+                      onClick={() => setSelectedMembership(membership.id)}
+                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                        isSelected
+                          ? 'border-[#fdda36] bg-[#fdda36]/10 ring-2 ring-[#fdda36]'
+                          : membership.is_highlighted
+                          ? 'border-[#fdda36] bg-gradient-to-br from-[#514163]/10 to-[#3a2f4a]/10'
+                          : 'border-gray-300 dark:border-gray-600 hover:border-[#fdda36]'
+                      }`}
+                    >
+                      {membership.is_highlighted && (
+                        <div className="mb-2">
+                          <span className="inline-block bg-[#fdda36] text-[#514163] px-2 py-0.5 rounded-full text-xs font-bold">
+                            {language === 'es' ? 'MÁS POPULAR' : 'MOST POPULAR'}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-lg font-bold text-gray-900 dark:text-white">{name}</h4>
+                        <div className="text-xl font-bold text-[#514163] dark:text-[#fdda36]">
+                          {priceMonthly === 0 ? (language === 'es' ? 'GRATIS' : 'FREE') : `$${priceMonthly}/mes`}
+                        </div>
+                      </div>
+                      <ul className="space-y-1">
+                        {features?.slice(0, 4).map((feature: string, idx: number) => (
+                          <li key={idx} className="flex items-start gap-1.5 text-xs text-gray-600 dark:text-gray-400">
+                            <Check className="w-3 h-3 text-[#fdda36] flex-shrink-0 mt-0.5" />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
+                {language === 'es'
+                  ? '* Puedes cambiar tu membresía en cualquier momento desde Configuración'
+                  : '* You can change your membership anytime from Settings'}
+              </p>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSignupStep(4)}
+                  className="py-2.5 px-4 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-semibold hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm"
+                >
+                  {language === 'es' ? 'Atrás' : 'Back'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || !selectedMembership}
+                  className="flex-1 py-2.5 px-4 bg-[#fdda36] text-[#514163] rounded-lg font-semibold hover:bg-[#ffd51a] transition-colors text-sm disabled:opacity-50"
+                >
+                  {loading
+                    ? (language === 'es' ? 'Procesando...' : 'Processing...')
+                    : !selectedMembership
+                    ? (language === 'es' ? 'Selecciona una Membresía' : 'Select a Membership')
+                    : memberships.find(m => m.id === selectedMembership)?.price_monthly > 0
+                    ? (language === 'es' ? 'Continuar al Pago' : 'Continue to Payment')
+                    : (language === 'es' ? 'Completar Registro' : 'Complete Registration')}
+                </button>
+              </div>
+            </form>
+          ) : null}
+        </div>
+      </div>
+
+      {/* RIGHT SIDE - Content (60%) */}
+      <div className="hidden lg:flex lg:w-[60%] flex-col overflow-y-auto bg-gradient-to-br from-[#514163] to-[#3a2f4a]">
+        <div className="flex-1 flex flex-col">
+          {/* Hero Video - Smaller at top */}
+          <div className="p-4">
+            <div className="relative w-full max-w-2xl mx-auto" style={{ height: '200px' }}>
+              <div className="relative h-full bg-black/30 backdrop-blur-sm rounded-xl overflow-hidden border border-[#fdda36]/30 hover:border-[#fdda36] transition-colors cursor-pointer group">
+                <img
+                  src="https://images.pexels.com/photos/6456225/pexels-photo-6456225.jpeg?auto=compress&cs=tinysrgb&w=1920"
+                  alt="Platform Preview"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover:bg-black/30 transition-colors">
+                  <div className="text-center text-white">
+                    <div className="w-12 h-12 bg-[#fdda36] rounded-full flex items-center justify-center mx-auto mb-2 group-hover:scale-110 transition-transform">
+                      <PlayCircle className="w-6 h-6 text-[#514163]" />
+                    </div>
+                    <p className="text-sm font-semibold">{language === 'es' ? 'Ver plataforma' : 'See Platform'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Memberships Section */}
+          <div className="flex-1 px-4 pb-4 overflow-y-auto">
+            {/* Mobile Toggle */}
+            <div className="lg:hidden flex items-center justify-center gap-2 bg-white/10 p-1 rounded-lg w-fit mx-auto mb-4">
+              <button
+                onClick={() => setShowAnnual(false)}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  !showAnnual
+                    ? 'bg-[#fdda36] text-[#514163] shadow-sm'
+                    : 'text-gray-300'
+                }`}
+              >
+                {language === 'es' ? 'Mensual' : 'Monthly'}
+              </button>
+              <button
+                onClick={() => setShowAnnual(true)}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  showAnnual
+                    ? 'bg-[#fdda36] text-[#514163] shadow-sm'
+                    : 'text-gray-300'
+                }`}
+              >
+                {language === 'es' ? 'Anual' : 'Annual'}
+                <span className="ml-1 text-xs font-bold">-20%</span>
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <h3 className="text-2xl font-bold text-white mb-1">
+                {language === 'es' ? 'Nuestras Membresías' : 'Our Memberships'}
+              </h3>
+              <p className="text-sm text-gray-300">
+                {language === 'es'
+                  ? 'Elige el plan perfecto para alcanzar tus objetivos'
+                  : 'Choose the perfect plan to achieve your goals'}
+              </p>
+            </div>
+
+            {memberships.length > 0 ? (
+              <>
+                {/* Desktop: Grid view - 3 columns */}
+                <div className="hidden lg:grid lg:grid-cols-3 gap-3">
+                  {memberships.map((membership) => {
+                    const name = language === 'es' ? membership.name_es : membership.name_en;
+                    const description = language === 'es' ? membership.description_es : membership.description_en;
+                    const features = language === 'es' ? membership.features_es : membership.features_en;
+                    const priceMonthly = parseFloat(membership.price_monthly || 0);
+                    const priceAnnual = parseFloat(membership.price_annual || 0);
+                    const isFree = priceMonthly === 0;
+
+                    return (
+                      <div
+                        key={membership.id}
+                        className={`bg-white/10 backdrop-blur-sm rounded-lg p-4 border-2 transition-all flex flex-col ${
+                          membership.is_highlighted
+                            ? 'border-[#fdda36] shadow-lg shadow-[#fdda36]/20 scale-105'
+                            : 'border-[#fdda36]/20 hover:border-[#fdda36]/50'
+                        }`}
+                      >
+                        {membership.is_highlighted && (
+                          <div className="text-center mb-2">
+                            <span className="inline-block bg-[#fdda36] text-[#514163] px-2 py-0.5 rounded-full text-[10px] font-bold uppercase">
+                              {language === 'es' ? 'MÁS POPULAR' : 'MOST POPULAR'}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="text-center mb-3">
+                          <Crown className="w-8 h-8 text-[#fdda36] mx-auto mb-2" />
+                          <h4 className="text-xl font-bold text-white mb-1">{name}</h4>
+                          {description && (
+                            <p className="text-xs text-gray-400">{description}</p>
+                          )}
+                        </div>
+
+                        <div className="text-center mb-3 pb-3 border-b border-white/10">
+                          <div className="text-2xl font-bold text-[#fdda36]">
+                            {isFree ? (language === 'es' ? 'GRATIS' : 'FREE') : `$${priceMonthly}`}
+                          </div>
+                          {!isFree && (
+                            <>
+                              <p className="text-xs text-gray-300">
+                                /{language === 'es' ? 'mes' : 'month'}
+                              </p>
+                              {priceAnnual > 0 && (
+                                <p className="text-xs text-[#fdda36] mt-1">
+                                  ${priceAnnual}/{language === 'es' ? 'año' : 'year'}
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </div>
+
+                        <ul className="space-y-1.5 flex-1">
+                          {features?.map((feature: string, idx: number) => (
+                            <li key={idx} className="flex items-start gap-1.5 text-xs text-gray-200">
+                              <Check className="w-3 h-3 text-[#fdda36] flex-shrink-0 mt-0.5" />
+                              <span>{feature}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Mobile: Compact view with toggle */}
+                <div className="lg:hidden grid grid-cols-1 gap-4">
+                  {memberships.map((membership) => {
+                    const name = language === 'es' ? membership.name_es : membership.name_en;
+                    const features = language === 'es' ? membership.features_es : membership.features_en;
+                    const price = showAnnual
+                      ? parseFloat(membership.price_annual || 0)
+                      : parseFloat(membership.price_monthly || 0);
+                    const isFree = price === 0;
+                    const monthlyEquivalent = showAnnual && price > 0 ? (price / 12).toFixed(2) : null;
+
+                    return (
+                      <div
+                        key={membership.id}
+                        className={`bg-white/10 backdrop-blur-sm rounded-xl p-4 border-2 transition-all ${
+                          membership.is_highlighted
+                            ? 'border-[#fdda36] shadow-lg'
+                            : 'border-[#fdda36]/20'
+                        }`}
+                      >
+                        {membership.is_highlighted && (
+                          <div className="text-center mb-2">
+                            <span className="inline-block bg-[#fdda36] text-[#514163] px-3 py-1 rounded-full text-xs font-bold">
+                              {language === 'es' ? 'MÁS POPULAR' : 'MOST POPULAR'}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <h4 className="text-lg font-bold text-white">{name}</h4>
+                            <div className="flex items-baseline gap-1 mt-1">
+                              <span className="text-2xl font-bold text-[#fdda36]">
+                                {isFree ? (language === 'es' ? 'GRATIS' : 'FREE') : `$${price}`}
+                              </span>
+                              {!isFree && (
+                                <span className="text-sm text-gray-300">
+                                  /{showAnnual ? (language === 'es' ? 'año' : 'year') : (language === 'es' ? 'mes' : 'month')}
+                                </span>
+                              )}
+                            </div>
+                            {monthlyEquivalent && (
+                              <p className="text-xs text-[#fdda36] mt-1">
+                                ${monthlyEquivalent}/{language === 'es' ? 'mes' : 'mo'}
+                              </p>
+                            )}
+                          </div>
+                          <Crown className="w-6 h-6 text-[#fdda36]" />
+                        </div>
+
+                        <ul className="space-y-1.5">
+                          {features?.slice(0, 3).map((feature: string, idx: number) => (
+                            <li key={idx} className="flex items-start gap-2 text-sm text-gray-200">
+                              <Check className="w-4 h-4 text-[#fdda36] flex-shrink-0 mt-0.5" />
+                              <span>{feature}</span>
+                            </li>
+                          ))}
+                          {features?.length > 3 && (
+                            <li className="text-xs text-gray-400 pl-6">
+                              + {features.length - 3} {language === 'es' ? 'más' : 'more'}
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Note about membership management */}
+                <p className="text-center text-xs text-gray-300 mt-4">
+                  {language === 'es'
+                    ? '* Modificación y compra de membresías dentro de la app'
+                    : '* Membership modification and purchase inside the app'}
+                </p>
+              </>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {plans.map((plan, idx) => {
+                  const Icon = plan.icon;
+                  return (
+                    <div
+                      key={idx}
+                      className="bg-white/10 backdrop-blur-sm rounded-xl p-5 border border-[#fdda36]/20"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <Icon className="w-6 h-6 text-[#fdda36] mb-2" />
+                          <h4 className="text-lg font-bold text-white">{plan.name}</h4>
+                        </div>
+                        <p className="text-2xl font-bold text-[#fdda36]">${plan.price}</p>
+                      </div>
+                      <ul className="space-y-2 mb-4">
+                        {plan.features.map((feature, fIdx) => (
+                          <li key={fIdx} className="flex items-start gap-2 text-sm text-gray-200">
+                            <Check className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Legal Footer */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700 py-3 px-6 z-10">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs">
+          <a
+            href="https://asciende.pro/impressum"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gray-600 dark:text-gray-400 hover:text-[#fdda36] dark:hover:text-[#fdda36] transition-colors font-medium"
+          >
+            {language === 'de' || language === 'es' ? 'Impressum' : 'Imprint'}
+          </a>
+          <span className="text-gray-400 dark:text-gray-600 dark:text-gray-400">•</span>
+          <a
+            href="https://asciende.pro/privacy-policy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gray-600 dark:text-gray-400 hover:text-[#fdda36] dark:hover:text-[#fdda36] transition-colors font-medium"
+          >
+            {t('auth.privacyPolicy')}
+          </a>
+          <span className="text-gray-400 dark:text-gray-600 dark:text-gray-400">•</span>
+          <a
+            href="https://asciende.pro/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-gray-600 dark:text-gray-400 hover:text-[#fdda36] dark:hover:text-[#fdda36] transition-colors font-medium"
+          >
+            {t('auth.termsConditions')}
+          </a>
+          <span className="text-gray-400 dark:text-gray-600 hidden sm:inline">•</span>
+          <span className="text-gray-500 dark:text-gray-500 text-[10px] sm:text-xs">
+            © {new Date().getFullYear()} Asciende Pro
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}

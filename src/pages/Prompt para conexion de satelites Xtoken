@@ -1,0 +1,213 @@
+PROMPT PARA CONECTAR UN SATELITE AL HUB DE ASCIENDE
+CONTEXTO
+El Hub centralizado de Asciende actua como servidor de datos para todos los satelites (Nutrition Planner, Endurance Planner, Lab, Academy, etc.). La comunicacion entre Hub y satelite NO usa credenciales de usuario — usa un token de API dedicado que el admin genera en el Hub una sola vez.
+
+El satelite nunca maneja login de usuarios. Solo usa su token para leer y escribir datos de atletas identificados por su athlete_id o athlete_email.
+
+PASO 1 — GENERAR EL TOKEN EN EL HUB (admin)
+El admin del Hub debe hacer esto una sola vez:
+
+Ir a Settings → External Planners
+Click en "New token"
+Completar:
+Planner name: (ej: "Academy Satellite", "Nutrition Planner", "Endurance Planner")
+Planner type: elegir del dropdown: lab / endurance / nutrition / academy / motion / performance
+Description: (opcional)
+Click en "Generate token"
+COPIAR EL TOKEN INMEDIATAMENTE — solo se muestra una vez
+Pegar el token en la configuracion del satelite
+El token tiene este formato: planner_<32caracteres>
+
+PASO 2 — COMO AUTENTICARSE DESDE EL SATELITE
+Todas las requests al Hub deben incluir este header:
+
+
+X-Planner-Token: planner_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+La URL base de la API es:
+
+
+https://ngkcbygyoobqhlmlnuvl.supabase.co/functions/v1/planner-hub-api
+El atletaa se identifica siempre por query param, ya sea por ID o email:
+
+
+?athlete_id=<uuid>
+o bien:
+
+
+?athlete_email=<email>
+PASO 3 — ENDPOINTS DISPONIBLES
+LECTURA (GET) — disponibles para todos los tipos de token
+Perfil del atleta:
+
+
+GET /athlete-profile?athlete_email=<email>
+X-Planner-Token: <token>
+Respuesta:
+
+
+{
+  "athlete": { "id", "full_name", "email", "sport", "date_of_birth", "gender" },
+  "body_composition": { "fat_mass_kg", "lean_mass_kg", "fat_percent", "measurement_date" },
+  "nutrition_targets": { "target_kcal", "target_protein_g", "target_carbs_g", "target_fat_g" }
+}
+Calendario de entrenamientos:
+
+
+GET /training-schedule?athlete_email=<email>&date_from=2026-03-01&date_to=2026-04-01
+X-Planner-Token: <token>
+Respuesta incluye workouts de fuerza + endurance, cargas semanales ATP, y distribucion de intensidad (verde/amarillo/rojo).
+
+Datos de nutricion:
+
+
+GET /nutrition-data?athlete_email=<email>&date_from=2026-03-01&date_to=2026-03-31
+X-Planner-Token: <token>
+Datos de endurance:
+
+
+GET /endurance-data?athlete_email=<email>&date_from=2026-03-01&date_to=2026-03-31
+X-Planner-Token: <token>
+Passport biologico (VO2max, FTP, zonas):
+
+
+GET /biological-passport?athlete_email=<email>
+X-Planner-Token: <token>
+Diario alimentario:
+
+
+GET /food-diary?athlete_email=<email>&date_from=2026-03-01&date_to=2026-03-07
+X-Planner-Token: <token>
+Antropometria (composicion corporal):
+
+
+GET /anthropometry?athlete_email=<email>&limit=5
+X-Planner-Token: <token>
+Habitos del atleta:
+
+
+GET /athlete-habits?athlete_email=<email>&days=30
+X-Planner-Token: <token>
+Wellness / checkins:
+
+
+GET /wellness?athlete_email=<email>&date_from=2026-03-01&date_to=2026-03-26
+X-Planner-Token: <token>
+Workouts de endurance programados:
+
+
+GET /endurance-workouts?athlete_email=<email>&date_from=2026-03-01&date_to=2026-04-01
+X-Planner-Token: <token>
+ESCRITURA (POST) — segun tipo de token
+Token tipo nutrition — enviar plan de nutricion:
+
+
+POST /push-nutrition-plan?athlete_email=<email>
+X-Planner-Token: <token>
+Content-Type: application/json
+
+{
+  "plan_date": "2026-03-27",
+  "plan_name": "Dia de entreno moderado",
+  "summary": {
+    "target_kcal": 2600,
+    "target_protein_g": 130,
+    "target_carbs_g": 310,
+    "target_fat_g": 80,
+    "fuel_day_type": "yellow"
+  },
+  "plan_data": { ... },
+  "notes": "Opcional"
+}
+Token tipo endurance — enviar plan semanal:
+
+
+POST /push-endurance-plan?athlete_email=<email>
+X-Planner-Token: <token>
+Content-Type: application/json
+
+{
+  "week_start_date": "2026-03-24",
+  "plan_name": "Semana de base aerobica",
+  "summary": { "total_hours": 8, "total_tss": 320, "sessions": 5 },
+  "plan_data": { "days": [...] },
+  "notes": "Opcional"
+}
+Token tipo endurance — enviar workout individual:
+
+
+POST /push-endurance-workout?athlete_email=<email>
+X-Planner-Token: <token>
+Content-Type: application/json
+
+{
+  "name": "Intervals Z4",
+  "sport": "cycling",
+  "scheduled_date": "2026-03-28",
+  "estimated_duration_minutes": 75,
+  "intensity_basis": "power",
+  "steps": [...],
+  "external_workout_id": "abc123"
+}
+Token tipo endurance — enviar log de entrenamiento completado:
+
+
+POST /push-training-log?athlete_email=<email>
+X-Planner-Token: <token>
+Content-Type: application/json
+
+{
+  "training_date": "2026-03-26",
+  "workout_type": "cycling",
+  "duration_minutes": 90,
+  "distance_km": 45,
+  "avg_power_watts": 210,
+  "tss": 95,
+  "rpe": 7,
+  "external_activity_id": "strava_12345"
+}
+Token tipo lab — enviar resultados de test fisiologico:
+
+
+POST /push-lab-passport?athlete_email=<email>
+X-Planner-Token: <token>
+Content-Type: application/json
+
+{
+  "measurement_date": "2026-03-26",
+  "test_protocol": "Ramp test incremental",
+  "physiological": {
+    "vo2max": 58.2,
+    "ftp_watts": 280,
+    "lt1_power": 195,
+    "lt2_power": 255,
+    "lt1_hr": 142,
+    "lt2_hr": 168,
+    "power_zones_json": { "z1": [0,140], "z2": [140,195], ... }
+  },
+  "anthropometry": {
+    "height_cm": 175,
+    "weight_kg": 68.5,
+    "body_fat_percent": 12.3
+  },
+  "athletic_profile": {
+    "training_age_years": 5,
+    "athlete_level": "advanced"
+  },
+  "sport_context": "cycling",
+  "notes": "Test en laboratorio condiciones controladas"
+}
+PASO 4 — CODIGOS DE ERROR
+Codigo	Causa	Solucion
+401	Token invalido o inactivo	Verificar token en Settings → External Planners
+403	Tipo de token incorrecto para ese endpoint	Token nutrition solo puede usar /push-nutrition-plan, token endurance solo puede usar /push-endurance-plan y /push-training-log, token lab solo puede usar /push-lab-passport
+400	Campo requerido faltante	Revisar que plan_date o week_start_date esten presentes
+404	Atleta no encontrado	Verificar que el athlete_email o athlete_id exista en el Hub
+500	Error interno	Revisar los logs
+NOTA IMPORTANTE PARA ACADEMY Y OTROS SATELITES EN CONSTRUCCION
+Si el satelite todavia no esta listo para conectarse, el admin simplemente no genera el token. No hay nada que configurar del lado del Hub hasta que el satelite este operativo. Cuando el satelite este listo:
+
+Admin genera token en Settings → External Planners, tipo academy
+Se pega el token en la configuracion del satelite
+El satelite ya puede hacer GET a todos los endpoints de lectura
+Si el satelite necesita escribir datos al Hub, se solicita que se implemente un nuevo endpoint tipo push-<academy-data>
+Por ahora los endpoints de escritura solo existen para nutrition, endurance y lab. El tipo academy tiene acceso completo de lectura desde el primer dia.

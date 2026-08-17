@@ -1,0 +1,52 @@
+[
+  {
+    "id": "ex001",
+    "name": "Back Squat",
+    "category": "Strength",
+    "videoUrl": "https://www.youtube.com/watch?v=ultWZbUMPL8",
+    "description": "Classic barbell squat focusing on lower body strength.",
+    "muscleGroups": ["Quadriceps", "Glutes", "Hamstrings"],
+    "equipment": ["Barbell", "Squat Rack"],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "ex002",
+    "name": "Romanian Deadlift",
+    "category": "Strength",
+    "videoUrl": "https://www.youtube.com/watch?v=2SHsk9AzdjA",
+    "description": "Emphasis on hamstring and glute development.",
+    "muscleGroups": ["Hamstrings", "Glutes", "Lower Back"],
+    "equipment": ["Barbell"],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "ex003",
+    "name": "Bench Press",
+    "category": "Strength",
+    "videoUrl": "https://www.youtube.com/watch?v=rT7DgCr-3pg",
+    "description": "Upper body pushing exercise for chest, shoulders, and triceps.",
+    "muscleGroups": ["Chest", "Shoulders", "Triceps"],
+    "equipment": ["Barbell", "Bench"],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "ex004",
+    "name": "Pull-ups",
+    "category": "Strength",
+    "videoUrl": "https://www.youtube.com/watch?v=eGo4IYlbE5g",
+    "description": "Bodyweight pulling exercise for back and biceps.",
+    "muscleGroups": ["Lats", "Biceps", "Upper Back"],
+    "equipment": ["Pull-up Bar"],
+    "difficulty": "intermediate"
+  },
+  {
+    "id": "ex005",
+    "name": "Push-ups",
+    "category": "Calisthenics",
+    "videoUrl": "https://www.youtube.com/watch?v=IODxDxX7oi4",
+    "description": "Classic bodyweight exercise for chest and arms.",
+    "muscleGroups": ["Chest", "Triceps", "Shoulders"],
+    "equipment": [],
+    "difficulty": "beginner"
+  }
+]

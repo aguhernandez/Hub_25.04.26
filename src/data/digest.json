@@ -1,0 +1,37 @@
+[
+  {
+    "week": "2025-W41",
+    "title": "The Role of Eccentric Training in Athletic Performance",
+    "summary": "Recent research from the Journal of Strength and Conditioning shows that eccentric training (controlled lowering phase) significantly improves power output and resilience in athletes. A 12-week study with volleyball players demonstrated a 23% increase in vertical jump height and reduced injury rates by 31%.\n\nKey takeaway: Incorporate 2-3 eccentric-focused exercises per week, emphasizing 3-4 second lowering phases.",
+    "link": "https://journals.lww.com/nsca-jscr",
+    "category": "training"
+  },
+  {
+    "week": "2025-W40",
+    "title": "Optimizing Protein Timing for Recovery",
+    "summary": "The International Society of Sports Nutrition updated their position on protein timing. New evidence suggests consuming 20-40g of high-quality protein within 2 hours post-training maximizes muscle protein synthesis.\n\nFor endurance athletes, adding carbohydrates (3:1 carb-to-protein ratio) enhances glycogen replenishment and reduces muscle damage markers.",
+    "link": "https://jissn.biomedcentral.com",
+    "category": "nutrition"
+  },
+  {
+    "week": "2025-W39",
+    "title": "Sleep Architecture and Athletic Performance",
+    "summary": "A groundbreaking study from Stanford Sleep Lab reveals that increasing sleep from 7 to 9 hours per night improved sprint times by 5% and reaction time by 9% in athletes.\n\nDeep sleep (NREM stage 3) is particularly crucial for physical recovery, while REM sleep supports motor skill consolidation and decision-making.",
+    "link": "https://sleep.stanford.edu",
+    "category": "recovery"
+  },
+  {
+    "week": "2025-W38",
+    "title": "Mental Imagery: The Hidden Training Tool",
+    "summary": "Sports psychology research demonstrates that mental imagery activates similar neural pathways as physical practice. Athletes who combined physical training with 15 minutes of daily visualization showed 28% faster skill acquisition.\n\nBest practices: Visualize in first-person perspective, engage all senses, and practice during calm, focused states.",
+    "link": "https://www.apa.org/science/about/psa/sport",
+    "category": "mindset"
+  },
+  {
+    "week": "2025-W37",
+    "title": "Hydration Strategies for Peak Performance",
+    "summary": "New guidelines from the American College of Sports Medicine emphasize individualized hydration. Sweat rate testing reveals that athletes can lose 0.5-2.5 liters per hour during training.\n\nElectrolyte balance is critical: aim for 300-600mg sodium per hour during prolonged exercise. Monitor urine color (pale yellow) as a simple hydration indicator.",
+    "link": "https://www.acsm.org",
+    "category": "nutrition"
+  }
+]

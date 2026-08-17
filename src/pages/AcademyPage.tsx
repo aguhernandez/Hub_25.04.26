@@ -1206,8 +1206,6 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
   const getCourseDesc = (c: Course) =>
     language === 'es' && c.description_es ? c.description_es : c.description;
 
-  const getCourseAcademyId = (c: Course) => c.external_course_id || c.slug || c.id;
-
   const getCourseUrl = (c: Course) => {
     if (c.external_url) return c.external_url;
     if (c.url) return c.url;
@@ -1443,7 +1441,7 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
                   return (
                     <button
                       key={course.id}
-                      onClick={() => { setShowCompleted(false); setSelectedCourseId(getCourseAcademyId(course)); }}
+                      onClick={() => { setShowCompleted(false); setSelectedCourseId(course.id); }}
                       className="group relative bg-white dark:bg-gray-800 rounded-xl border border-emerald-200 dark:border-emerald-800/50 overflow-hidden hover:shadow-lg transition-all duration-200 flex flex-col text-left w-full"
                     >
                       <div className="relative h-32 bg-gray-900 overflow-hidden flex-shrink-0">
@@ -1554,7 +1552,7 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
                 return (
                   <button
                     key={course.id}
-                    onClick={() => setSelectedCourseId(getCourseAcademyId(course))}
+                    onClick={() => setSelectedCourseId(course.id)}
                     className="group flex-shrink-0 snap-start bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-all duration-200 text-left"
                     style={{ width: 'calc(85vw - 2rem)', maxWidth: '280px' }}
                   >
@@ -1632,7 +1630,7 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
           <div className="hidden md:block space-y-6">
             {filteredFeatured && (
               <button
-                onClick={() => setSelectedCourseId(getCourseAcademyId(filteredFeatured))
+                onClick={() => setSelectedCourseId(filteredFeatured.id)}
                 className="group block relative overflow-hidden rounded-2xl bg-gray-900 min-h-[380px] shadow-lg hover:shadow-2xl transition-shadow duration-300 text-left w-full"
               >
                 {getCourseImage(filteredFeatured) ? (
@@ -1705,7 +1703,7 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
                   return (
                     <button
                       key={course.id}
-                      onClick={() => setSelectedCourseId(getCourseAcademyId(course))}
+                      onClick={() => setSelectedCourseId(course.id)}
                       className="group bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col text-left w-full"
                     >
                       <div className="relative h-48 bg-gray-900 overflow-hidden flex-shrink-0">
