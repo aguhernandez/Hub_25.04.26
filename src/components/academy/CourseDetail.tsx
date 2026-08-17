@@ -115,12 +115,28 @@ export default function CourseDetail({ courseId, onBack }: CourseDetailProps) {
 
   return (
     <div className="space-y-4 pb-4">
+      <div className="flex flex-col gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-sky-900/70 dark:bg-sky-950/40">
+        <p className="text-sm font-medium leading-6 text-sky-950 dark:text-sky-100">
+          {language === 'es'
+            ? 'Para una mejor experiencia, visita Academy.'
+            : 'For the best experience, visit Academy.'}
+        </p>
+        <a
+          href="https://academy.asciende.pro"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex w-fit items-center justify-center rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-800 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 dark:bg-sky-500 dark:text-sky-950 dark:hover:bg-sky-400 dark:focus:ring-offset-sky-950"
+        >
+          Academy
+        </a>
+      </div>
+
       <button
         onClick={onBack}
         className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
       >
         <ArrowLeft className="w-4 h-4" />
-        {language === 'es' ? 'Volver a Academia' : 'Back to Academy'}
+        {language === 'es' ? 'Volver' : 'Back'}
       </button>
 
       <div
