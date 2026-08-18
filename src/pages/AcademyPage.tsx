@@ -18,6 +18,7 @@ import TagSelector from '../components/tags/TagSelector';
 import ArticleEditor from '../components/digest/ArticleEditor';
 import PremiumPaywall from '../components/digest/PremiumPaywall';
 import CourseDetail from '../components/academy/CourseDetail';
+import AcademyInAppTest from '../components/academy/AcademyInAppTest';
 
 interface Course {
   id: string;
@@ -1321,14 +1322,18 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
               )}
             </div>
           </div>
-          <button
-            onClick={() => syncAndLoad(true)}
-            disabled={syncing}
-            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-            {language === 'es' ? 'Sincronizar' : 'Sync'}
-          </button>
+          <div className="flex-shrink-0 flex items-center gap-2">
+            {/* ── TEST: In-App WebView prototype — safe to remove ── */}
+            <AcademyInAppTest />
+            <button
+              onClick={() => syncAndLoad(true)}
+              disabled={syncing}
+              className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+              {language === 'es' ? 'Sincronizar' : 'Sync'}
+            </button>
+          </div>
         </div>
       </div>
 
