@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { ArrowLeft, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, AlertCircle, ExternalLink, GraduationCap } from 'lucide-react';
 
 interface CourseDetailProps {
   courseId: string;
@@ -12,8 +12,8 @@ export default function CourseDetail({ courseId, onBack }: CourseDetailProps) {
   const { language } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [iframeSrc, setIframeSrc] = useState<string | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [academyUrl, setAcademyUrl] = useState<string | null>(null);
+  const [opened, setOpened] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,14 +43,20 @@ export default function CourseDetail({ courseId, onBack }: CourseDetailProps) {
           }
         }
 
-        const params = new URLSearchParams({ embedded: 'true' });
+        const params = new URLSearchParams();
         if (satelliteToken) {
           params.set('token', satelliteToken);
         }
 
-        const url = `https://academy.asciende.pro/course/${encodeURIComponent(courseId)}?${params.toString()}`;
+        const url = `https://academy.asciende.pro/course/${encodeURIComponent(courseId)}${params.toString() ? `?${params.toString()}` : ''}`;
         if (cancelled) return;
-        setIframeSrc(url);
+        setAcademyUrl(url);
+
+        // Open in a new tab immediately — Stripe Checkout requires top-level navigation
+        // and cannot run inside an iframe.
+        const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
+        if (cancelled) return;
+        setOpened(!!newWindow);
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : String(err));
@@ -61,38 +67,13 @@ export default function CourseDetail({ courseId, onBack }: CourseDetailProps) {
     return () => { cancelled = true; };
   }, [courseId]);
 
-  useEffect(() => {
-    function handleMessage(event: MessageEvent) {
-      const data = event.data;
-      if (!data || data.type !== 'ASCIENDE_STRIPE_CHECKOUT') return;
-      const checkoutUrl = typeof data.checkoutUrl === 'string' ? data.checkoutUrl : '';
-      if (!checkoutUrl) {
-        console.warn('[Hub] ASCIENDE_STRIPE_CHECKOUT received without checkoutUrl');
-        return;
-      }
-      try {
-        const parsed = new URL(checkoutUrl);
-        if (parsed.hostname !== 'checkout.stripe.com') {
-          console.warn('[Hub] checkoutUrl is not a Stripe URL:', checkoutUrl);
-          return;
-        }
-      } catch {
-        console.warn('[Hub] checkoutUrl is not a valid URL:', checkoutUrl);
-        return;
-      }
-      window.open(checkoutUrl, '_blank');
-    }
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-3">
           <Loader2 className="w-8 h-8 text-[#fdda36] animate-spin mx-auto" />
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            {language === 'es' ? 'Cargando curso...' : 'Loading course...'}
+            {language === 'es' ? 'Abriendo curso en Academy...' : 'Opening course in Academy...'}
           </p>
         </div>
       </div>
@@ -114,23 +95,7 @@ export default function CourseDetail({ courseId, onBack }: CourseDetailProps) {
   }
 
   return (
-    <div className="space-y-4 pb-4">
-      <div className="flex flex-col gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-sky-900/70 dark:bg-sky-950/40">
-        <p className="text-sm font-medium leading-6 text-sky-950 dark:text-sky-100">
-          {language === 'es'
-            ? 'Para una mejor experiencia, visita Academy.'
-            : 'For the best experience, visit Academy.'}
-        </p>
-        <a
-          href="https://academy.asciende.pro"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex w-fit items-center justify-center rounded-lg bg-sky-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-800 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 dark:bg-sky-500 dark:text-sky-950 dark:hover:bg-sky-400 dark:focus:ring-offset-sky-950"
-        >
-          Academy
-        </a>
-      </div>
-
+    <div className="space-y-6 pb-4">
       <button
         onClick={onBack}
         className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
@@ -139,21 +104,36 @@ export default function CourseDetail({ courseId, onBack }: CourseDetailProps) {
         {language === 'es' ? 'Volver' : 'Back'}
       </button>
 
-      <div
-        ref={containerRef}
-        className="relative w-full rounded-2xl overflow-hidden bg-white dark:bg-gray-900 shadow-lg border border-gray-200 dark:border-gray-700"
-        style={{ height: 'calc(100vh - 120px)', minHeight: '500px' }}
-      >
-        {iframeSrc && (
-          <iframe
-            src={iframeSrc}
-            title="Academy Course"
-            className="absolute inset-0 w-full h-full"
-            style={{ border: 'none' }}
-            allow="accelerometer; autoplay; encrypted-media; fullscreen; picture-in-picture"
-            allowFullScreen
-            onLoad={() => setLoading(false)}
-          />
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-6 text-center px-4">
+        <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-[#fdda36]/20 border border-[#fdda36]/30">
+          <GraduationCap className="w-8 h-8 text-[#514163] dark:text-[#fdda36]" />
+        </div>
+
+        <div className="space-y-2 max-w-md">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+            {language === 'es' ? 'Curso abierto en Academy' : 'Course opened in Academy'}
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+            {language === 'es'
+              ? opened
+                ? 'El curso se ha abierto en una nueva pestaña. Desde ahí podrás completar la compra con Stripe sin problemas.'
+                : 'Tu navegador bloqueó la apertura automática. Haz clic en el botón para abrir el curso en Academy.'
+              : opened
+                ? 'The course has opened in a new tab. From there you can complete the Stripe checkout without issues.'
+                : 'Your browser blocked the automatic popup. Click the button below to open the course in Academy.'}
+          </p>
+        </div>
+
+        {academyUrl && (
+          <a
+            href={academyUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-[#fdda36] text-gray-900 rounded-xl text-sm font-bold hover:bg-[#f5ce20] transition-colors shadow-sm"
+          >
+            <ExternalLink className="w-4 h-4" />
+            {language === 'es' ? 'Abrir en Academy' : 'Open in Academy'}
+          </a>
         )}
       </div>
     </div>
