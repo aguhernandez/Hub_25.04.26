@@ -18,7 +18,6 @@ import TagSelector from '../components/tags/TagSelector';
 import ArticleEditor from '../components/digest/ArticleEditor';
 import PremiumPaywall from '../components/digest/PremiumPaywall';
 import CourseDetail from '../components/academy/CourseDetail';
-import AcademyInAppTest from '../components/academy/AcademyInAppTest';
 
 interface Course {
   id: string;
@@ -671,6 +670,37 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
   const [showCompleted, setShowCompleted] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
 
+  const openCourse = useCallback(async (courseId: string) => {
+    let isNative = false;
+    try {
+      const { Capacitor } = await import('@capacitor/core');
+      isNative = Capacitor.isNativePlatform();
+    } catch { /* not native */ }
+
+    if (isNative) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const params = new URLSearchParams();
+        if (session) {
+          const tokenRes = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-session-token`,
+            { headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' } }
+          );
+          if (tokenRes.ok) {
+            const tokenData = await tokenRes.json();
+            if (tokenData.success && tokenData.token) params.set('token', tokenData.token);
+          }
+        }
+        const url = `https://academy.asciende.pro/course/${encodeURIComponent(courseId)}${params.toString() ? `?${params.toString()}` : ''}`;
+        const { Browser } = await import('@capacitor/browser');
+        await Browser.open({ url, windowName: '_self' });
+        return;
+      } catch { /* fall through to detail view on error */ }
+    }
+
+    setSelectedCourseId(courseId);
+  }, []);
+
   const [allTags, setAllTags] = useState<TagItem[]>([]);
   const [athleteTags, setAthleteTags] = useState<AthleteTagEntry[]>([]);
   const [satelliteTags, setSatelliteTags] = useState<SatelliteTag[]>([]);
@@ -1322,18 +1352,14 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
               )}
             </div>
           </div>
-          <div className="flex-shrink-0 flex items-center gap-2">
-            {/* ── TEST: In-App WebView prototype — safe to remove ── */}
-            <AcademyInAppTest />
-            <button
-              onClick={() => syncAndLoad(true)}
-              disabled={syncing}
-              className="flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-              {language === 'es' ? 'Sincronizar' : 'Sync'}
-            </button>
-          </div>
+          <button
+            onClick={() => syncAndLoad(true)}
+            disabled={syncing}
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+            {language === 'es' ? 'Sincronizar' : 'Sync'}
+          </button>
         </div>
       </div>
 
@@ -1446,7 +1472,7 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
                   return (
                     <button
                       key={course.id}
-                      onClick={() => { setShowCompleted(false); setSelectedCourseId(course.id); }}
+                      onClick={() => { setShowCompleted(false); openCourse(course.id); }}
                       className="group relative bg-white dark:bg-gray-800 rounded-xl border border-emerald-200 dark:border-emerald-800/50 overflow-hidden hover:shadow-lg transition-all duration-200 flex flex-col text-left w-full"
                     >
                       <div className="relative h-32 bg-gray-900 overflow-hidden flex-shrink-0">
@@ -1557,7 +1583,7 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
                 return (
                   <button
                     key={course.id}
-                    onClick={() => setSelectedCourseId(course.id)}
+                    onClick={() => openCourse(course.id)}
                     className="group flex-shrink-0 snap-start bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-all duration-200 text-left"
                     style={{ width: 'calc(85vw - 2rem)', maxWidth: '280px' }}
                   >
@@ -1635,7 +1661,7 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
           <div className="hidden md:block space-y-6">
             {filteredFeatured && (
               <button
-                onClick={() => setSelectedCourseId(filteredFeatured.id)}
+                onClick={() => openCourse(filteredFeatured.id)}
                 className="group block relative overflow-hidden rounded-2xl bg-gray-900 min-h-[380px] shadow-lg hover:shadow-2xl transition-shadow duration-300 text-left w-full"
               >
                 {getCourseImage(filteredFeatured) ? (
@@ -1708,7 +1734,7 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
                   return (
                     <button
                       key={course.id}
-                      onClick={() => setSelectedCourseId(course.id)}
+                      onClick={() => openCourse(course.id)}
                       className="group bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col text-left w-full"
                     >
                       <div className="relative h-48 bg-gray-900 overflow-hidden flex-shrink-0">
