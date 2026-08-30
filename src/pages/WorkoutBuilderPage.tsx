@@ -199,11 +199,21 @@ export default function WorkoutBuilderPage() {
   }, [selectedExercise]);
 
   const loadExercises = async () => {
-    const { data } = await supabase
-      .from('exercises')
-      .select('id, exercise, exercise_en, exercise_es, category, type, equipment, link, pattern_ability, movement')
-      .order('exercise_en');
-    setExercises(data || []);
+    const pageSize = 1000;
+    let allData: any[] = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from('exercises')
+        .select('id, exercise, exercise_en, exercise_es, category, type, equipment, link, pattern_ability, movement')
+        .order('exercise_en')
+        .range(offset, offset + pageSize - 1);
+      if (error) break;
+      allData = allData.concat(data || []);
+      if (!data || data.length < pageSize) break;
+      offset += pageSize;
+    }
+    setExercises(allData);
   };
 
   const loadWorkoutForEdit = async (athleteWorkoutId: string, scheduledDate: string) => {
