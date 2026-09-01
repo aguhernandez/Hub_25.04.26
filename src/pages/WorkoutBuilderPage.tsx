@@ -480,12 +480,21 @@ export default function WorkoutBuilderPage() {
       secondary_metric: undefined,
       notes: '',
       superset_group: null,
-      order_index: workoutExercises.length,
+      order_index: 0,
       section_title: sectionTitle,
       block_instance_id: blockInstanceId
     };
 
-    setWorkoutExercises([...workoutExercises, newExercise]);
+    const targetBlockIdx = orderedBlocks.findIndex(b => b.instanceId === blockInstanceId);
+    let insertAt = 0;
+    for (let i = 0; i < workoutExercises.length; i++) {
+      const exBlockId = workoutExercises[i].block_instance_id || 'default';
+      const exBlockIdx = orderedBlocks.findIndex(b => b.instanceId === exBlockId);
+      if (exBlockIdx <= targetBlockIdx) insertAt = i + 1;
+    }
+    const newExercises = [...workoutExercises];
+    newExercises.splice(insertAt, 0, newExercise);
+    setWorkoutExercises(newExercises);
     setSelectedExercise('');
     setExerciseSearchTerm('');
   };
@@ -535,9 +544,11 @@ export default function WorkoutBuilderPage() {
     const duplicated: AdvancedWorkoutExercise = {
       ...exerciseToDuplicate,
       set_lines: exerciseToDuplicate.set_lines.map(l => ({ ...l })),
-      order_index: workoutExercises.length
+      order_index: 0
     };
-    setWorkoutExercises([...workoutExercises, duplicated]);
+    const newExercises = [...workoutExercises];
+    newExercises.splice(index + 1, 0, duplicated);
+    setWorkoutExercises(newExercises);
     success(language === 'es' ? `${exerciseToDuplicate.exercise_name} duplicado` : `${exerciseToDuplicate.exercise_name} duplicated`);
   };
 
@@ -573,15 +584,27 @@ export default function WorkoutBuilderPage() {
     newBlocks.splice(insertIndex, 0, newBlock);
     setOrderedBlocks(newBlocks);
 
+    const sourceIndices: number[] = [];
     const copiedExercises = workoutExercises
-      .filter(ex => (ex.block_instance_id || 'default') === instanceId)
+      .filter((ex, i) => {
+        if ((ex.block_instance_id || 'default') === instanceId) {
+          sourceIndices.push(i);
+          return true;
+        }
+        return false;
+      })
       .map(ex => ({
         ...ex,
         set_lines: ex.set_lines.map(l => ({ ...l })),
         block_instance_id: newInstanceId,
-        order_index: workoutExercises.length + (ex.order_index ?? 0),
+        order_index: 0,
       }));
-    setWorkoutExercises([...workoutExercises, ...copiedExercises]);
+    if (copiedExercises.length > 0) {
+      const insertAfter = sourceIndices[sourceIndices.length - 1] + 1;
+      const newExercises = [...workoutExercises];
+      newExercises.splice(insertAfter, 0, ...copiedExercises);
+      setWorkoutExercises(newExercises);
+    }
 
     const copiedCircuits = workoutCircuits
       .filter(c => (c.block_instance_id || c.section_title) === instanceId)
@@ -683,14 +706,15 @@ export default function WorkoutBuilderPage() {
       // Flatten set_lines into individual exercise entries
       // Sort exercises by block order (supports duplicate block types)
       const blockOrder = orderedBlocks.map(b => b.instanceId);
-      const sortedExercises = [...workoutExercises].sort((a, b) => {
-        const aId = a.block_instance_id || blockOrder[0] || '';
-        const bId = b.block_instance_id || blockOrder[0] || '';
+      const indexedExercises = workoutExercises.map((ex, origIndex) => ({ ex, origIndex }));
+      const sortedExercises = indexedExercises.sort((a, b) => {
+        const aId = a.ex.block_instance_id || blockOrder[0] || '';
+        const bId = b.ex.block_instance_id || blockOrder[0] || '';
         const aIdx = blockOrder.indexOf(aId);
         const bIdx = blockOrder.indexOf(bId);
         if (aIdx !== bIdx) return aIdx - bIdx;
-        return (a.order_index ?? 0) - (b.order_index ?? 0);
-      });
+        return a.origIndex - b.origIndex;
+      }).map(item => item.ex);
 
       const exercisesToInsert: any[] = [];
       sortedExercises.forEach((ex, exerciseIndex) => {
@@ -1632,7 +1656,7 @@ function WorkoutSummaryPanel({ exercises, sections, language }: WorkoutSummaryPa
       </div>
       <div className="divide-y divide-gray-100 dark:divide-gray-700">
         {sortedKeys.map((sectionKey) => {
-          const sectionExercises = grouped[sectionKey].slice().sort((a, b) => a.order_index - b.order_index);
+          const sectionExercises = grouped[sectionKey];
           const sectionTitle = sections.find(s => s.id === sectionKey)?.title || grouped[sectionKey][0]?.section_title || sectionKey;
           const isOpen = !!openSections[sectionKey];
           return (
