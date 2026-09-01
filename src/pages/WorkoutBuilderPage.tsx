@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAthlete } from '../contexts/AthleteContext';
 import { supabase } from '../lib/supabase';
-import { Dumbbell, Plus, Save, Users, Calendar, Search, X, Play, Trash2, Calculator, Layers, AlertTriangle, ChevronDown, MoveUp, MoveDown } from 'lucide-react';
+import { Dumbbell, Plus, Save, Users, Calendar, Search, X, Play, Trash2, Calculator, Layers, AlertTriangle, ChevronDown, MoveUp, MoveDown, Copy } from 'lucide-react';
 import BackButton from '../components/BackButton';
 import AdvancedExerciseBuilder from '../components/training/AdvancedExerciseBuilder';
 import BlockOrderBuilder, { type BlockInstance } from '../components/training/BlockOrderBuilder';
@@ -50,6 +50,7 @@ interface AdvancedWorkoutExercise {
   superset_group: number | null;
   order_index: number;
   section_title?: string;
+  block_instance_id?: string;
 }
 
 interface CircuitExerciseItem {
@@ -70,6 +71,7 @@ interface WorkoutCircuit {
   amrap_minutes: number;
   exercises: CircuitExerciseItem[];
   section_title: string;
+  block_instance_id?: string;
 }
 
 export default function WorkoutBuilderPage() {
@@ -309,6 +311,24 @@ export default function WorkoutBuilderPage() {
         });
 
       const exercisesArray = Object.values(groupedExercises);
+
+      const sectionTitles = [...new Set(exercisesArray.map((ex: any) => ex.section_title).filter(Boolean))] as string[];
+      const reconstructedBlocks: BlockInstance[] = sectionTitles.map(title => {
+        const available = availableBlocks.find(b => b.name === title);
+        return {
+          instanceId: `block_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          typeId: available?.id || 'custom',
+          name: title,
+          color: available?.color || 'blue',
+        };
+      });
+      setOrderedBlocks(reconstructedBlocks);
+
+      const titleToInstanceId = new Map(reconstructedBlocks.map(b => [b.name, b.instanceId]));
+      exercisesArray.forEach((ex: any) => {
+        ex.block_instance_id = titleToInstanceId.get(ex.section_title) || reconstructedBlocks[0]?.instanceId || 'default';
+      });
+
       setWorkoutExercises(exercisesArray);
 
       const { data: tagRows } = await supabase
@@ -442,11 +462,14 @@ export default function WorkoutBuilderPage() {
     if (!exercise) return;
 
     let sectionTitle: string;
+    let blockInstanceId: string;
     if (selectedSection) {
       const block = orderedBlocks.find(b => b.instanceId === selectedSection);
       sectionTitle = block ? block.name : (language === 'es' ? 'Parte Principal' : 'Main Work');
+      blockInstanceId = selectedSection;
     } else {
       sectionTitle = orderedBlocks.length > 0 ? orderedBlocks[0].name : (language === 'es' ? 'Parte Principal' : 'Main Work');
+      blockInstanceId = orderedBlocks.length > 0 ? orderedBlocks[0].instanceId : 'default';
     }
 
     const newExercise: AdvancedWorkoutExercise = {
@@ -458,7 +481,8 @@ export default function WorkoutBuilderPage() {
       notes: '',
       superset_group: null,
       order_index: workoutExercises.length,
-      section_title: sectionTitle
+      section_title: sectionTitle,
+      block_instance_id: blockInstanceId
     };
 
     setWorkoutExercises([...workoutExercises, newExercise]);
@@ -473,7 +497,7 @@ export default function WorkoutBuilderPage() {
     const previousExercise = workoutExercises[currentIndex - 1];
 
     // Only move within the same section
-    if (currentExercise.section_title !== previousExercise.section_title) return;
+    if ((currentExercise.block_instance_id || 'default') !== (previousExercise.block_instance_id || 'default')) return;
 
     const newExercises = [...workoutExercises];
     [newExercises[currentIndex - 1], newExercises[currentIndex]] = [newExercises[currentIndex], newExercises[currentIndex - 1]];
@@ -487,7 +511,7 @@ export default function WorkoutBuilderPage() {
     const nextExercise = workoutExercises[currentIndex + 1];
 
     // Only move within the same section
-    if (currentExercise.section_title !== nextExercise.section_title) return;
+    if ((currentExercise.block_instance_id || 'default') !== (nextExercise.block_instance_id || 'default')) return;
 
     const newExercises = [...workoutExercises];
     [newExercises[currentIndex], newExercises[currentIndex + 1]] = [newExercises[currentIndex + 1], newExercises[currentIndex]];
@@ -510,24 +534,86 @@ export default function WorkoutBuilderPage() {
     const exerciseToDuplicate = workoutExercises[index];
     const duplicated: AdvancedWorkoutExercise = {
       ...exerciseToDuplicate,
+      set_lines: exerciseToDuplicate.set_lines.map(l => ({ ...l })),
       order_index: workoutExercises.length
     };
     setWorkoutExercises([...workoutExercises, duplicated]);
     success(language === 'es' ? `${exerciseToDuplicate.exercise_name} duplicado` : `${exerciseToDuplicate.exercise_name} duplicated`);
   };
 
+  const duplicateBlockEmpty = (instanceId: string) => {
+    const sourceBlock = orderedBlocks.find(b => b.instanceId === instanceId);
+    if (!sourceBlock) return;
+    const newInstanceId = `block_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const newBlock: BlockInstance = {
+      instanceId: newInstanceId,
+      typeId: sourceBlock.typeId,
+      name: sourceBlock.name,
+      color: sourceBlock.color,
+    };
+    const insertIndex = orderedBlocks.findIndex(b => b.instanceId === instanceId) + 1;
+    const newBlocks = [...orderedBlocks];
+    newBlocks.splice(insertIndex, 0, newBlock);
+    setOrderedBlocks(newBlocks);
+    success(language === 'es' ? `Bloque "${sourceBlock.name}" duplicado (vacío)` : `Block "${sourceBlock.name}" duplicated (empty)`);
+  };
+
+  const copyBlockWithContent = (instanceId: string) => {
+    const sourceBlock = orderedBlocks.find(b => b.instanceId === instanceId);
+    if (!sourceBlock) return;
+    const newInstanceId = `block_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const newBlock: BlockInstance = {
+      instanceId: newInstanceId,
+      typeId: sourceBlock.typeId,
+      name: sourceBlock.name,
+      color: sourceBlock.color,
+    };
+    const insertIndex = orderedBlocks.findIndex(b => b.instanceId === instanceId) + 1;
+    const newBlocks = [...orderedBlocks];
+    newBlocks.splice(insertIndex, 0, newBlock);
+    setOrderedBlocks(newBlocks);
+
+    const copiedExercises = workoutExercises
+      .filter(ex => (ex.block_instance_id || 'default') === instanceId)
+      .map(ex => ({
+        ...ex,
+        set_lines: ex.set_lines.map(l => ({ ...l })),
+        block_instance_id: newInstanceId,
+        order_index: workoutExercises.length + (ex.order_index ?? 0),
+      }));
+    setWorkoutExercises([...workoutExercises, ...copiedExercises]);
+
+    const copiedCircuits = workoutCircuits
+      .filter(c => (c.block_instance_id || c.section_title) === instanceId)
+      .map(c => ({
+        ...c,
+        id: `circuit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        exercises: c.exercises.map(e => ({ ...e })),
+        block_instance_id: newInstanceId,
+      }));
+    if (copiedCircuits.length > 0) {
+      setWorkoutCircuits([...workoutCircuits, ...copiedCircuits]);
+    }
+
+    success(language === 'es' ? `Bloque "${sourceBlock.name}" copiado con contenido` : `Block "${sourceBlock.name}" copied with content`);
+  };
+
   const handleCircuitAdded = (circuit: { circuit_id: string; circuit_name: string; circuit_type: string; rounds: number; amrap_minutes: number; exercises: CircuitExerciseItem[] }) => {
     let sectionTitle: string;
+    let blockInstanceId: string;
     if (selectedSection) {
       const block = orderedBlocks.find(b => b.instanceId === selectedSection);
       sectionTitle = block ? block.name : (language === 'es' ? 'Parte Principal' : 'Main Work');
+      blockInstanceId = selectedSection;
     } else {
       sectionTitle = orderedBlocks.length > 0 ? orderedBlocks[0].name : (language === 'es' ? 'Parte Principal' : 'Main Work');
+      blockInstanceId = orderedBlocks.length > 0 ? orderedBlocks[0].instanceId : 'default';
     }
     const newCircuit: WorkoutCircuit = {
       id: `circuit_${Date.now()}`,
       ...circuit,
       section_title: sectionTitle,
+      block_instance_id: blockInstanceId,
     };
     setWorkoutCircuits(prev => [...prev, newCircuit]);
     success(language === 'es' ? `Circuito "${circuit.circuit_name}" agregado` : `Circuit "${circuit.circuit_name}" added`);
@@ -596,12 +682,12 @@ export default function WorkoutBuilderPage() {
 
       // Flatten set_lines into individual exercise entries
       // Sort exercises by block order (supports duplicate block types)
-      const blockOrder = orderedBlocks.map(b => b.name);
+      const blockOrder = orderedBlocks.map(b => b.instanceId);
       const sortedExercises = [...workoutExercises].sort((a, b) => {
-        const aTitle = a.section_title || blockOrder[0] || '';
-        const bTitle = b.section_title || blockOrder[0] || '';
-        const aIdx = blockOrder.indexOf(aTitle);
-        const bIdx = blockOrder.indexOf(bTitle);
+        const aId = a.block_instance_id || blockOrder[0] || '';
+        const bId = b.block_instance_id || blockOrder[0] || '';
+        const aIdx = blockOrder.indexOf(aId);
+        const bIdx = blockOrder.indexOf(bId);
         if (aIdx !== bIdx) return aIdx - bIdx;
         return (a.order_index ?? 0) - (b.order_index ?? 0);
       });
@@ -1127,17 +1213,17 @@ export default function WorkoutBuilderPage() {
               {/* Circuits grouped by section */}
               {workoutCircuits.length > 0 && (() => {
                 const groupedCircuits = workoutCircuits.reduce((acc, circuit) => {
-                  const key = circuit.section_title;
+                  const key = circuit.block_instance_id || circuit.section_title;
                   if (!acc[key]) acc[key] = [];
                   acc[key].push(circuit);
                   return acc;
                 }, {} as Record<string, WorkoutCircuit[]>);
 
-                return Object.entries(groupedCircuits).map(([sectionTitle, circuits]) => (
-                  <div key={`circuits_${sectionTitle}`} className="border-2 border-[#514163]/20 dark:border-[#fdda36]/20 rounded-xl p-4 bg-[#514163]/3 dark:bg-[#fdda36]/3">
+                return Object.entries(groupedCircuits).map(([groupKey, circuits]) => (
+                  <div key={`circuits_${groupKey}`} className="border-2 border-[#514163]/20 dark:border-[#fdda36]/20 rounded-xl p-4 bg-[#514163]/3 dark:bg-[#fdda36]/3">
                     <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#514163]/20 dark:border-[#fdda36]/20">
                       <Layers className="w-4 h-4 text-[#514163] dark:text-[#fdda36]" />
-                      <h3 className="text-base font-bold text-gray-900 dark:text-white">{sectionTitle}</h3>
+                      <h3 className="text-base font-bold text-gray-900 dark:text-white">{circuits[0]?.section_title || groupKey}</h3>
                       <span className="text-sm text-gray-500 dark:text-gray-400">
                         ({circuits.length} {circuits.length === 1 ? (language === 'es' ? 'circuito' : 'circuit') : (language === 'es' ? 'circuitos' : 'circuits')})
                       </span>
@@ -1158,12 +1244,12 @@ export default function WorkoutBuilderPage() {
 
               {/* Group exercises by block and order by block order */}
               {(() => {
-                // Group exercises by section_title, preserving workoutExercises order
+                // Group exercises by block_instance_id, preserving workoutExercises order
                 const grouped = workoutExercises.reduce((acc, ex, index) => {
-                  const defaultTitle = orderedBlocks.length > 0 ? orderedBlocks[0].name : (language === 'es' ? 'Parte Principal' : 'Main Work');
-                  const sectionTitle = ex.section_title || defaultTitle;
-                  if (!acc[sectionTitle]) acc[sectionTitle] = [];
-                  acc[sectionTitle].push({ exercise: ex, index });
+                  const defaultInstanceId = orderedBlocks.length > 0 ? orderedBlocks[0].instanceId : 'default';
+                  const instanceId = ex.block_instance_id || defaultInstanceId;
+                  if (!acc[instanceId]) acc[instanceId] = [];
+                  acc[instanceId].push({ exercise: ex, index });
                   return acc;
                 }, {} as Record<string, Array<{ exercise: typeof workoutExercises[0]; index: number }>>);
 
@@ -1171,17 +1257,19 @@ export default function WorkoutBuilderPage() {
                 const orderedSections = orderedBlocks
                   .map(block => ({
                     title: block.name,
-                    items: grouped[block.name] || [],
+                    items: grouped[block.instanceId] || [],
                     color: block.color,
                     instanceId: block.instanceId,
                   }))
                   .filter(section => section.items.length > 0);
 
                 // Add orphaned exercises that don't match any block
-                const definedTitles = orderedBlocks.map(b => b.name);
-                Object.keys(grouped).forEach(groupTitle => {
-                  if (!definedTitles.includes(groupTitle)) {
-                    orderedSections.push({ title: groupTitle, items: grouped[groupTitle], color: 'blue', instanceId: groupTitle });
+                const definedInstanceIds = orderedBlocks.map(b => b.instanceId);
+                Object.keys(grouped).forEach(instanceId => {
+                  if (!definedInstanceIds.includes(instanceId)) {
+                    const items = grouped[instanceId];
+                    const title = items[0]?.exercise?.section_title || (language === 'es' ? 'Sin sección' : 'Unsectioned');
+                    orderedSections.push({ title, items, color: 'blue', instanceId });
                   }
                 });
 
@@ -1203,6 +1291,22 @@ export default function WorkoutBuilderPage() {
                         <span className="text-sm text-gray-600 dark:text-gray-400">
                           ({items.length} {language === 'es' ? 'ejercicios' : 'exercises'})
                         </span>
+                        <div className="flex items-center gap-1 ml-auto">
+                          <button
+                            onClick={() => duplicateBlockEmpty(instanceId)}
+                            className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                            title={language === 'es' ? 'Duplicar bloque (vacío)' : 'Duplicate block (empty)'}
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => copyBlockWithContent(instanceId)}
+                            className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
+                            title={language === 'es' ? 'Copiar bloque (con contenido)' : 'Copy block (with content)'}
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                       <div className="space-y-3">
                         {items.map(({ exercise: ex, index }, itemIndex) => {
@@ -1483,6 +1587,7 @@ interface WorkoutSummaryPanelProps {
   exercises: Array<{
     exercise_name: string;
     section_title?: string;
+    block_instance_id?: string;
     set_lines: Array<{ sets: number; reps: string }>;
     order_index: number;
   }>;
@@ -1498,11 +1603,11 @@ function WorkoutSummaryPanel({ exercises, sections, language }: WorkoutSummaryPa
   // Build a canonical order map: full section_title string → position index
   const sectionOrder = new Map<string, number>();
   sections.forEach((s, i) => {
-    sectionOrder.set(s.title, i);
+    sectionOrder.set(s.id, i);
   });
 
   const grouped = exercises.reduce<Record<string, typeof exercises>>((acc, ex) => {
-    const key = ex.section_title?.trim() || (language === 'es' ? 'Sin sección' : 'Unsectioned');
+    const key = ex.block_instance_id || ex.section_title?.trim() || (language === 'es' ? 'Sin sección' : 'Unsectioned');
     if (!acc[key]) acc[key] = [];
     acc[key].push(ex);
     return acc;
@@ -1526,13 +1631,14 @@ function WorkoutSummaryPanel({ exercises, sections, language }: WorkoutSummaryPa
         </h3>
       </div>
       <div className="divide-y divide-gray-100 dark:divide-gray-700">
-        {sortedKeys.map((sectionTitle) => {
-          const sectionExercises = grouped[sectionTitle].slice().sort((a, b) => a.order_index - b.order_index);
-          const isOpen = !!openSections[sectionTitle];
+        {sortedKeys.map((sectionKey) => {
+          const sectionExercises = grouped[sectionKey].slice().sort((a, b) => a.order_index - b.order_index);
+          const sectionTitle = sections.find(s => s.id === sectionKey)?.title || grouped[sectionKey][0]?.section_title || sectionKey;
+          const isOpen = !!openSections[sectionKey];
           return (
-            <div key={sectionTitle}>
+            <div key={sectionKey}>
               <button
-                onClick={() => toggle(sectionTitle)}
+                onClick={() => toggle(sectionKey)}
                 className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
               >
                 <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
