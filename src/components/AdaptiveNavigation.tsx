@@ -75,21 +75,21 @@ const PRIMARY_NAV: NavItem[] = [
     icon: Apple,
     label: 'Nutrition',
     path: 'trainer-athlete-nutrition',
-    roles: ['trainer', 'head_coach']
+    roles: ['trainer']
   },
   {
     id: 'training',
     icon: Dumbbell,
     label: 'Train',
     path: 'training',
-    roles: ['athlete', 'trainer', 'nutritionist', 'head_coach']
+    roles: ['athlete', 'trainer', 'head_coach']
   },
   {
     id: 'base-academy',
     icon: GraduationCap,
     label: 'Academy',
     path: 'base-academy',
-    roles: ['athlete', 'trainer', 'nutritionist', 'head_coach']
+    roles: ['athlete', 'trainer', 'head_coach']
   }
 ];
 
@@ -155,8 +155,8 @@ const ATHLETE_MORE_SECTIONS: MoreMenuSection[] = [
 
 const TRAINER_MORE_SECTIONS: MoreMenuSection[] = [
   { section: 'ATHLETES', items: [
-    { id: 'performance', icon: TrendingUp, label: 'Stats', path: 'performance' },
     { id: 'my-athletes', icon: Users, label: 'My Athletes', path: 'my-athletes' },
+    { id: 'performance', icon: TrendingUp, label: 'Stats', path: 'performance' },
     { id: 'activity-history', icon: MapPin, label: 'Activity History', path: 'activity-history' },
   ]},
   { section: 'COMMUNITY', items: [
@@ -179,6 +179,15 @@ const TRAINER_MORE_SECTIONS: MoreMenuSection[] = [
   ]},
 ];
 
+const NUTRITIONIST_MORE_SECTIONS: MoreMenuSection[] = [
+  { section: 'ATHLETES', items: [
+    { id: 'my-athletes', icon: Users, label: 'My Athletes', path: 'my-athletes' },
+  ]},
+  { section: 'SYSTEM', items: [
+    { id: 'settings', icon: Settings, label: 'Settings', path: 'settings' },
+  ]},
+];
+
 const ADMIN_MORE_SECTIONS: MoreMenuSection[] = [
   { section: 'MANAGEMENT', items: [
     { id: 'admin-memberships', icon: Crown, label: 'Manage Memberships', path: 'admin-memberships' },
@@ -191,7 +200,6 @@ const ADMIN_MORE_SECTIONS: MoreMenuSection[] = [
     { id: 'admin-partners', icon: Handshake, label: 'Partners', path: 'admin-partners' },
   ]},
   { section: 'CONTENT', items: [
-    { id: 'admin-foods', icon: Apple, label: 'Add Food', path: 'admin-foods' },
     { id: 'habits', icon: ListChecks, label: 'Habits & Goals', path: 'habits' },
     { id: 'base-academy', icon: GraduationCap, label: 'Academy Asciende', path: 'base-academy' },
   ]},
@@ -340,8 +348,8 @@ export default function AdaptiveNavigation({ currentPage, onNavigate }: Adaptive
     switch (profile.role) {
       case 'admin': return ADMIN_MORE_SECTIONS;
       case 'trainer':
-      case 'nutritionist':
       case 'head_coach': return TRAINER_MORE_SECTIONS;
+      case 'nutritionist': return NUTRITIONIST_MORE_SECTIONS;
       default: return ATHLETE_MORE_SECTIONS;
     }
   };
