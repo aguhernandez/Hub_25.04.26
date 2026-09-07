@@ -156,6 +156,7 @@ const ATHLETE_MORE_SECTIONS: MoreMenuSection[] = [
 const TRAINER_MORE_SECTIONS: MoreMenuSection[] = [
   { section: 'ATHLETES', items: [
     { id: 'my-athletes', icon: Users, label: 'My Athletes', path: 'my-athletes' },
+    { id: 'habits', icon: CheckSquare, label: 'Habits & Goals', path: 'habits' },
     { id: 'performance', icon: TrendingUp, label: 'Stats', path: 'performance' },
     { id: 'activity-history', icon: MapPin, label: 'Activity History', path: 'activity-history' },
   ]},
@@ -182,6 +183,7 @@ const TRAINER_MORE_SECTIONS: MoreMenuSection[] = [
 const NUTRITIONIST_MORE_SECTIONS: MoreMenuSection[] = [
   { section: 'ATHLETES', items: [
     { id: 'my-athletes', icon: Users, label: 'My Athletes', path: 'my-athletes' },
+    { id: 'habits', icon: CheckSquare, label: 'Habits & Goals', path: 'habits' },
   ]},
   { section: 'SYSTEM', items: [
     { id: 'settings', icon: Settings, label: 'Settings', path: 'settings' },

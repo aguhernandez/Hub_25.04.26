@@ -108,15 +108,17 @@ export default function HabitsPage() {
   const [longTermGoals, setLongTermGoals] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
+  const isProfessional = ['trainer', 'nutritionist', 'head_coach'].includes(profile?.role || '');
+
   const getTargetUserId = () => {
-    if (profile?.role === 'trainer') {
+    if (isProfessional) {
       return selectedAthleteId || null;
     }
     return profile?.id || null;
   };
 
   useEffect(() => {
-    if (profile?.role === 'trainer') {
+    if (isProfessional) {
       loadAthletes();
       loadTeams();
       if (trainerView === 'overview') {
@@ -131,7 +133,7 @@ export default function HabitsPage() {
 
   useEffect(() => {
     console.log('selectedAthleteId changed:', selectedAthleteId);
-    if (profile?.role === 'trainer' && selectedAthleteId) {
+    if (isProfessional && selectedAthleteId) {
       console.log('Switching to detail view for athlete:', selectedAthleteId);
       setTrainerView('detail');
       setHabits([]);
@@ -139,14 +141,14 @@ export default function HabitsPage() {
       loadHabits(selectedAthleteId);
       loadTemplates();
       loadGoals(selectedAthleteId);
-    } else if (profile?.role === 'trainer' && !selectedAthleteId) {
+    } else if (isProfessional && !selectedAthleteId) {
       console.log('No athlete selected, staying in overview');
       setTrainerView('overview');
     }
   }, [selectedAthleteId]);
 
   useEffect(() => {
-    if (profile?.role === 'trainer' && athletes.length > 0 && trainerView === 'overview') {
+    if (isProfessional && athletes.length > 0 && trainerView === 'overview') {
       loadAthleteMetrics();
     }
   }, [athletes, trainerView]);
@@ -166,7 +168,7 @@ export default function HabitsPage() {
     console.log('selectedAthleteId:', selectedAthleteId);
 
     if (habits.length > 0) {
-      const targetUserId = profile?.role === 'trainer' ? selectedAthleteId : profile?.id;
+      const targetUserId = isProfessional ? selectedAthleteId : profile?.id;
       console.log('targetUserId for logs:', targetUserId);
       if (targetUserId) {
         loadWeekLogs(targetUserId);
@@ -178,10 +180,11 @@ export default function HabitsPage() {
     if (!profile?.id) return;
 
     try {
+      const assignmentColumn = profile?.role === 'nutritionist' ? 'assigned_nutritionist_id' : 'assigned_trainer_id';
       const { data: directAthletes } = await supabase
         .from('profiles')
         .select('id, full_name, avatar_url')
-        .eq('assigned_trainer_id', profile.id)
+        .eq(assignmentColumn, profile.id)
         .eq('role', 'athlete')
         .order('full_name');
 
@@ -718,7 +721,7 @@ export default function HabitsPage() {
   };
 
   const addHabitFromTemplate = async (template: HabitTemplate) => {
-    if (profile?.role === 'trainer' && assignmentMode === 'team' && selectedTeamId) {
+    if (isProfessional && assignmentMode === 'team' && selectedTeamId) {
       try {
         const { data: result, error } = await supabase.rpc('assign_habits_to_team', {
           p_habit_ids: [template.id],
@@ -895,7 +898,7 @@ export default function HabitsPage() {
           </div>
         </div>
 
-        {profile?.role === 'trainer' && (
+        {isProfessional && (
           <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3">
@@ -1085,7 +1088,7 @@ export default function HabitsPage() {
           </div>
         )}
 
-        {profile?.role === 'trainer' && trainerView === 'overview' ? (
+        {isProfessional && trainerView === 'overview' ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -1203,9 +1206,9 @@ export default function HabitsPage() {
               </div>
             )}
           </div>
-        ) : (profile?.role === 'athlete' || (profile?.role === 'trainer' && selectedAthleteId)) ? (
+        ) : (profile?.role === 'athlete' || (isProfessional && selectedAthleteId)) ? (
           <>
-          {profile?.role === 'trainer' && selectedAthleteId && (
+          {isProfessional && selectedAthleteId && (
             <button
               onClick={() => {
                 clearSelectedAthlete();
@@ -1344,8 +1347,8 @@ export default function HabitsPage() {
                                   habitId={habit.id}
                                   language={language}
                                   currentUserId={profile?.id}
-                                  isTrainerOrAdmin={profile?.role === 'trainer' || profile?.role === 'admin'}
-                                  canCreate={profile?.role === 'trainer' || profile?.role === 'admin'}
+                                  isTrainerOrAdmin={isProfessional || profile?.role === 'admin'}
+                                  canCreate={isProfessional || profile?.role === 'admin'}
                                 />
                               </div>
                             </div>
@@ -1975,7 +1978,7 @@ function AddHabitModal({
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                 {language === 'es' ? 'Añadir Hábito' : 'Add Habit'}
               </h2>
-              {userProfile?.role === 'trainer' && (
+              {['trainer', 'nutritionist', 'head_coach'].includes(userProfile?.role || '') && (
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                   {assignmentMode === 'team' && selectedTeamName
                     ? (language === 'es'
