@@ -1430,70 +1430,84 @@ export default function TrainingPage() {
   };
 
   const calculateTotalVolume = async () => {
-    if (!profile?.id) return;
+    if (!profile?.id || !effectiveAthleteId) return;
 
-    const startDate = getDateRangeStart();
-    const endDate = getDateRangeEnd();
-    const startDateStr = formatDateLocal(startDate);
-    const endDateStr = formatDateLocal(endDate);
+    const startDateStr = formatDateLocal(getDateRangeStart());
+    const endDateStr = formatDateLocal(getDateRangeEnd());
 
-    // Done volume: from training_logs (actual executed values)
-    const { data: logs } = await supabase
-      .from('training_logs')
-      .select('weight_used, reps_completed')
-      .eq('athlete_id', effectiveAthleteId)
-      .gte('logged_at', startDate.toISOString())
-      .lte('logged_at', endDate.toISOString());
-
-    if (logs) {
-      const volume = logs.reduce((total, log) => {
-        return total + ((log.weight_used || 0) * (log.reps_completed || 0));
-      }, 0);
-      setTotalVolume(volume);
-    }
-
-    // Planned volume: from workout_exercises joined to athlete_workouts in range
+    // Fetch athlete_workouts in range — we need both the aw.id (for training_logs join)
+    // and aw.workout_id (for workout_exercises join)
     const { data: athleteWorkouts } = await supabase
       .from('athlete_workouts')
-      .select('id')
+      .select('id, workout_id, scheduled_date, status')
       .eq('athlete_id', effectiveAthleteId)
       .gte('scheduled_date', startDateStr)
       .lte('scheduled_date', endDateStr);
 
+    // --- Done volume: sum weight_used * reps_completed from training_logs
+    //    joined to athlete_workouts in the date range ---
+    let doneVol = 0;
     if (athleteWorkouts && athleteWorkouts.length > 0) {
-      const workoutIds = athleteWorkouts.map(aw => aw.id);
-      const { data: exercises } = await supabase
-        .from('workout_exercises')
-        .select('sets, reps, primary_metric, primary_value, secondary_metric, secondary_value, set_lines')
-        .in('workout_id', workoutIds);
+      const awIds = athleteWorkouts.map(aw => aw.id);
+      const { data: logs } = await supabase
+        .from('training_logs')
+        .select('weight_used, reps_completed')
+        .in('athlete_workout_id', awIds);
 
-      if (exercises) {
-        let planned = 0;
-        for (const ex of exercises) {
-          // If set_lines exist, use them; otherwise use top-level fields
-          const lines = ex.set_lines && Array.isArray(ex.set_lines) && ex.set_lines.length > 0
-            ? ex.set_lines
-            : [{ sets: ex.sets, reps: ex.reps, primary_metric: ex.primary_metric, primary_value: ex.primary_value, secondary_metric: ex.secondary_metric, secondary_value: ex.secondary_value }];
-          for (const line of lines) {
-            const sets = Number(line.sets) || 0;
-            const metric = line.primary_metric || ex.primary_metric || 'reps';
-            const valueStr = line.primary_value || ex.primary_value || line.reps || ex.reps || '0';
-            const weightStr = (line.secondary_metric || ex.secondary_metric) === 'kg' ? (line.secondary_value || ex.secondary_value || '0') : null;
-            // Only count kg as weight metric for volume
-            if (metric === 'kg' || (line.secondary_metric || ex.secondary_metric) === 'kg') {
-              const repsVal = metric === 'kg' ? parseFloat(valueStr) || 0 : parseFloat(String(line.reps || ex.reps || '0')) || 0;
-              const kgVal = metric === 'kg' ? (parseFloat(line.secondary_value || ex.secondary_value || '0') || 0) : (parseFloat(weightStr || '0') || 0);
-              planned += sets * repsVal * kgVal;
+      if (logs) {
+        doneVol = logs.reduce((total, log) => {
+          const w = parseFloat(log.weight_used) || 0;
+          const r = log.reps_completed || 0;
+          return total + (w * r);
+        }, 0);
+      }
+    }
+    setTotalVolume(doneVol);
+
+    // --- Planned volume: sum sets * reps * kg from workout_exercises
+    //    linked via workout_id (the workouts table FK, NOT athlete_workouts.id) ---
+    let plannedVol = 0;
+    if (athleteWorkouts && athleteWorkouts.length > 0) {
+      const workoutIds = athleteWorkouts.map(aw => aw.workout_id).filter(Boolean);
+      if (workoutIds.length > 0) {
+        const { data: exercises } = await supabase
+          .from('workout_exercises')
+          .select('sets, reps, primary_metric, primary_value, secondary_metric, secondary_value, set_lines')
+          .in('workout_id', workoutIds);
+
+        if (exercises) {
+          for (const ex of exercises) {
+            const lines = ex.set_lines && Array.isArray(ex.set_lines) && ex.set_lines.length > 0
+              ? ex.set_lines
+              : [{ sets: ex.sets, reps: ex.reps, primary_value: ex.primary_value, secondary_metric: ex.secondary_metric, secondary_value: ex.secondary_value }];
+
+            for (const line of lines) {
+              const sets = Number(line.sets) || 0;
+              const pMetric = ex.primary_metric || 'reps';
+              const pValue = line.primary_value || ex.primary_value || line.reps || ex.reps || '0';
+              const sMetric = line.secondary_metric || ex.secondary_metric;
+              const sValue = line.secondary_value || ex.secondary_value || '0';
+
+              let kg = 0;
+              let reps = 0;
+
+              if (pMetric === 'kg') {
+                kg = parseFloat(pValue) || 0;
+                reps = sMetric === 'reps' ? (parseFloat(sValue) || 0) : (parseFloat(String(line.reps || ex.reps || '0')) || 0);
+              } else if (sMetric === 'kg') {
+                kg = parseFloat(sValue) || 0;
+                reps = pMetric === 'reps' ? (parseFloat(pValue) || 0) : (parseFloat(String(line.reps || ex.reps || '0')) || 0);
+              } else {
+                continue;
+              }
+
+              plannedVol += sets * reps * kg;
             }
           }
         }
-        setPlannedVolume(planned);
-      } else {
-        setPlannedVolume(0);
       }
-    } else {
-      setPlannedVolume(0);
     }
+    setPlannedVolume(plannedVol);
   };
 
   const handleCopyWorkout = async (workout: Workout) => {
