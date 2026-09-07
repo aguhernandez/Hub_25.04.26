@@ -8,6 +8,7 @@ import BackButton from '../components/BackButton';
 import AdvancedExerciseBuilder from '../components/training/AdvancedExerciseBuilder';
 import BlockOrderBuilder, { type BlockInstance } from '../components/training/BlockOrderBuilder';
 import StrengthEstimator from '../components/training/StrengthEstimator';
+import Last12WorkoutsPanel from '../components/training/Last12WorkoutsPanel';
 import CircuitPanelInline from '../components/training/CircuitPanelInline';
 import CircuitBlock from '../components/training/CircuitBlock';
 import Toast from '../components/Toast';
@@ -106,6 +107,7 @@ export default function WorkoutBuilderPage() {
   const [selectedSection, setSelectedSection] = useState<string>('');
   const [sessionNotes, setSessionNotes] = useState('');
   const [showStrengthEstimator, setShowStrengthEstimator] = useState(false);
+  const [showLast12Workouts, setShowLast12Workouts] = useState(false);
   const [estimatorExerciseId, setEstimatorExerciseId] = useState<string>('');
   const [estimatorExerciseName, setEstimatorExerciseName] = useState<string>('');
   const [savedWorkoutId, setSavedWorkoutId] = useState<string | null>(null);
@@ -1577,6 +1579,13 @@ export default function WorkoutBuilderPage() {
               <Calculator className="w-5 h-5" />
               {language === 'es' ? 'Calculadora 1RM' : '1RM Calculator'}
             </button>
+            <button
+              onClick={() => setShowLast12Workouts(true)}
+              className="w-full mt-3 flex items-center justify-center gap-3 px-4 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 font-semibold rounded-lg transition-colors border border-gray-200 dark:border-gray-600"
+            >
+              <Calendar className="w-5 h-5 text-[#514163] dark:text-[#fdda36]" />
+              {language === 'es' ? 'Ver últimos 12 entrenamientos' : 'Last 12 workouts'}
+            </button>
           </div>
 
           <WorkoutSummaryPanel
@@ -1597,6 +1606,12 @@ export default function WorkoutBuilderPage() {
           </button>
         </div>
       </div>
+
+      <Last12WorkoutsPanel
+        isOpen={showLast12Workouts}
+        onClose={() => setShowLast12Workouts(false)}
+        athleteId={selectedAthlete || (profile?.role === 'athlete' ? profile.id : undefined)}
+      />
 
       <StrengthEstimator
         isOpen={showStrengthEstimator}
