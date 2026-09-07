@@ -61,6 +61,8 @@ export default function AdvancedExerciseBuilder({
     { value: 'time', label: language === 'es' ? 'Tiempo (seg)' : 'Time (sec)' },
     { value: 'distance', label: language === 'es' ? 'Distancia (m)' : 'Distance (m)' },
     { value: 'calories', label: language === 'es' ? 'Calorías' : 'Calories' },
+    { value: 'jumps', label: language === 'es' ? 'Saltos' : 'Jumps' },
+    { value: 'height', label: language === 'es' ? 'Altura (cm)' : 'Height (cm)' },
   ];
 
   const addSetLine = () => {

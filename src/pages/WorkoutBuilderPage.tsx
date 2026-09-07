@@ -1612,7 +1612,9 @@ interface WorkoutSummaryPanelProps {
     exercise_name: string;
     section_title?: string;
     block_instance_id?: string;
-    set_lines: Array<{ sets: number; reps: string }>;
+    primary_metric?: string;
+    secondary_metric?: string;
+    set_lines: Array<{ sets: number; reps: string; primary_value?: string; secondary_value?: string }>;
     order_index: number;
   }>;
   sections: Array<{ id: string; title: string }>;
@@ -1621,6 +1623,18 @@ interface WorkoutSummaryPanelProps {
 
 function WorkoutSummaryPanel({ exercises, sections, language }: WorkoutSummaryPanelProps) {
   const [openSections, setOpenSections] = React.useState<Record<string, boolean>>({});
+
+  const metricLabels: Record<string, string> = {
+    reps: language === 'es' ? 'Repeticiones' : 'Reps',
+    kg: 'Kg',
+    lb: 'Lb',
+    percent: '%',
+    time: language === 'es' ? 'Tiempo (seg)' : 'Time (sec)',
+    distance: language === 'es' ? 'Distancia (m)' : 'Distance (m)',
+    calories: language === 'es' ? 'Calorías' : 'Calories',
+    jumps: language === 'es' ? 'Saltos' : 'Jumps',
+    height: language === 'es' ? 'Altura (cm)' : 'Height (cm)',
+  };
 
   if (exercises.length === 0) return null;
 
@@ -1679,11 +1693,22 @@ function WorkoutSummaryPanel({ exercises, sections, language }: WorkoutSummaryPa
                       <p className="text-sm text-gray-700 dark:text-gray-300 font-medium pl-3">
                         {ex.exercise_name}
                       </p>
-                      {ex.set_lines.map((sl, j) => (
-                        <p key={j} className="text-xs text-gray-500 dark:text-gray-400 pl-6">
-                          {sl.sets}x{sl.reps}
-                        </p>
-                      ))}
+                      {ex.set_lines.map((sl, j) => {
+                        const primaryMetric = ex.primary_metric || 'reps';
+                        const primaryLabel = metricLabels[primaryMetric] || primaryMetric;
+                        const primaryValue = sl.primary_value || sl.reps;
+                        const secondaryMetric = ex.secondary_metric;
+                        const secondaryLabel = secondaryMetric ? (metricLabels[secondaryMetric] || secondaryMetric) : '';
+                        const secondaryValue = sl.secondary_value;
+                        return (
+                          <p key={j} className="text-xs text-gray-500 dark:text-gray-400 pl-6">
+                            {sl.sets}x{primaryValue} {primaryLabel}
+                            {secondaryValue && secondaryMetric && (
+                              <> @ {secondaryValue} {secondaryLabel}</>
+                            )}
+                          </p>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>
