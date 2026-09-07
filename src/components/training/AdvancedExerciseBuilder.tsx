@@ -367,7 +367,7 @@ export default function AdvancedExerciseBuilder({
                     type="checkbox"
                     checked={line.working_set || false}
                     onChange={(e) => updateSetLine(index, 'working_set', e.target.checked)}
-                    className="w-4 h-4 accent-red-500 cursor-pointer"
+                    className="ws-checkbox"
                   />
                   {language === 'es' ? 'Serie Efectiva' : 'Working Set'}
                 </label>
@@ -469,7 +469,7 @@ export default function AdvancedExerciseBuilder({
                   checked={line.working_set || false}
                   onChange={(e) => updateSetLine(index, 'working_set', e.target.checked)}
                   title={language === 'es' ? 'Serie Efectiva' : 'Working Set'}
-                  className="w-4 h-4 accent-red-500 cursor-pointer"
+                  className="ws-checkbox"
                 />
               </div>
               <button

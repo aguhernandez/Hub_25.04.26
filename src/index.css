@@ -252,6 +252,40 @@
   .animate-spin-slow {
     animation: spin-slow 1.5s linear infinite;
   }
+
+  /* Custom working-set checkbox: white box, black border, yellow when checked */
+  .ws-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: 2px solid #000000;
+    background: #ffffff;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.15s ease;
+    flex-shrink: 0;
+  }
+  .ws-checkbox:checked {
+    background: #fdda36;
+    border-color: #000000;
+  }
+  .ws-checkbox:checked::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 1px;
+    width: 6px;
+    height: 11px;
+    border: solid #000000;
+    border-width: 0 2.5px 2.5px 0;
+    transform: rotate(45deg);
+  }
+  .ws-checkbox:focus {
+    outline: 2px solid rgba(253, 218, 54, 0.5);
+    outline-offset: 1px;
+  }
 }
 
 /* Print Styles for PDF Export */
