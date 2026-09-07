@@ -410,7 +410,7 @@ export default function SupportMeSectionV2() {
       </div>
 
       {/* Projects Content */}
-      {!supportModeEnabled ? (
+      {!supportModeEnabled && projects.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 dark:border-gray-700 p-8 text-center">
           <Heart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white dark:text-white mb-2">

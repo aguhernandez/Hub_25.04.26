@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useMembership } from '../hooks/useMembership';
 import { supabase } from '../lib/supabase';
 import SupportMeSectionV2 from '../components/settings/SupportMeSectionV2';
 import CreateProjectModal from '../components/support/CreateProjectModal';
@@ -19,7 +20,8 @@ import {
   Globe,
   Target,
   CheckCircle,
-  Edit
+  Edit,
+  Gift
 } from 'lucide-react';
 
 interface Brand {
@@ -72,6 +74,50 @@ interface Partnership {
   brands: Brand;
 }
 
+interface Partner {
+  id: string;
+  name: string;
+  logo_url: string | null;
+  description: string | null;
+  category: string;
+  website: string | null;
+  status: string;
+  start_date: string | null;
+  end_date: string | null;
+}
+
+interface PartnerBenefit {
+  id: string;
+  partner_id: string;
+  name: string;
+  description: string | null;
+  discount_type: string;
+  discount_value: string | null;
+  eligible_products: string | null;
+  terms: string | null;
+  how_to_use: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  destination_url: string | null;
+  referral_required: boolean;
+  tracking_enabled: boolean;
+  usage_limit: number | null;
+  usage_count: number;
+  partners: Partner;
+}
+
+interface PartnerReferral {
+  id: string;
+  referral_code: string;
+  partner_id: string;
+  benefit_id: string;
+  status: string;
+  activation_at: string;
+  expiration_at: string | null;
+  partners: Partner;
+  partner_benefits: PartnerBenefit;
+}
+
 interface AthleteProject {
   id: string;
   athlete_id: string;
@@ -102,11 +148,17 @@ interface AthleteProject {
 
 export default function ImpactBrandsPage() {
   const { profile } = useAuth();
+  const { hasAccess, loading: membershipLoading } = useMembership();
   const [activeTab, setActiveTab] = useState<'promotions' | 'projects' | 'partnerships'>('partnerships');
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [athleteProjects, setAthleteProjects] = useState<AthleteProject[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [partnerships, setPartnerships] = useState<Partnership[]>([]);
+  const [partnerBenefits, setPartnerBenefits] = useState<PartnerBenefit[]>([]);
+  const [myReferrals, setMyReferrals] = useState<PartnerReferral[]>([]);
+  const [selectedBenefit, setSelectedBenefit] = useState<PartnerBenefit | null>(null);
+  const [activatedReferral, setActivatedReferral] = useState<PartnerReferral | null>(null);
+  const [activationError, setActivationError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [myProjects, setMyProjects] = useState<any[]>([]);
@@ -158,6 +210,23 @@ export default function ImpactBrandsPage() {
         if (error) throw error;
         setAthleteProjects(data || []);
       } else if (activeTab === 'partnerships') {
+        const [{ data: benefitsData, error: benefitsError }, { data: referralsData, error: referralsError }] = await Promise.all([
+          supabase
+            .from('partner_benefits')
+            .select('*, partners!inner(*)')
+            .eq('is_active', true)
+            .eq('partners.status', 'active')
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('partner_referrals')
+            .select('*, partners(*), partner_benefits(*)')
+            .eq('athlete_id', profile?.id || '')
+            .order('created_at', { ascending: false })
+        ]);
+        if (benefitsError) throw benefitsError;
+        if (referralsError) throw referralsError;
+        setPartnerBenefits((benefitsData || []) as PartnerBenefit[]);
+        setMyReferrals((referralsData || []) as PartnerReferral[]);
         setPartnerships([]);
       }
     } catch (error) {
@@ -169,6 +238,54 @@ export default function ImpactBrandsPage() {
 
   const trackPromotionClick = async (promotionId: string) => {
     console.log('Promotion clicked:', promotionId);
+  };
+
+  const activateBenefit = async (benefit: PartnerBenefit) => {
+    setActivationError(null);
+    if (!hasAccess(['intermediate'])) {
+      setActivationError('This benefit is available to athletes with a paid membership.');
+      return;
+    }
+    const existing = myReferrals.find(referral => referral.benefit_id === benefit.id && !['cancelled', 'expired', 'refunded'].includes(referral.status));
+    if (existing) {
+      setActivatedReferral(existing);
+      return;
+    }
+    const { data: codeData, error: codeError } = await supabase.rpc('generate_referral_code');
+    if (codeError) {
+      setActivationError('We could not create your referral right now. Please try again.');
+      return;
+    }
+    const expirationAt = benefit.end_date ? new Date(`${benefit.end_date}T23:59:59`).toISOString() : null;
+    const { data, error } = await supabase
+      .from('partner_referrals')
+      .insert({
+        referral_code: codeData,
+        athlete_id: profile?.id,
+        partner_id: benefit.partner_id,
+        benefit_id: benefit.id,
+        expiration_at: expirationAt,
+      })
+      .select('*, partners(*), partner_benefits(*)')
+      .maybeSingle();
+    if (error || !data) {
+      setActivationError('We could not activate this benefit right now. Please try again.');
+      return;
+    }
+    setActivatedReferral(data as PartnerReferral);
+    setMyReferrals(previous => [data as PartnerReferral, ...previous]);
+  };
+
+  const openPartner = async (referral: PartnerReferral) => {
+    if (referral.status === 'activated' && referral.partners.website) {
+      await supabase.from('partner_referrals').update({ clicked_at: new Date().toISOString() }).eq('id', referral.id);
+    }
+    const destination = referral.partner_benefits.destination_url || referral.partners.website;
+    if (destination) {
+      const url = new URL(destination);
+      url.searchParams.set('ref', referral.referral_code);
+      window.open(url.toString(), '_blank', 'noopener,noreferrer');
+    }
   };
 
   const getPromotionTypeIcon = (type: string) => {
@@ -592,73 +709,68 @@ export default function ImpactBrandsPage() {
                       <SupportMeSectionV2 />
                     </div>
 
-                    {/* Brand Partnerships Section */}
+                    {/* Partner Benefits Section */}
                     <div>
-                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                        <Handshake className="w-6 h-6 text-[#514163] dark:text-[#8b7399]" />
-                        Brand Partnerships
+                      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                        <Handshake className="w-6 h-6 text-[#514163] dark:text-[#fdda36]" />
+                        Benefits for Asciende Athletes
                       </h2>
-                      {partnerships.length === 0 ? (
+                      <p className="text-gray-600 dark:text-gray-400 mb-6">Discover exclusive benefits from independent partner brands.</p>
+
+                      {!membershipLoading && !hasAccess(['intermediate']) && (
+                        <div className="mb-6 bg-[#fdda36]/20 border border-[#fdda36] rounded-xl p-5">
+                          <h3 className="font-bold text-[#514163] mb-1">Paid membership required to activate benefits</h3>
+                          <p className="text-sm text-[#514163]/80">You can explore partner offers, but activating a benefit is available with a paid Asciende membership.</p>
+                        </div>
+                      )}
+
+                      {activationError && (
+                        <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 text-sm text-red-700 dark:text-red-300">{activationError}</div>
+                      )}
+
+                      {partnerBenefits.length === 0 ? (
                         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
-                          <Handshake className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No active partnerships</h3>
-                          <p className="text-gray-600 dark:text-gray-400 mb-6">Build your profile and apply for sponsorships</p>
-                          <button
-                            onClick={handleCreateProjectClick}
-                            className="inline-flex items-center gap-2 px-6 py-3 bg-[#fdda36] text-[#514163] rounded-lg font-medium hover:bg-[#ffd51a] transition-colors"
-                          >
-                            <Target className="w-5 h-5" />
-                            Request Sponsorship
-                          </button>
+                          <Gift className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+                          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Benefits coming soon</h3>
+                          <p className="text-gray-600 dark:text-gray-400">New partner offers will appear here.</p>
                         </div>
                       ) : (
-                        <div className="space-y-4">
-                          {partnerships.map(partnership => (
-                            <div key={partnership.id} className="bg-gradient-to-r from-[#514163]/5 to-[#514163]/10 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 rounded-2xl border border-[#514163]/20 p-6">
-                              <div className="flex items-start justify-between">
-                                <div className="flex items-center gap-4">
-                                  {partnership.brands.logo_url ? (
-                                    <img
-                                      src={partnership.brands.logo_url}
-                                      alt={partnership.brands.name}
-                                      className="w-16 h-16 rounded-xl object-cover"
-                                    />
-                                  ) : (
-                                    <div className="w-16 h-16 bg-gradient-to-br from-[#514163] to-[#6d5581] dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 rounded-xl flex items-center justify-center text-white font-bold text-2xl">
-                                      {partnership.brands.name[0]}
-                                    </div>
-                                  )}
-
-                                  <div>
-                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{partnership.brands.name}</h3>
-                                    <p className="text-sm text-gray-600 capitalize">{partnership.partnership_type}</p>
-                                    {partnership.monetary_value && (
-                                      <div className="flex items-center gap-1 text-green-600 font-semibold mt-1">
-                                        <DollarSign className="w-4 h-4" />
-                                        ${partnership.monetary_value.toLocaleString()}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <span className="px-3 py-1 bg-[#514163]/10 text-[#514163] rounded-full text-sm font-medium">
-                                  Active
-                                </span>
-                              </div>
-
-                              <div className="mt-4 flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                                <div className="flex items-center gap-1">
-                                  <Calendar className="w-4 h-4" />
-                                  Since {new Date(partnership.start_date).toLocaleDateString()}
-                                </div>
-                                {partnership.end_date && (
-                                  <div>
-                                    Until {new Date(partnership.end_date).toLocaleDateString()}
-                                  </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                          {partnerBenefits.map(benefit => (
+                            <div key={benefit.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-lg transition-shadow">
+                              <div className="flex items-start gap-4 mb-4">
+                                {benefit.partners.logo_url ? (
+                                  <img src={benefit.partners.logo_url} alt={benefit.partners.name} className="w-14 h-14 rounded-xl object-cover" />
+                                ) : (
+                                  <div className="w-14 h-14 rounded-xl bg-[#514163] flex items-center justify-center text-white font-bold text-xl">{benefit.partners.name[0]}</div>
                                 )}
+                                <div className="flex-1">
+                                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{benefit.partners.category}</p>
+                                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">{benefit.partners.name}</h3>
+                                </div>
+                              </div>
+                              <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{benefit.discount_value || benefit.name}</h4>
+                              <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">{benefit.description || benefit.name}</p>
+                              <div className="flex items-center justify-between gap-3">
+                                <button onClick={() => setSelectedBenefit(benefit)} className="text-sm font-medium text-[#514163] dark:text-[#fdda36] hover:underline">View details</button>
+                                <button onClick={() => activateBenefit(benefit)} className="px-4 py-2 bg-[#514163] text-white rounded-lg font-medium hover:bg-[#6b5179] transition-colors">Activate Benefit</button>
                               </div>
                             </div>
                           ))}
+                        </div>
+                      )}
+
+                      {myReferrals.length > 0 && (
+                        <div className="mt-8">
+                          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">My Activated Benefits</h3>
+                          <div className="space-y-3">
+                            {myReferrals.map(referral => (
+                              <div key={referral.id} className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between gap-4">
+                                <div><p className="font-semibold text-gray-900 dark:text-white">{referral.partner_benefits?.name || 'Partner benefit'}</p><p className="font-mono text-sm text-gray-600 dark:text-gray-400">{referral.referral_code}</p></div>
+                                <button onClick={() => openPartner(referral)} className="px-4 py-2 bg-[#fdda36] text-[#514163] rounded-lg font-semibold hover:bg-[#ffd51a] transition-colors">Go to Partner</button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -695,6 +807,44 @@ export default function ImpactBrandsPage() {
             loadData();
           }}
         />
+      )}
+
+      {selectedBenefit && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setSelectedBenefit(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto" onClick={event => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <p className="text-sm text-gray-500 uppercase tracking-wide">{selectedBenefit.partners.category}</p>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{selectedBenefit.partners.name}</h2>
+              </div>
+              <button onClick={() => setSelectedBenefit(null)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><span className="sr-only">Close</span>×</button>
+            </div>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{selectedBenefit.discount_value || selectedBenefit.name}</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-5">{selectedBenefit.description}</p>
+            {selectedBenefit.eligible_products && <p className="text-sm text-gray-600 dark:text-gray-400 mb-3"><strong>Eligible products:</strong> {selectedBenefit.eligible_products}</p>}
+            {selectedBenefit.how_to_use && <p className="text-sm text-gray-600 dark:text-gray-400 mb-3"><strong>How to use:</strong> {selectedBenefit.how_to_use}</p>}
+            {selectedBenefit.terms && <p className="text-sm text-gray-600 dark:text-gray-400 mb-5"><strong>Terms:</strong> {selectedBenefit.terms}</p>}
+            <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4 mb-5 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
+              <strong className="block text-gray-900 dark:text-white mb-1">Partner Disclaimer</strong>
+              This benefit is provided by an independent third-party partner. Asciende connects athletes with partner brands and is not the seller or provider of the products or services offered.
+            </div>
+            <button onClick={() => { setSelectedBenefit(null); activateBenefit(selectedBenefit); }} className="w-full px-4 py-3 bg-[#514163] text-white rounded-lg font-semibold hover:bg-[#6b5179] transition-colors">Activate Benefit</button>
+          </div>
+        </div>
+      )}
+
+      {activatedReferral && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setActivatedReferral(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6 text-center" onClick={event => event.stopPropagation()}>
+            <CheckCircle className="w-14 h-14 text-green-600 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Benefit Activated</h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-1">{activatedReferral.partner_benefits?.discount_value || activatedReferral.partner_benefits?.name}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">Partner: {activatedReferral.partners?.name}</p>
+            <div className="bg-[#fdda36]/20 border border-[#fdda36] rounded-xl p-4 mb-5"><p className="text-xs text-[#514163] mb-1">Your reference</p><p className="font-mono font-bold text-lg text-[#514163]">{activatedReferral.referral_code}</p></div>
+            <button onClick={() => openPartner(activatedReferral)} className="w-full px-4 py-3 bg-[#514163] text-white rounded-lg font-semibold hover:bg-[#6b5179] transition-colors">Go to Partner</button>
+            <button onClick={() => setActivatedReferral(null)} className="mt-3 text-sm text-gray-500 hover:underline">Close</button>
+          </div>
+        </div>
       )}
 
     </div>

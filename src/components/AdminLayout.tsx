@@ -22,7 +22,8 @@ import {
   Moon,
   Sun,
   ListChecks,
-  GraduationCap
+  GraduationCap,
+  Handshake
 } from 'lucide-react';
 import NotificationCenter from './NotificationCenter';
 
@@ -62,7 +63,8 @@ export default function AdminLayout({ children, currentPage }: AdminLayoutProps)
       section: 'BUSINESS',
       items: [
         { id: 'services', icon: Briefcase, label: 'Coaching & Events' },
-        { id: 'brand-requests', icon: Lightbulb, label: 'Brand Requests' }
+        { id: 'brand-requests', icon: Lightbulb, label: 'Brand Requests' },
+        { id: 'admin-partners', icon: Handshake, label: 'Partners' }
       ]
     },
     {

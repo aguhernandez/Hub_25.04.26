@@ -32,6 +32,7 @@ import {
   MapPin,
   Fingerprint,
   GraduationCap,
+  Handshake,
   type LucideIcon
 } from 'lucide-react';
 
@@ -187,6 +188,7 @@ const ADMIN_MORE_SECTIONS: MoreMenuSection[] = [
   { section: 'BUSINESS', items: [
     { id: 'services', icon: Briefcase, label: 'Coaching & Events', path: 'services' },
     { id: 'brand-requests', icon: Lightbulb, label: 'Brand Requests', path: 'brand-requests' },
+    { id: 'admin-partners', icon: Handshake, label: 'Partners', path: 'admin-partners' },
   ]},
   { section: 'CONTENT', items: [
     { id: 'admin-foods', icon: Apple, label: 'Add Food', path: 'admin-foods' },
@@ -239,6 +241,7 @@ const navTranslations: Record<string, Record<string, string>> = {
     'Stripe Products': 'Stripe Products',
     'Manage Programs': 'Manage Programs',
     'Brand Requests': 'Brand Requests',
+    'Partners': 'Partners',
     'Add Food': 'Add Food',
     'Biological Passport': 'Biological Passport',
     'About Asciende': 'About Asciende',
@@ -288,6 +291,7 @@ const navTranslations: Record<string, Record<string, string>> = {
     'Stripe Products': 'Productos Stripe',
     'Manage Programs': 'Gestionar Programas',
     'Brand Requests': 'Solicitudes de Marcas',
+    'Partners': 'Partners',
     'Add Food': 'Agregar Alimento',
     'Biological Passport': 'Pasaporte Biológico',
     'About Asciende': 'Sobre Asciende',
