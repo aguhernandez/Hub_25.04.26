@@ -777,10 +777,22 @@ export default function PerformanceDashboard() {
   };
 
   // Get max stats for main exercises
-  const getMaxForExercise = (exerciseName: string) => {
-    const exercise = allExercisesLogs.find(ex =>
-      ex.exerciseName.toLowerCase().includes(exerciseName.toLowerCase())
-    );
+  const getMaxForExercise = (exerciseNames: string[]) => {
+    const normalizedNames = exerciseNames.map(name => name.toLowerCase());
+    const exercise = allExercisesLogs
+      .map((candidate) => {
+        const normalizedExerciseName = candidate.exerciseName.toLowerCase();
+        const matchIndex = normalizedNames.findIndex(name =>
+          normalizedExerciseName.includes(name)
+        );
+        const exactMatch = normalizedNames.some(name => normalizedExerciseName === name);
+        return {
+          candidate,
+          score: exactMatch ? 1000 : matchIndex >= 0 ? normalizedNames.length - matchIndex : 0,
+        };
+      })
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score)[0]?.candidate;
 
     if (!exercise || exercise.logs.length === 0) {
       return null;
@@ -1075,14 +1087,14 @@ export default function PerformanceDashboard() {
             {/* Main Exercises Max Stats */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
               {[
-                { name: 'Back Squat', key: 'squat' },
-                { name: 'Deadlift', key: 'deadlift' },
-                { name: 'Bench Press', key: 'bench' },
-                { name: 'Hang Clean', key: 'clean' },
-                { name: 'Lying Barbell Row', key: 'row' },
-                { name: 'Overhead Press', key: 'ohp' }
+                { name: 'Back Squat', key: 'squat', matchNames: ['back squat'] },
+                { name: 'Deadlift', key: 'deadlift', matchNames: ['deadlift'] },
+                { name: 'Bench Press', key: 'bench', matchNames: ['bench press'] },
+                { name: 'Hang Clean', key: 'clean', matchNames: ['clean [hang]', 'hang clean'] },
+                { name: 'Lying Barbell Row', key: 'row', matchNames: ['prone bench row', 'lying barbell row', 'barbell row'] },
+                { name: 'Overhead Press', key: 'ohp', matchNames: ['military press', 'overhead press'] }
               ].map((exercise) => {
-                const maxStats = getMaxForExercise(exercise.name);
+                const maxStats = getMaxForExercise(exercise.matchNames);
                 return (
                   <div
                     key={exercise.key}
