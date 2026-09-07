@@ -408,7 +408,9 @@ export default function WorkoutBuilderPage() {
         weight_used,
         reps_completed,
         logged_at,
-        workout_exercises (
+        workout_exercises!inner (
+          exercise_id,
+          custom_exercise_name,
           exercises (
             id,
             exercise
@@ -426,8 +428,8 @@ export default function WorkoutBuilderPage() {
     const historyMap = new Map<string, { maxWeight: number; maxDate: string }>();
 
     logs.forEach((log: any) => {
-      const exerciseId = log.workout_exercises?.exercises?.id;
-      const exerciseName = log.workout_exercises?.exercises?.exercise;
+      const exerciseId = log.workout_exercises?.exercise_id || log.workout_exercises?.exercises?.id;
+      const exerciseName = log.workout_exercises?.exercises?.exercise || log.workout_exercises?.custom_exercise_name;
 
       if (!exerciseId || !log.weight_used) return;
 
