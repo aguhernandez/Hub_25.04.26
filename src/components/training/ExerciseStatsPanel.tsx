@@ -64,6 +64,9 @@ export default function ExerciseStatsPanel({
           workout_exercise_id,
           workout_exercises!inner (
             exercise_id,
+            reps,
+            sets,
+            primary_value,
             custom_exercise_name,
             exercises (
               id,
@@ -94,7 +97,9 @@ export default function ExerciseStatsPanel({
       matchLogs.forEach((log: any) => {
         const dateKey = new Date(log.logged_at).toLocaleDateString('en-CA');
         const weight = parseFloat(log.weight_used) || 0;
-        const reps = log.reps_completed || 0;
+        const we = log.workout_exercises;
+        const plannedReps = we?.reps ? parseInt(String(we.reps), 10) : (we?.primary_value ? parseInt(String(we.primary_value), 10) : 0);
+        const reps = log.reps_completed || plannedReps || 0;
         const existing = sessionMap.get(dateKey);
         if (existing) {
           existing.sets += 1;
