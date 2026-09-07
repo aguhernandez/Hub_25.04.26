@@ -716,9 +716,10 @@ export default function PerformanceDashboard() {
       const r = log.reps_completed || 0;
       const rir = log.rir ?? null;
 
-      if (w <= 0 || r <= 0) return;
+      if (w <= 0) return;
 
-      const oneRM = calcOneRM(w, r, rir);
+      const effectiveReps = r > 0 ? r : 1;
+      const oneRM = calcOneRM(w, effectiveReps, rir);
 
       // Group by athlete_workout_id (session) — each session gets one entry (best set)
       const sessionKey = log.athlete_workout_id || log.logged_at.split('T')[0];
