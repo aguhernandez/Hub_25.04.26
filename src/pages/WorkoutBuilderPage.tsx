@@ -984,7 +984,7 @@ export default function WorkoutBuilderPage() {
                 <Dumbbell className="w-5 h-5" />
                 {language === 'es' ? 'Agregar Ejercicio' : 'Add Exercise'}
               </button>
-              {isTrainerOrAdmin && (
+              {(isTrainerOrAdmin || isAthlete) && (
                 <button
                   onClick={() => setAddPanelTab('circuit')}
                   className={`flex-1 flex items-center justify-center gap-2.5 py-4 text-sm font-semibold transition-all border-b-2 ${
