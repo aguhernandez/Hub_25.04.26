@@ -75,21 +75,21 @@ const PRIMARY_NAV: NavItem[] = [
     icon: Apple,
     label: 'Nutrition',
     path: 'trainer-athlete-nutrition',
-    roles: ['trainer']
+    roles: ['trainer', 'nutritionist', 'head_coach']
   },
   {
     id: 'training',
     icon: Dumbbell,
     label: 'Train',
     path: 'training',
-    roles: ['athlete', 'trainer', 'head_coach']
+    roles: ['athlete', 'trainer', 'nutritionist', 'head_coach']
   },
   {
     id: 'base-academy',
     icon: GraduationCap,
     label: 'Academy',
     path: 'base-academy',
-    roles: ['athlete', 'trainer', 'head_coach']
+    roles: ['athlete', 'trainer', 'nutritionist', 'head_coach']
   }
 ];
 
@@ -176,16 +176,6 @@ const TRAINER_MORE_SECTIONS: MoreMenuSection[] = [
     { id: 'bioimpedance', icon: Ruler, label: 'Body Composition', path: 'bioimpedance' },
     { id: 'workout-builder', icon: Dumbbell, label: 'Workout Builder', path: 'workout-builder' },
     { id: 'program-builder', icon: BookOpen, label: 'Program Builder', path: 'program-builder' },
-    { id: 'settings', icon: Settings, label: 'Settings', path: 'settings' },
-  ]},
-];
-
-const NUTRITIONIST_MORE_SECTIONS: MoreMenuSection[] = [
-  { section: 'ATHLETES', items: [
-    { id: 'my-athletes', icon: Users, label: 'My Athletes', path: 'my-athletes' },
-    { id: 'habits', icon: CheckSquare, label: 'Habits & Goals', path: 'habits' },
-  ]},
-  { section: 'SYSTEM', items: [
     { id: 'settings', icon: Settings, label: 'Settings', path: 'settings' },
   ]},
 ];
@@ -351,7 +341,7 @@ export default function AdaptiveNavigation({ currentPage, onNavigate }: Adaptive
       case 'admin': return ADMIN_MORE_SECTIONS;
       case 'trainer':
       case 'head_coach': return TRAINER_MORE_SECTIONS;
-      case 'nutritionist': return NUTRITIONIST_MORE_SECTIONS;
+      case 'nutritionist': return TRAINER_MORE_SECTIONS;
       default: return ATHLETE_MORE_SECTIONS;
     }
   };

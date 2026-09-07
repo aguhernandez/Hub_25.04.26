@@ -173,7 +173,7 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       ];
     }
 
-    if (profile.role === 'trainer' || profile.role === 'head_coach') {
+    if (profile.role === 'trainer' || profile.role === 'head_coach' || profile.role === 'nutritionist') {
       return [
         { section: 'ATHLETES', items: [
           { id: 'my-athletes', icon: Users, label: 'My Athletes' },
