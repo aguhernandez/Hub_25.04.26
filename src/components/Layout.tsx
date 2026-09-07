@@ -173,10 +173,11 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
       ];
     }
 
-    if (profile.role === 'trainer') {
+    if (profile.role === 'trainer' || profile.role === 'head_coach') {
       return [
         { section: 'ATHLETES', items: [
           { id: 'my-athletes', icon: Users, label: 'My Athletes' },
+          { id: 'habits', icon: CheckSquare, label: 'Habits & Goals' },
           { id: 'activity-history', icon: MapPin, label: 'Activity History' }
         ]},
         { section: 'COMMUNITY', items: [
@@ -195,6 +196,15 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           { id: 'bioimpedance', icon: Ruler, label: 'Body Composition' },
           { id: 'workout-builder', icon: Dumbbell, label: 'Workout Builder' },
           { id: 'program-builder', icon: BookOpen, label: 'Program Builder' }
+        ]},
+      ];
+    }
+
+    if (profile.role === 'nutritionist') {
+      return [
+        { section: 'ATHLETES', items: [
+          { id: 'my-athletes', icon: Users, label: 'My Athletes' },
+          { id: 'habits', icon: CheckSquare, label: 'Habits & Goals' },
         ]},
       ];
     }
