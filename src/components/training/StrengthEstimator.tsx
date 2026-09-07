@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Calculator, TrendingUp, Save, BarChart3, Check, Zap, Target, Activity, Search, ChevronDown } from 'lucide-react';
+import { X, Calculator, TrendingUp, Save, BarChart3, Check, Zap, Target, Activity, Search, ChevronDown, History } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { getExerciseName } from '../../utils/exerciseI18n';
+import Last12WorkoutsPanel from './Last12WorkoutsPanel';
 
 interface StrengthEstimatorProps {
   isOpen: boolean;
@@ -76,6 +77,7 @@ export default function StrengthEstimator({
   const [unit, setUnit] = useState<'kg' | 'lb'>('kg');
   const [oneRM, setOneRM] = useState<number>(0);
   const [showSaved, setShowSaved] = useState(false);
+  const [showLast12, setShowLast12] = useState(false);
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [selectedExerciseName, setSelectedExerciseName] = useState<string>(initialExerciseName || '');
@@ -628,6 +630,14 @@ export default function StrengthEstimator({
                 </div>
               </div>
 
+              <button
+                onClick={() => setShowLast12(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium text-sm border border-gray-200 dark:border-gray-600"
+              >
+                <History className="w-5 h-5 text-[#514163] dark:text-[#fdda36]" />
+                {language === 'es' ? 'Ver últimos 12 entrenamientos' : 'Last 12 workouts'}
+              </button>
+
               {history.length > 0 && (
                 <div className="bg-white dark:bg-gray-800 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 dark:border-gray-700 p-6">
                   <div className="flex items-center justify-between mb-4">
@@ -717,6 +727,12 @@ export default function StrengthEstimator({
           </div>
         </div>
       </div>
+
+      <Last12WorkoutsPanel
+        isOpen={showLast12}
+        onClose={() => setShowLast12(false)}
+        athleteId={targetAthleteId}
+      />
     </div>
   );
 }
