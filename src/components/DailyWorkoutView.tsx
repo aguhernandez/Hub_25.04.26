@@ -22,6 +22,7 @@ interface SetLine {
   primary_metric?: string;
   secondary_metric?: string;
   rest_seconds?: number;
+  working_set?: boolean;
 }
 
 interface Exercise {
@@ -40,6 +41,7 @@ interface Exercise {
   primary_metric?: string;
   secondary_metric?: string;
   set_lines?: SetLine[];
+  working_set?: boolean;
 }
 
 interface SetTracking {
@@ -118,7 +120,8 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
             secondary_value: lastGroup.secondary_value,
             primary_metric: lastGroup.primary_metric,
             secondary_metric: lastGroup.secondary_metric,
-            rest_seconds: lastGroup.rest_seconds
+            rest_seconds: lastGroup.rest_seconds,
+            working_set: (lastGroup as any).working_set ?? false
           }];
         }
         // Add this as another line
@@ -130,7 +133,8 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
           secondary_value: item.secondary_value,
           primary_metric: item.primary_metric,
           secondary_metric: item.secondary_metric,
-          rest_seconds: item.rest_seconds || 60
+          rest_seconds: item.rest_seconds || 60,
+          working_set: item.working_set ?? false
         });
       } else {
         // New exercise
@@ -148,7 +152,8 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
           secondary_value: item.secondary_value,
           primary_metric: item.primary_metric,
           secondary_metric: item.secondary_metric,
-        });
+          working_set: item.working_set ?? false,
+        } as any);
       }
     });
 
@@ -378,7 +383,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       console.log('🔍 Loading exercises for workout:', allActivities[0].workout_id);
       const { data: exercisesData, error: exError } = await supabase
         .from('workout_exercises')
-        .select('id, order_index, sets, reps, rest_seconds, section_title, primary_value, secondary_value, primary_metric, secondary_metric, exercises(id, exercise, exercise_en, exercise_es, description, description_en, description_es, link)')
+        .select('id, order_index, sets, reps, rest_seconds, section_title, primary_value, secondary_value, primary_metric, secondary_metric, working_set, exercises(id, exercise, exercise_en, exercise_es, description, description_en, description_es, link)')
         .eq('workout_id', allActivities[0].workout_id)
         .order('order_index');
 
@@ -1016,7 +1021,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
     if (selectedWorkout?.workout_id) {
       const { data: exercisesData } = await supabase
         .from('workout_exercises')
-        .select('id, order_index, sets, reps, rest_seconds, section_title, primary_value, secondary_value, primary_metric, secondary_metric, exercises(id, exercise, exercise_en, exercise_es, description, description_en, description_es, link)')
+        .select('id, order_index, sets, reps, rest_seconds, section_title, primary_value, secondary_value, primary_metric, secondary_metric, working_set, exercises(id, exercise, exercise_en, exercise_es, description, description_en, description_es, link)')
         .eq('workout_id', selectedWorkout.workout_id)
         .order('order_index');
 

@@ -2650,7 +2650,7 @@ export default function TrainingPage() {
                             {ex.set_lines ? (
                               // Multiple lines - show each separately
                               ex.set_lines.map((line, lineIdx) => (
-                                <div key={lineIdx} className="space-y-1">
+                                <div key={lineIdx} className={`space-y-1 rounded-lg px-2 py-1 ${line.working_set ? 'bg-red-500/15 border border-red-300 dark:border-red-700/40' : ''}`}>
                                   <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                                     <span className="font-semibold">{line.sets} sets</span>
                                     <span>×</span>
@@ -2690,6 +2690,9 @@ export default function TrainingPage() {
                                         <span>•</span>
                                         <span>{line.rest_seconds}s rest</span>
                                       </>
+                                    )}
+                                    {line.working_set && (
+                                      <span className="ml-1 text-[10px] font-bold uppercase text-red-500 dark:text-red-400">WS</span>
                                     )}
                                   </div>
                                   {(line.rir !== null && line.rir !== undefined) || (line.rpe !== null && line.rpe !== undefined) ? (
