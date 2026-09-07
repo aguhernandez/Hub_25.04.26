@@ -27,13 +27,9 @@ export default function ExerciseSelector({
 
   const filteredExercises = useMemo(() => {
     const exercisesWithStats = exercises.filter(ex => ex.sessionCount > 0);
-    const exercisesWithoutStats = exercises.filter(ex => ex.sessionCount === 0);
 
     if (!searchTerm.trim()) {
-      return [
-        ...exercisesWithStats.sort((a, b) => b.sessionCount - a.sessionCount),
-        ...exercisesWithoutStats.sort((a, b) => a.name.localeCompare(b.name))
-      ];
+      return [...exercisesWithStats.sort((a, b) => b.sessionCount - a.sessionCount)];
     }
 
     const term = searchTerm.toLowerCase();
@@ -41,15 +37,8 @@ export default function ExerciseSelector({
       ex.name.toLowerCase().includes(term) ||
       ex.category?.toLowerCase().includes(term)
     );
-    const filteredWithoutStats = exercisesWithoutStats.filter(ex =>
-      ex.name.toLowerCase().includes(term) ||
-      ex.category?.toLowerCase().includes(term)
-    );
 
-    return [
-      ...filteredWithStats.sort((a, b) => b.sessionCount - a.sessionCount),
-      ...filteredWithoutStats.sort((a, b) => a.name.localeCompare(b.name))
-    ];
+    return [...filteredWithStats.sort((a, b) => b.sessionCount - a.sessionCount)];
   }, [exercises, searchTerm]);
 
   const selectedExerciseName = useMemo(() => {
@@ -123,18 +112,8 @@ export default function ExerciseSelector({
             ) : (
               <div className="py-2">
                 {filteredExercises.map((exercise, index) => {
-                  const prevExercise = index > 0 ? filteredExercises[index - 1] : null;
-                  const showDivider = prevExercise && prevExercise.sessionCount > 0 && exercise.sessionCount === 0;
-
                   return (
                     <div key={exercise.id}>
-                      {showDivider && (
-                        <div className="px-4 py-2 bg-gray-50 dark:bg-gray-900 dark:bg-gray-900">
-                          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 dark:text-gray-400">
-                            {language === 'es' ? 'Otros ejercicios' : 'Other exercises'}
-                          </div>
-                        </div>
-                      )}
                       <button
                         onClick={() => handleSelect(exercise)}
                         className={`w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${

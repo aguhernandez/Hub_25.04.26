@@ -499,13 +499,36 @@ export default function PerformanceDashboard() {
       return;
     }
 
-    // Fallback: load all exercises
-    console.log('📋 Loading all exercises as fallback...');
-    const { data: allExercises, error: exercisesError } = await supabase
+    // Fallback: load only exercises the user has actually logged
+    console.log('📋 Loading exercises from training logs as fallback...');
+    const { data: userLogs } = await supabase
+      .from('training_logs')
+      .select('workout_exercises(exercise_id)')
+      .eq('athlete_id', targetAthleteId);
+
+    if (!userLogs || userLogs.length === 0) {
+      console.log('⚠️ No training logs found for athlete');
+      setExercisesList([]);
+      return;
+    }
+
+    const exerciseIds = Array.from(new Set(
+      userLogs
+        .map((log: any) => log.workout_exercises?.exercise_id)
+        .filter(Boolean)
+    ));
+
+    if (exerciseIds.length === 0) {
+      console.log('⚠️ No exercise IDs found in logs');
+      setExercisesList([]);
+      return;
+    }
+
+    const { data: loggedExercises, error: exercisesError } = await supabase
       .from('exercises')
       .select('id, exercise, exercise_en, exercise_es, category')
-      .order('exercise_en', { ascending: true })
-      .limit(500);
+      .in('id', exerciseIds)
+      .order('exercise_en', { ascending: true });
 
     if (exercisesError) {
       console.error('❌ Error loading exercises:', exercisesError);
@@ -513,13 +536,13 @@ export default function PerformanceDashboard() {
       return;
     }
 
-    if (allExercises && allExercises.length > 0) {
-      console.log('✅ Loaded', allExercises.length, 'total exercises');
-      const exercisesWithCount = allExercises.map(ex => ({
+    if (loggedExercises && loggedExercises.length > 0) {
+      console.log('✅ Loaded', loggedExercises.length, 'exercises from user logs');
+      const exercisesWithCount = loggedExercises.map(ex => ({
         id: ex.id,
         name: getExerciseName(ex, language),
         category: ex.category,
-        sessionCount: 0
+        sessionCount: 1
       }));
       setExercisesList(exercisesWithCount);
       if (!selectedExercise) {
@@ -527,7 +550,7 @@ export default function PerformanceDashboard() {
         setSelectedExerciseName(exercisesWithCount[0].name);
       }
     } else {
-      console.log('⚠️ No exercises found in database');
+      console.log('⚠️ No exercises found for user logs');
       setExercisesList([]);
     }
   };
