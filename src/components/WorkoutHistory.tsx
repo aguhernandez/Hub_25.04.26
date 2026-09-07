@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useToast } from '../hooks/useToast';
-import { TrendingUp, Calendar, Weight, ChevronDown, ChevronUp, Dumbbell, Search, Trash2, Activity, Bike } from 'lucide-react';
+import { TrendingUp, Calendar, Weight, ChevronDown, ChevronUp, Dumbbell, Search, Trash2, Activity, Bike, BarChart2 } from 'lucide-react';
 import { getExerciseName } from '../utils/exerciseI18n';
 import DeleteWorkoutModal from './DeleteWorkoutModal';
 
@@ -272,7 +272,9 @@ export default function WorkoutHistory() {
         logged_at,
         workout_exercises (
           exercises (
-            name
+            exercise,
+            exercise_en,
+            exercise_es
           )
         )
       `)
@@ -285,7 +287,7 @@ export default function WorkoutHistory() {
     const exerciseMap = new Map<string, ExerciseProgress>();
 
     data.forEach((log: any) => {
-      const exerciseName = log.workout_exercises?.exercises?.name;
+      const exerciseName = getExerciseName(log.workout_exercises?.exercises, language);
       if (!exerciseName) return;
 
       if (!exerciseMap.has(exerciseName)) {
@@ -666,6 +668,36 @@ export default function WorkoutHistory() {
 
         {/* Columna derecha: Historial por Ejercicio */}
         <div className="space-y-6">
+          {/* Volume Planned vs Done summary */}
+          {(() => {
+            const doneVolume = history.reduce((sum, h) => sum + (h.total_volume || 0), 0);
+            return (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-4">
+                  <BarChart2 className="w-5 h-5 text-[#514163] dark:text-[#fdda36]" />
+                  {language === 'es' ? 'Volumen Total' : 'Total Volume'}
+                </h2>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3">
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      {language === 'es' ? 'Hecho' : 'Done'}
+                    </p>
+                    <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                      {doneVolume.toFixed(0)} kg
+                    </p>
+                  </div>
+                  <div className="bg-teal-50 dark:bg-teal-900/20 rounded-lg p-3">
+                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                      {language === 'es' ? 'Sesiones' : 'Sessions'}
+                    </p>
+                    <p className="text-lg font-bold text-teal-600 dark:text-teal-400">
+                      {history.filter(h => h.type === 'gym').length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
           <div className="bg-white dark:bg-gray-800 dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 dark:border-gray-700">
             <div className="p-6 border-b border-gray-200 dark:border-gray-700 dark:border-gray-700">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white dark:text-white flex items-center gap-2 mb-4">

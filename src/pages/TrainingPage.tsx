@@ -110,6 +110,7 @@ export default function TrainingPage() {
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'calendar' | 'history'>('calendar');
   const [totalVolume, setTotalVolume] = useState(0);
+  const [plannedVolume, setPlannedVolume] = useState(0);
   const [copiedWorkout, setCopiedWorkout] = useState<Workout | null>(null);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [workoutToDuplicate, setWorkoutToDuplicate] = useState<Workout | null>(null);
@@ -1433,7 +1434,10 @@ export default function TrainingPage() {
 
     const startDate = getDateRangeStart();
     const endDate = getDateRangeEnd();
+    const startDateStr = formatDateLocal(startDate);
+    const endDateStr = formatDateLocal(endDate);
 
+    // Done volume: from training_logs (actual executed values)
     const { data: logs } = await supabase
       .from('training_logs')
       .select('weight_used, reps_completed')
@@ -1446,6 +1450,49 @@ export default function TrainingPage() {
         return total + ((log.weight_used || 0) * (log.reps_completed || 0));
       }, 0);
       setTotalVolume(volume);
+    }
+
+    // Planned volume: from workout_exercises joined to athlete_workouts in range
+    const { data: athleteWorkouts } = await supabase
+      .from('athlete_workouts')
+      .select('id')
+      .eq('athlete_id', effectiveAthleteId)
+      .gte('scheduled_date', startDateStr)
+      .lte('scheduled_date', endDateStr);
+
+    if (athleteWorkouts && athleteWorkouts.length > 0) {
+      const workoutIds = athleteWorkouts.map(aw => aw.id);
+      const { data: exercises } = await supabase
+        .from('workout_exercises')
+        .select('sets, reps, primary_metric, primary_value, secondary_metric, secondary_value, set_lines')
+        .in('workout_id', workoutIds);
+
+      if (exercises) {
+        let planned = 0;
+        for (const ex of exercises) {
+          // If set_lines exist, use them; otherwise use top-level fields
+          const lines = ex.set_lines && Array.isArray(ex.set_lines) && ex.set_lines.length > 0
+            ? ex.set_lines
+            : [{ sets: ex.sets, reps: ex.reps, primary_metric: ex.primary_metric, primary_value: ex.primary_value, secondary_metric: ex.secondary_metric, secondary_value: ex.secondary_value }];
+          for (const line of lines) {
+            const sets = Number(line.sets) || 0;
+            const metric = line.primary_metric || ex.primary_metric || 'reps';
+            const valueStr = line.primary_value || ex.primary_value || line.reps || ex.reps || '0';
+            const weightStr = (line.secondary_metric || ex.secondary_metric) === 'kg' ? (line.secondary_value || ex.secondary_value || '0') : null;
+            // Only count kg as weight metric for volume
+            if (metric === 'kg' || (line.secondary_metric || ex.secondary_metric) === 'kg') {
+              const repsVal = metric === 'kg' ? parseFloat(valueStr) || 0 : parseFloat(String(line.reps || ex.reps || '0')) || 0;
+              const kgVal = metric === 'kg' ? (parseFloat(line.secondary_value || ex.secondary_value || '0') || 0) : (parseFloat(weightStr || '0') || 0);
+              planned += sets * repsVal * kgVal;
+            }
+          }
+        }
+        setPlannedVolume(planned);
+      } else {
+        setPlannedVolume(0);
+      }
+    } else {
+      setPlannedVolume(0);
     }
   };
 
@@ -2166,6 +2213,7 @@ export default function TrainingPage() {
       )}
 
       {activeTab === 'calendar' && (
+      <>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center gap-3">
@@ -2208,21 +2256,77 @@ export default function TrainingPage() {
             </div>
           </div>
         </div>
+      </div>
 
+      {/* Second row: Volume Planned / Done / Difference */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
               <Weight className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Total Volume</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {language === 'es' ? 'Volumen Planificado' : 'Volume Planned'}
+              </p>
+              <p className="text-xl font-bold text-gray-900 dark:text-white">
+                {plannedVolume.toFixed(0)} kg
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-teal-100 dark:bg-teal-900/20 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {language === 'es' ? 'Volumen Hecho' : 'Volume Done'}
+              </p>
               <p className="text-xl font-bold text-gray-900 dark:text-white">
                 {totalVolume.toFixed(0)} kg
               </p>
             </div>
           </div>
         </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+              (totalVolume - plannedVolume) < 0
+                ? 'bg-red-100 dark:bg-red-900/20'
+                : (totalVolume - plannedVolume) > 0
+                ? 'bg-emerald-100 dark:bg-emerald-900/20'
+                : 'bg-gray-100 dark:bg-gray-700/40'
+            }`}>
+              <BarChart2 className={`w-5 h-5 ${
+                (totalVolume - plannedVolume) < 0
+                  ? 'text-red-600 dark:text-red-400'
+                  : (totalVolume - plannedVolume) > 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-gray-500 dark:text-gray-400'
+              }`} />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {language === 'es' ? 'Diferencia' : 'Difference'}
+              </p>
+              <p className={`text-xl font-bold ${
+                (totalVolume - plannedVolume) < 0
+                  ? 'text-red-600 dark:text-red-400'
+                  : (totalVolume - plannedVolume) > 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-gray-900 dark:text-white'
+              }`}>
+                {(totalVolume - plannedVolume) >= 0 ? '+' : ''}{(totalVolume - plannedVolume).toFixed(0)} kg
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
+      </>
       )}
 
       {activeTab === 'calendar' ? (
