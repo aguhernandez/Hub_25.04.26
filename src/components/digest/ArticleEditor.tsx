@@ -387,7 +387,7 @@ export default function ArticleEditor({ isOpen, onClose, onSaved, article }: Art
                       className={`px-4 py-2 rounded-lg border-2 font-medium transition-colors ${
                         formData.template_type === t.value
                           ? 'bg-[#514163] text-white border-[#514163]'
-                          : 'bg-white dark:bg-gray-800 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:border-gray-600 hover:border-[#514163]'
+                          : 'bg-[#514163] text-white border-[#514163] hover:bg-[#3d3149] hover:border-[#3d3149]'
                       }`}
                     >
                       {t.label}
