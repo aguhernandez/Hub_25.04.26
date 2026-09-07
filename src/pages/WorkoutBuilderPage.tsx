@@ -437,14 +437,18 @@ export default function WorkoutBuilderPage() {
       const weight = log.weight_used;
 
       if (!existing || weight > existing.maxWeight) {
-        historyMap.set(exerciseId, {
+        const history = {
           maxWeight: weight,
           maxDate: new Date(log.logged_at).toLocaleDateString('en-US', {
             month: 'short',
             day: 'numeric',
             year: 'numeric'
           })
-        });
+        };
+        historyMap.set(exerciseId, history);
+        if (exerciseName) {
+          historyMap.set(exerciseName.trim().toLowerCase(), history);
+        }
       }
     });
 
@@ -1336,7 +1340,8 @@ export default function WorkoutBuilderPage() {
                       </div>
                       <div className="space-y-3">
                         {items.map(({ exercise: ex, index }, itemIndex) => {
-                          const history = exerciseHistory.get(ex.exercise_id);
+                          const history = exerciseHistory.get(ex.exercise_id)
+                            || exerciseHistory.get(ex.exercise_name.trim().toLowerCase());
                           const isFirstInSection = itemIndex === 0;
                           const isLastInSection = itemIndex === items.length - 1;
 

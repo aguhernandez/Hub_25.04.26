@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Trash2, Copy, TrendingUp } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { supabase } from '../../lib/supabase';
 import OneRMLoadSelector from './OneRMLoadSelector';
 import ExerciseStatsPanel from './ExerciseStatsPanel';
 
@@ -52,6 +53,49 @@ export default function AdvancedExerciseBuilder({
 }: AdvancedExerciseProps) {
   const { language } = useLanguage();
   const [showStatsPanel, setShowStatsPanel] = useState(false);
+  const [loadedHistory, setLoadedHistory] = useState<{ maxWeight: number; maxDate: string } | null>(null);
+
+  useEffect(() => {
+    if (!athleteId || exerciseHistory) {
+      setLoadedHistory(null);
+      return;
+    }
+
+    let cancelled = false;
+    const loadHistory = async () => {
+      const { data: logs } = await supabase
+        .from('training_logs')
+        .select('weight_used, logged_at, workout_exercises!inner (exercise_id)')
+        .eq('athlete_id', athleteId)
+        .eq('workout_exercises.exercise_id', exercise.exercise_id)
+        .not('weight_used', 'is', null)
+        .order('logged_at', { ascending: false })
+        .limit(500);
+
+      const validLogs = (logs || []).filter((log: any) => Number(log.weight_used) > 0);
+      if (cancelled || validLogs.length === 0) {
+        if (!cancelled) setLoadedHistory(null);
+        return;
+      }
+
+      const bestLog = validLogs.reduce((best: any, log: any) =>
+        Number(log.weight_used) > Number(best.weight_used) ? log : best
+      );
+      setLoadedHistory({
+        maxWeight: Number(bestLog.weight_used),
+        maxDate: new Date(bestLog.logged_at).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        }),
+      });
+    };
+
+    loadHistory();
+    return () => { cancelled = true; };
+  }, [athleteId, exercise.exercise_id, exerciseHistory]);
+
+  const resolvedHistory = exerciseHistory || loadedHistory;
 
   const metricOptions = [
     { value: 'reps', label: language === 'es' ? 'Repeticiones' : 'Reps' },
@@ -101,7 +145,7 @@ export default function AdvancedExerciseBuilder({
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white">{exercise.exercise_name}</h3>
-            {exerciseHistory ? (
+            {resolvedHistory ? (
               <button
                 onClick={() => setShowStatsPanel(true)}
                 className="flex items-center gap-2 px-3 py-1 bg-green-100 dark:bg-green-900/20 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/40 transition-colors cursor-pointer"
@@ -109,10 +153,10 @@ export default function AdvancedExerciseBuilder({
               >
                 <TrendingUp className="w-4 h-4 text-green-600 dark:text-green-400" />
                 <span className="text-sm font-semibold text-green-900 dark:text-green-300">
-                  {language === 'es' ? 'Max:' : 'Max:'} {exerciseHistory.maxWeight} kg
+                  {language === 'es' ? 'Max:' : 'Max:'} {resolvedHistory.maxWeight} kg
                 </span>
                 <span className="text-xs text-green-700 dark:text-green-400">
-                  ({exerciseHistory.maxDate})
+                  ({resolvedHistory.maxDate})
                 </span>
               </button>
             ) : (
