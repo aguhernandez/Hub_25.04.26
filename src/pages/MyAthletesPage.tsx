@@ -56,7 +56,7 @@ export default function MyAthletesPage() {
   };
 
   useEffect(() => {
-    if (user && profile?.role === 'trainer') {
+    if (user && ['trainer', 'nutritionist', 'head_coach'].includes(profile?.role || '')) {
       loadAthletes();
     }
   }, [user, profile]);
@@ -66,13 +66,16 @@ export default function MyAthletesPage() {
 
     setLoading(true);
     try {
-      const directAthletes = await supabase
+      let directAthletes = supabase
         .from('profiles')
         .select('id, full_name, avatar_url, email, country, sport')
-        .eq('assigned_trainer_id', user.id)
         .eq('role', 'athlete');
+      if (profile?.role !== 'head_coach') {
+        directAthletes = directAthletes.eq(profile?.role === 'nutritionist' ? 'assigned_nutritionist_id' : 'assigned_trainer_id', user.id);
+      }
+      const directAthletesResult = await directAthletes;
 
-      // Load team members - simplified approach with explicit joins
+      // Team membership is part of the existing trainer/head-coach workflow.
       const { data: teamMembers, error: teamError } = await supabase
         .from('team_members')
         .select(`
@@ -83,7 +86,8 @@ export default function MyAthletesPage() {
             coach_id
           )
         `)
-        .eq('teams.coach_id', user.id);
+        .eq('teams.coach_id', user.id)
+        .in('teams.coach_id', profile?.role === 'head_coach' || profile?.role === 'trainer' ? [user.id] : []);
 
       console.log('Team members loaded:', teamMembers?.length || 0, 'Error:', teamError);
 
@@ -102,8 +106,8 @@ export default function MyAthletesPage() {
 
       const allAthletes: Athlete[] = [];
 
-      if (directAthletes.data) {
-        directAthletes.data.forEach(athlete => {
+      if (directAthletesResult.data) {
+        directAthletesResult.data.forEach(athlete => {
           allAthletes.push({
             ...athlete,
             is_direct: true
@@ -212,10 +216,10 @@ export default function MyAthletesPage() {
     if (!user) return;
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ assigned_trainer_id: user.id })
-        .eq('id', athleteId);
+      const { error } = await supabase.rpc('assign_athlete_to_professional', {
+        p_athlete_id: athleteId,
+        p_professional_type: profile?.role === 'nutritionist' ? 'nutritionist' : 'trainer',
+      });
 
       if (!error) {
         setShowAddModal(false);

@@ -47,11 +47,11 @@ export default function TrainerDashboard() {
 
     try {
       const [athletesRes, programsRes, workoutsRes] = await Promise.all([
-        supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url')
-          .eq('assigned_trainer_id', profile.id)
-          .eq('role', 'athlete'),
+        (() => {
+          let query = supabase.from('profiles').select('id, full_name, avatar_url').eq('role', 'athlete');
+          if (profile.role === 'head_coach') return query;
+          return query.eq(profile.role === 'nutritionist' ? 'assigned_nutritionist_id' : 'assigned_trainer_id', profile.id);
+        })(),
         supabase
           .from('training_programs')
           .select('id', { count: 'exact', head: true })
@@ -125,7 +125,7 @@ export default function TrainerDashboard() {
                 {language === 'es' ? '¡Hola,' : 'Hello,'} {profile?.full_name?.split(' ')[0]}! 👋
               </h1>
               <p className="mt-2 text-gray-600 dark:text-gray-400 text-lg">
-                {language === 'es' ? 'Panel de Entrenador' : 'Trainer Dashboard'}
+                {language === 'es' ? (profile.role === 'nutritionist' ? 'Panel de Nutrición' : 'Panel de Entrenador') : (profile.role === 'nutritionist' ? 'Nutritionist Dashboard' : 'Professional Dashboard')}
               </p>
             </div>
 

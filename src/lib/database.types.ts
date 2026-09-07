@@ -14,7 +14,7 @@ export type Database = {
           id: string
           email: string
           full_name: string | null
-          role: 'admin' | 'trainer' | 'athlete'
+          role: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach'
           country: string | null
           phone: string | null
           avatar_url: string | null
@@ -26,12 +26,14 @@ export type Database = {
           is_active: boolean
           created_at: string
           updated_at: string
+          assigned_trainer_id: string | null
+          assigned_nutritionist_id: string | null
         }
         Insert: {
           id: string
           email: string
           full_name?: string | null
-          role?: 'admin' | 'trainer' | 'athlete'
+          role?: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach'
           country?: string | null
           phone?: string | null
           avatar_url?: string | null
@@ -41,11 +43,13 @@ export type Database = {
           intervals_icu_api_key?: string | null
           objectives?: string | null
           is_active?: boolean
+          assigned_trainer_id?: string | null
+          assigned_nutritionist_id?: string | null
         }
         Update: {
           email?: string
           full_name?: string | null
-          role?: 'admin' | 'trainer' | 'athlete'
+          role?: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach'
           country?: string | null
           phone?: string | null
           avatar_url?: string | null
@@ -55,6 +59,8 @@ export type Database = {
           intervals_icu_api_key?: string | null
           objectives?: string | null
           is_active?: boolean
+          assigned_trainer_id?: string | null
+          assigned_nutritionist_id?: string | null
         }
       }
       habits: {
@@ -77,6 +83,8 @@ export type Database = {
           target_value?: number | null
           unit?: string | null
           is_active?: boolean
+          assigned_trainer_id?: string | null
+          assigned_nutritionist_id?: string | null
         }
         Update: {
           name?: string
@@ -85,6 +93,8 @@ export type Database = {
           target_value?: number | null
           unit?: string | null
           is_active?: boolean
+          assigned_trainer_id?: string | null
+          assigned_nutritionist_id?: string | null
         }
       }
       habit_logs: {

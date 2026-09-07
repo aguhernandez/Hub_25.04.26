@@ -49,6 +49,7 @@ import SportSelect from '../components/SportSelect';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 import { initPushNotifications } from '../services/pushNotificationService';
+import { ROLE_LABELS, ROLE_LABELS_ES, USER_ROLES, type UserRole } from '../types/roles';
 
 const TRAINER_ROLE_OPTIONS = [
   { value: 'head_coach',     labelEs: 'Entrenador Principal',              labelEn: 'Head Coach' },
@@ -188,6 +189,7 @@ export default function SettingsPage() {
   const [athleteTrainers, setAthleteTrainers] = useState<Array<{ id?: string; trainer_id: string; role_type: string; is_primary: boolean }>>([]);
   const [trainers, setTrainers] = useState<any[]>([]);
   const [trainerRoleType, setTrainerRoleType] = useState('');
+  const [requestedRole, setRequestedRole] = useState<UserRole>((profile?.role as UserRole) || 'athlete');
 
   // Avatar
   const [avatarUrl, setAvatarUrl] = useState('');
@@ -217,6 +219,7 @@ export default function SettingsPage() {
       setProfileVisibility(profile.profile_visibility || 'private');
       setPublicProfileSlug(profile.public_profile_slug || '');
       setTrainerRoleType((profile as any).trainer_role_type || '');
+      if (profile.role && USER_ROLES.includes(profile.role as UserRole)) setRequestedRole(profile.role as UserRole);
       setAvatarUrl(profile.avatar_url || '');
     }
   }, [profile]);
@@ -331,6 +334,20 @@ export default function SettingsPage() {
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleRoleRequest = async () => {
+    if (!profile || requestedRole === profile.role) return;
+    if (isAdmin) {
+      const { error } = await supabase.rpc('admin_set_profile_role', { p_user_id: profile.id, p_role: requestedRole });
+      if (error) { showError(language === 'es' ? 'No se pudo cambiar el rol' : 'Could not change role'); return; }
+      await updateProfile({ role: requestedRole });
+      success(language === 'es' ? 'Rol actualizado' : 'Role updated');
+      return;
+    }
+    const { error } = await supabase.from('role_change_requests').insert({ requester_id: profile.id, requested_role: requestedRole });
+    if (error) { showError(language === 'es' ? 'No se pudo enviar la solicitud' : 'Could not send request'); return; }
+    success(language === 'es' ? 'Solicitud enviada al administrador' : 'Request sent to an administrator');
   };
 
   const handleSave = async () => {
@@ -576,6 +593,24 @@ export default function SettingsPage() {
       {/* Profile Section */}
       {activeSection === 'profile' && (
         <div className="space-y-6">
+          {/* Role access is displayed here; only administrators can apply role changes. */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2"><Shield className="w-5 h-5 text-[#fdda36]" />{language === 'es' ? 'Rol de cuenta' : 'Account role'}</h2>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{language === 'es' ? 'Tu rol actual determina las funciones disponibles.' : 'Your current role determines the available features.'}</p>
+              </div>
+              <span className="px-3 py-1.5 rounded-full bg-[#514163]/10 text-[#514163] dark:text-[#fdda36] font-semibold text-sm">{language === 'es' ? ROLE_LABELS_ES[(profile?.role as UserRole) || 'athlete'] : ROLE_LABELS[(profile?.role as UserRole) || 'athlete']}</span>
+            </div>
+            <div className="mt-4 flex flex-col sm:flex-row gap-3 sm:items-center">
+              <select value={requestedRole} onChange={event => setRequestedRole(event.target.value as UserRole)} className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                {USER_ROLES.map(role => <option key={role} value={role}>{language === 'es' ? ROLE_LABELS_ES[role] : ROLE_LABELS[role]}</option>)}
+              </select>
+              <button onClick={handleRoleRequest} disabled={requestedRole === profile?.role} className="px-4 py-2 bg-[#fdda36] text-[#514163] rounded-lg font-semibold disabled:opacity-50">{isAdmin ? (language === 'es' ? 'Cambiar rol' : 'Change role') : (language === 'es' ? 'Solicitar cambio' : 'Request change')}</button>
+            </div>
+            {!isAdmin && <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">{language === 'es' ? 'Los cambios de rol deben ser aprobados por un administrador.' : 'Role changes must be approved by an administrator.'}</p>}
+          </div>
+
           {/* Avatar Card */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">

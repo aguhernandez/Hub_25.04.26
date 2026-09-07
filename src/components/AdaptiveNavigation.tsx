@@ -41,7 +41,7 @@ interface NavItem {
   icon: LucideIcon;
   label: string;
   path: string;
-  roles: ('athlete' | 'trainer' | 'admin')[];
+  roles: ('athlete' | 'trainer' | 'admin' | 'nutritionist' | 'head_coach')[];
   badge?: number;
   color?: string;
 }
@@ -61,7 +61,7 @@ const PRIMARY_NAV: NavItem[] = [
     icon: Home,
     label: 'Home',
     path: 'dashboard',
-    roles: ['athlete', 'trainer']
+    roles: ['athlete', 'trainer', 'nutritionist', 'head_coach']
   },
   {
     id: 'nutrition',
@@ -75,21 +75,21 @@ const PRIMARY_NAV: NavItem[] = [
     icon: Apple,
     label: 'Nutrition',
     path: 'trainer-athlete-nutrition',
-    roles: ['trainer']
+    roles: ['trainer', 'head_coach']
   },
   {
     id: 'training',
     icon: Dumbbell,
     label: 'Train',
     path: 'training',
-    roles: ['athlete', 'trainer']
+    roles: ['athlete', 'trainer', 'nutritionist', 'head_coach']
   },
   {
     id: 'base-academy',
     icon: GraduationCap,
     label: 'Academy',
     path: 'base-academy',
-    roles: ['athlete', 'trainer']
+    roles: ['athlete', 'trainer', 'nutritionist', 'head_coach']
   }
 ];
 
@@ -330,7 +330,7 @@ export default function AdaptiveNavigation({ currentPage, onNavigate }: Adaptive
 
   const getVisibleNavItems = () => {
     if (!profile) return [];
-    const userRole = profile.role as 'athlete' | 'trainer' | 'admin';
+    const userRole = profile.role as 'athlete' | 'trainer' | 'admin' | 'nutritionist' | 'head_coach';
     const navItems = userRole === 'admin' ? ADMIN_PRIMARY_NAV : PRIMARY_NAV;
     return navItems.filter(item => item.roles.includes(userRole));
   };
@@ -339,7 +339,9 @@ export default function AdaptiveNavigation({ currentPage, onNavigate }: Adaptive
     if (!profile) return [];
     switch (profile.role) {
       case 'admin': return ADMIN_MORE_SECTIONS;
-      case 'trainer': return TRAINER_MORE_SECTIONS;
+      case 'trainer':
+      case 'nutritionist':
+      case 'head_coach': return TRAINER_MORE_SECTIONS;
       default: return ATHLETE_MORE_SECTIONS;
     }
   };

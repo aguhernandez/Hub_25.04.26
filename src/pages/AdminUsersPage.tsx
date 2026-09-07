@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase';
 import AdminLayout from '../components/AdminLayout';
 import ChangeMembershipModal from '../components/ChangeMembershipModal';
 import ProfileOptionsModal from '../components/ProfileOptionsModal';
+import RoleGuard from '../components/RoleGuard';
+import { ROLE_LABELS, ROLE_LABELS_ES, USER_ROLES, type UserRole } from '../types/roles';
 import {
   Users,
   Search,
@@ -34,7 +36,7 @@ interface User {
   } | null;
 }
 
-export default function AdminUsersPage() {
+function AdminUsersPageContent() {
   const { profile } = useAuth();
   const { language } = useLanguage();
   const [users, setUsers] = useState<User[]>([]);
@@ -46,6 +48,8 @@ export default function AdminUsersPage() {
   const [showMembershipModal, setShowMembershipModal] = useState(false);
   const [showProfileOptionsModal, setShowProfileOptionsModal] = useState(false);
   const [selectedUserForOptions, setSelectedUserForOptions] = useState<User | null>(null);
+  const [pendingRoles, setPendingRoles] = useState<Record<string, UserRole>>({});
+  const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -104,6 +108,24 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleRoleChange = async (userId: string) => {
+    const role = pendingRoles[userId];
+    if (!role) return;
+    setSavingRoleId(userId);
+    const { error } = await supabase.rpc('admin_set_profile_role', { p_user_id: userId, p_role: role });
+    if (error) {
+      console.error('Error changing user role:', error);
+    } else {
+      setUsers(current => current.map(user => user.id === userId ? { ...user, role } : user));
+      setPendingRoles(current => {
+        const next = { ...current };
+        delete next[userId];
+        return next;
+      });
+    }
+    setSavingRoleId(null);
+  };
+
   const handleChangeMembership = (user: User) => {
     setSelectedUser(user);
     setShowMembershipModal(true);
@@ -157,6 +179,8 @@ export default function AdminUsersPage() {
       all: { es: 'Todos', en: 'All' },
       athletes: { es: 'Atletas', en: 'Athletes' },
       coaches: { es: 'Entrenadores', en: 'Coaches' },
+      nutritionists: { es: 'Nutricionistas', en: 'Nutritionists' },
+      headCoaches: { es: 'Head Coaches', en: 'Head Coaches' },
       admins: { es: 'Administradores', en: 'Admins' },
       name: { es: 'Nombre', en: 'Name' },
       email: { es: 'Email', en: 'Email' },
@@ -234,6 +258,8 @@ export default function AdminUsersPage() {
               <option value="all">{t('all')}</option>
               <option value="athlete">{t('athletes')}</option>
               <option value="trainer">{t('coaches')}</option>
+              <option value="nutritionist">{t('nutritionists')}</option>
+              <option value="head_coach">{t('headCoaches')}</option>
               <option value="admin">{t('admins')}</option>
             </select>
           </div>
@@ -299,10 +325,20 @@ export default function AdminUsersPage() {
                         {user.email}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getRoleBadge(user.role)}`}>
-                          {getRoleIcon(user.role)}
-                          {user.role}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={pendingRoles[user.id] || user.role}
+                            onChange={(event) => setPendingRoles(current => ({ ...current, [user.id]: event.target.value as UserRole }))}
+                            className={`px-2 py-1 rounded-lg text-xs font-medium border-0 ${getRoleBadge(user.role)}`}
+                          >
+                            {USER_ROLES.map(role => <option key={role} value={role}>{language === 'es' ? ROLE_LABELS_ES[role] : ROLE_LABELS[role]}</option>)}
+                          </select>
+                          {pendingRoles[user.id] && pendingRoles[user.id] !== user.role && (
+                            <button onClick={() => handleRoleChange(user.id)} disabled={savingRoleId === user.id} className="text-xs font-semibold text-blue-600 hover:text-blue-800 disabled:opacity-50">
+                              {savingRoleId === user.id ? '...' : language === 'es' ? 'Guardar' : 'Save'}
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">
                         {user.sport || '-'}
@@ -388,4 +424,8 @@ export default function AdminUsersPage() {
       </div>
     </AdminLayout>
   );
+}
+
+export default function AdminUsersPage() {
+  return <RoleGuard allowedRoles={['admin']}><AdminUsersPageContent /></RoleGuard>;
 }

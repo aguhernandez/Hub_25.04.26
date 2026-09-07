@@ -3,12 +3,14 @@ import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { initPushNotifications, silentReRegister } from '../services/pushNotificationService';
 import type { Database } from '../lib/database.types';
+import type { UserRole } from '../types/roles';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
 interface AuthContextType {
   user: User | null;
   profile: Profile | null;
+  role: UserRole | null;
   session: Session | null;
   loading: boolean;
   signUp: (email: string, password: string, fullName?: string, sport?: string) => Promise<{ error: AuthError | null; user?: User | null }>;
@@ -177,6 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         profile,
+        role: (profile?.role as UserRole | undefined) ?? null,
         session,
         loading,
         signUp,

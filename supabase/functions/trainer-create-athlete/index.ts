@@ -2,7 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
 };
 
@@ -47,9 +47,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (callerProfile.role !== 'trainer' && callerProfile.role !== 'admin') {
+    if (!['trainer', 'nutritionist', 'head_coach', 'admin'].includes(callerProfile.role)) {
       return new Response(
-        JSON.stringify({ error: 'Only trainers or admins can create athletes' }),
+        JSON.stringify({ error: 'Only authorized professionals can create athletes' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -103,7 +103,8 @@ Deno.serve(async (req: Request) => {
         first_name: first_name || full_name.split(' ')[0],
         last_name: last_name || full_name.split(' ').slice(1).join(' ') || null,
         sport: sport || null,
-        assigned_trainer_id: callerProfile.id,
+        assigned_trainer_id: ['trainer', 'head_coach', 'admin'].includes(callerProfile.role) ? callerProfile.id : null,
+        assigned_nutritionist_id: callerProfile.role === 'nutritionist' ? callerProfile.id : null,
         role: 'athlete',
       })
       .eq('id', newUser.user.id);

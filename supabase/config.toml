@@ -1,0 +1,2 @@
+[functions.trainer-create-athlete]
+verify_jwt = true
