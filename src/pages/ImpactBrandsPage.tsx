@@ -213,7 +213,7 @@ export default function ImpactBrandsPage() {
             .from('partner_benefits')
             .select('*, partners!inner(*)')
             .eq('is_active', true)
-            .eq('partner.status', 'active')
+            .eq('partners.status', 'active')
             .order('created_at', { ascending: false }),
           supabase
             .from('partner_referrals')
