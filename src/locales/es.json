@@ -852,5 +852,79 @@
       "powerStreams": "Potencia y Streams",
       "hrDisabled": "FC Deshabilitada"
     }
+  },
+  "impactBrands": {
+    "badge": "Spotters y Apoyo",
+    "title": "Crece con Apoyo",
+    "subtitle": "Conéctate con marcas, accede a ofertas exclusivas y apoya proyectos que marcan la diferencia en la comunidad deportiva",
+    "tabs": {
+      "partnerships": "Mis Alianzas",
+      "projects": "Proyectos de Apoyo",
+      "promotions": "Promociones y Descuentos"
+    },
+    "loading": "Cargando...",
+    "promotions": {
+      "none": "No hay promociones disponibles",
+      "noneDesc": "Vuelve pronto para ofertas exclusivas",
+      "useCode": "Usa el código:",
+      "validUntil": "Válido hasta",
+      "getOffer": "Obtener Oferta"
+    },
+    "projects": {
+      "category": "Categoría",
+      "allCategories": "Todas las Categorías",
+      "country": "País",
+      "allCountries": "Todos los Países",
+      "none": "No hay proyectos activos",
+      "noneFiltered": "Prueba ajustando tus filtros",
+      "noneDefault": "Nuevos proyectos próximamente",
+      "yourProject": "Tu Proyecto",
+      "verified": "Verificado",
+      "raised": "recaudado",
+      "of": "de",
+      "funded": "financiado",
+      "supporters": "seguidores",
+      "supportThisProject": "Apoyar Este Proyecto"
+    },
+    "partnerships": {
+      "supportProjects": "Proyectos de Apoyo",
+      "benefitsTitle": "Beneficios para Atletas de Asciende",
+      "benefitsSubtitle": "Descubre beneficios exclusivos de marcas socias independientes.",
+      "membershipRequired": "Se requiere membresía paga para activar beneficios",
+      "membershipRequiredDesc": "Puedes explorar las ofertas de los socios, pero activar un beneficio requiere una membresía paga de Asciende.",
+      "benefitsComingSoon": "Próximamente más beneficios",
+      "benefitsComingSoonDesc": "Nuevas ofertas de socios aparecerán aquí.",
+      "viewDetails": "Ver detalles",
+      "activateBenefit": "Activar Beneficio",
+      "myActivatedBenefits": "Mis Beneficios Activados",
+      "partnerBenefit": "Beneficio del socio",
+      "goToPartner": "Ir al Socio",
+      "eligibleProducts": "Productos elegibles:",
+      "howToUse": "Cómo usar:",
+      "terms": "Términos:",
+      "partnerDisclaimer": "Aviso del Socio",
+      "partnerDisclaimerText": "Este beneficio es proporcionado por un socio externo independiente. Asciende conecta a los atletas con marcas socias y no es el vendedor ni proveedor de los productos o servicios ofrecidos.",
+      "benefitActivated": "Beneficio Activado",
+      "yourReference": "Tu referencia",
+      "partner": "Socio:",
+      "close": "Cerrar"
+    },
+    "cta": {
+      "title": "¿Eres una marca?",
+      "desc": "Aliate con Asciende para apoyar a atletas del Sur Global y crear un impacto significativo",
+      "becomePartner": "Convertirse en Socio"
+    },
+    "categories": {
+      "travel": "Viajes",
+      "equipment": "Equipamiento",
+      "training": "Entrenamiento",
+      "education": "Educación",
+      "health": "Salud"
+    },
+    "errors": {
+      "activateFailed": "No pudimos activar este beneficio en este momento. Por favor, inténtalo de nuevo.",
+      "createReferralFailed": "No pudimos crear tu referencia en este momento. Por favor, inténtalo de nuevo.",
+      "membershipRequiredShort": "Este beneficio está disponible para atletas con membresía paga."
+    }
   }
 }

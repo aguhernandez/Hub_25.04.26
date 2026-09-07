@@ -826,5 +826,79 @@
       "powerStreams": "Power & Streams",
       "hrDisabled": "HR Disabled"
     }
+  },
+  "impactBrands": {
+    "badge": "Spotters and Support",
+    "title": "Grow with Support",
+    "subtitle": "Connect with brands, access exclusive offers, and support projects that make a difference in the sports community",
+    "tabs": {
+      "partnerships": "My Partnerships",
+      "projects": "Support Projects",
+      "promotions": "Promotions & Discounts"
+    },
+    "loading": "Loading...",
+    "promotions": {
+      "none": "No promotions available",
+      "noneDesc": "Check back soon for exclusive offers",
+      "useCode": "Use code:",
+      "validUntil": "Valid until",
+      "getOffer": "Get Offer"
+    },
+    "projects": {
+      "category": "Category",
+      "allCategories": "All Categories",
+      "country": "Country",
+      "allCountries": "All Countries",
+      "none": "No active projects",
+      "noneFiltered": "Try adjusting your filters",
+      "noneDefault": "New projects coming soon",
+      "yourProject": "Your Project",
+      "verified": "Verified",
+      "raised": "raised",
+      "of": "of",
+      "funded": "funded",
+      "supporters": "supporters",
+      "supportThisProject": "Support This Project"
+    },
+    "partnerships": {
+      "supportProjects": "Support Projects",
+      "benefitsTitle": "Benefits for Asciende Athletes",
+      "benefitsSubtitle": "Discover exclusive benefits from independent partner brands.",
+      "membershipRequired": "Paid membership required to activate benefits",
+      "membershipRequiredDesc": "You can explore partner offers, but activating a benefit is available with a paid Asciende membership.",
+      "benefitsComingSoon": "Benefits coming soon",
+      "benefitsComingSoonDesc": "New partner offers will appear here.",
+      "viewDetails": "View details",
+      "activateBenefit": "Activate Benefit",
+      "myActivatedBenefits": "My Activated Benefits",
+      "partnerBenefit": "Partner benefit",
+      "goToPartner": "Go to Partner",
+      "eligibleProducts": "Eligible products:",
+      "howToUse": "How to use:",
+      "terms": "Terms:",
+      "partnerDisclaimer": "Partner Disclaimer",
+      "partnerDisclaimerText": "This benefit is provided by an independent third-party partner. Asciende connects athletes with partner brands and is not the seller or provider of the products or services offered.",
+      "benefitActivated": "Benefit Activated",
+      "yourReference": "Your reference",
+      "partner": "Partner:",
+      "close": "Close"
+    },
+    "cta": {
+      "title": "Are you a brand?",
+      "desc": "Partner with Asciende to support athletes from the Global South and create meaningful impact",
+      "becomePartner": "Become a Partner"
+    },
+    "categories": {
+      "travel": "Travel",
+      "equipment": "Equipment",
+      "training": "Training",
+      "education": "Education",
+      "health": "Health"
+    },
+    "errors": {
+      "activateFailed": "We could not activate this benefit right now. Please try again.",
+      "createReferralFailed": "We could not create your referral right now. Please try again.",
+      "membershipRequiredShort": "This benefit is available to athletes with a paid membership."
+    }
   }
 }

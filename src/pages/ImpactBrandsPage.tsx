@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useMembership } from '../hooks/useMembership';
+import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import SupportMeSectionV2 from '../components/settings/SupportMeSectionV2';
 import CreateProjectModal from '../components/support/CreateProjectModal';
@@ -8,12 +9,9 @@ import {
   Heart,
   Tag,
   Handshake,
-  TrendingUp,
   ExternalLink,
-  ArrowRight,
   MapPin,
   Calendar,
-  DollarSign,
   Users,
   Zap,
   Award,
@@ -149,6 +147,7 @@ interface AthleteProject {
 export default function ImpactBrandsPage() {
   const { profile } = useAuth();
   const { hasAccess, loading: membershipLoading } = useMembership();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'promotions' | 'projects' | 'partnerships'>('partnerships');
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [athleteProjects, setAthleteProjects] = useState<AthleteProject[]>([]);
@@ -193,7 +192,6 @@ export default function ImpactBrandsPage() {
       if (activeTab === 'promotions') {
         setPromotions([]);
       } else if (activeTab === 'projects') {
-        // Load ALL active athlete support projects
         const { data, error } = await supabase
           .from('athlete_support_projects')
           .select(`
@@ -215,7 +213,7 @@ export default function ImpactBrandsPage() {
             .from('partner_benefits')
             .select('*, partners!inner(*)')
             .eq('is_active', true)
-            .eq('partners.status', 'active')
+            .eq('partner.status', 'active')
             .order('created_at', { ascending: false }),
           supabase
             .from('partner_referrals')
@@ -243,7 +241,7 @@ export default function ImpactBrandsPage() {
   const activateBenefit = async (benefit: PartnerBenefit) => {
     setActivationError(null);
     if (!hasAccess(['intermediate'])) {
-      setActivationError('This benefit is available to athletes with a paid membership.');
+      setActivationError(t('impactBrands.errors.membershipRequiredShort'));
       return;
     }
     const existing = myReferrals.find(referral => referral.benefit_id === benefit.id && !['cancelled', 'expired', 'refunded'].includes(referral.status));
@@ -253,7 +251,7 @@ export default function ImpactBrandsPage() {
     }
     const { data: codeData, error: codeError } = await supabase.rpc('generate_referral_code');
     if (codeError) {
-      setActivationError('We could not create your referral right now. Please try again.');
+      setActivationError(t('impactBrands.errors.createReferralFailed'));
       return;
     }
     const expirationAt = benefit.end_date ? new Date(`${benefit.end_date}T23:59:59`).toISOString() : null;
@@ -269,7 +267,7 @@ export default function ImpactBrandsPage() {
       .select('*, partners(*), partner_benefits(*)')
       .maybeSingle();
     if (error || !data) {
-      setActivationError('We could not activate this benefit right now. Please try again.');
+      setActivationError(t('impactBrands.errors.activateFailed'));
       return;
     }
     setActivatedReferral(data as PartnerReferral);
@@ -297,16 +295,6 @@ export default function ImpactBrandsPage() {
     }
   };
 
-  const getProjectTypeColor = (type: string) => {
-    switch (type) {
-      case 'athlete_support': return 'bg-[#514163]/10 text-[#514163]';
-      case 'facility': return 'bg-[#514163]/20 text-[#514163]';
-      case 'equipment': return 'bg-[#514163]/15 text-[#514163]';
-      case 'community': return 'bg-[#514163]/25 text-[#514163]';
-      default: return 'bg-gray-100 text-gray-700 dark:text-gray-300';
-    }
-  };
-
   const getCategoryColor = (category: string) => {
     switch (category) {
       case 'travel': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
@@ -324,7 +312,6 @@ export default function ImpactBrandsPage() {
       if (selectedCountry !== 'all' && project.country !== selectedCountry) return false;
       return true;
     }).sort((a, b) => {
-      // Put own projects first
       if (a.athlete_id === profile?.id && b.athlete_id !== profile?.id) return -1;
       if (a.athlete_id !== profile?.id && b.athlete_id === profile?.id) return 1;
       return 0;
@@ -337,12 +324,12 @@ export default function ImpactBrandsPage() {
   };
 
   const categories = [
-    { value: 'all', label: 'All Categories' },
-    { value: 'travel', label: 'Travel' },
-    { value: 'equipment', label: 'Equipment' },
-    { value: 'training', label: 'Training' },
-    { value: 'education', label: 'Education' },
-    { value: 'health', label: 'Health' }
+    { value: 'all', labelKey: 'impactBrands.projects.allCategories' },
+    { value: 'travel', labelKey: 'impactBrands.categories.travel' },
+    { value: 'equipment', labelKey: 'impactBrands.categories.equipment' },
+    { value: 'training', labelKey: 'impactBrands.categories.training' },
+    { value: 'education', labelKey: 'impactBrands.categories.education' },
+    { value: 'health', labelKey: 'impactBrands.categories.health' }
   ];
 
   const calculateProgress = (project: AthleteProject): number => {
@@ -358,34 +345,14 @@ export default function ImpactBrandsPage() {
         <div className="mb-8 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white rounded-full text-sm font-medium mb-4">
             <Heart className="w-4 h-4" />
-            Spotters and Support
+            {t('impactBrands.badge')}
           </div>
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
-            Grow with Support
+            {t('impactBrands.title')}
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
-            Connect with brands, access exclusive offers, and support projects that make a difference in the sports community
+            {t('impactBrands.subtitle')}
           </p>
-        </div>
-
-        {/* Stats Bar */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 text-center">
-            <div className="text-3xl font-bold text-[#514163] dark:text-[#fdda36]">12</div>
-            <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Active Brands</div>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 text-center">
-            <div className="text-3xl font-bold text-[#514163] dark:text-[#fdda36]">24</div>
-            <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Promotions</div>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 text-center">
-            <div className="text-3xl font-bold text-[#514163] dark:text-[#fdda36]">8</div>
-            <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Active Projects</div>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 text-center">
-            <div className="text-3xl font-bold text-[#514163] dark:text-[#fdda36]">$45K</div>
-            <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">Raised This Year</div>
-          </div>
         </div>
 
         {/* Tabs */}
@@ -401,7 +368,7 @@ export default function ImpactBrandsPage() {
             >
               <div className="flex items-center justify-center gap-2">
                 <Handshake className="w-5 h-5" />
-                <span>My Partnerships</span>
+                <span>{t('impactBrands.tabs.partnerships')}</span>
               </div>
             </button>
 
@@ -415,7 +382,7 @@ export default function ImpactBrandsPage() {
             >
               <div className="flex items-center justify-center gap-2">
                 <Heart className="w-5 h-5" />
-                <span>Support Projects</span>
+                <span>{t('impactBrands.tabs.projects')}</span>
               </div>
             </button>
 
@@ -429,7 +396,7 @@ export default function ImpactBrandsPage() {
             >
               <div className="flex items-center justify-center gap-2">
                 <Tag className="w-5 h-5" />
-                <span>Promotions & Discounts</span>
+                <span>{t('impactBrands.tabs.promotions')}</span>
               </div>
             </button>
           </div>
@@ -438,7 +405,7 @@ export default function ImpactBrandsPage() {
             {loading ? (
               <div className="text-center py-12">
                 <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                <p className="mt-4 text-gray-600 dark:text-gray-400">Loading...</p>
+                <p className="mt-4 text-gray-600 dark:text-gray-400">{t('impactBrands.loading')}</p>
               </div>
             ) : (
               <>
@@ -448,8 +415,8 @@ export default function ImpactBrandsPage() {
                     {promotions.length === 0 ? (
                       <div className="text-center py-12">
                         <Tag className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No promotions available</h3>
-                        <p className="text-gray-600 dark:text-gray-400">Check back soon for exclusive offers</p>
+                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{t('impactBrands.promotions.none')}</h3>
+                        <p className="text-gray-600 dark:text-gray-400">{t('impactBrands.promotions.noneDesc')}</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -466,7 +433,6 @@ export default function ImpactBrandsPage() {
                             )}
 
                             <div className="p-6">
-                              {/* Brand Logo */}
                               <div className="flex items-center gap-3 mb-4">
                                 {promo.brands.logo_url ? (
                                   <img
@@ -488,7 +454,6 @@ export default function ImpactBrandsPage() {
                                 </div>
                               </div>
 
-                              {/* Promotion Details */}
                               <div className="flex items-center gap-2 mb-3">
                                 <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${
                                   promo.promotion_type === 'discount' ? 'bg-[#514163]/10 text-[#514163]' :
@@ -511,7 +476,7 @@ export default function ImpactBrandsPage() {
 
                               {promo.discount_code && (
                                 <div className="bg-yellow-50 dark:bg-yellow-900/20 border-2 border-yellow-200 dark:border-yellow-800 border-dashed rounded-lg p-3 mb-4">
-                                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">Use code:</div>
+                                  <div className="text-xs text-gray-600 dark:text-gray-400 mb-1">{t('impactBrands.promotions.useCode')}</div>
                                   <div className="font-mono font-bold text-lg text-gray-900 dark:text-yellow-300">{promo.discount_code}</div>
                                 </div>
                               )}
@@ -519,7 +484,7 @@ export default function ImpactBrandsPage() {
                               {promo.end_date && (
                                 <div className="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-400 mb-4">
                                   <Calendar className="w-3 h-3" />
-                                  Valid until {new Date(promo.end_date).toLocaleDateString()}
+                                  {t('impactBrands.promotions.validUntil')} {new Date(promo.end_date).toLocaleDateString()}
                                 </div>
                               )}
 
@@ -530,7 +495,7 @@ export default function ImpactBrandsPage() {
                                 onClick={() => trackPromotionClick(promo.id)}
                                 className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                               >
-                                Get Offer
+                                {t('impactBrands.promotions.getOffer')}
                                 <ExternalLink className="w-4 h-4" />
                               </a>
                             </div>
@@ -544,11 +509,10 @@ export default function ImpactBrandsPage() {
                 {/* Projects Tab */}
                 {activeTab === 'projects' && (
                   <div>
-                    {/* Filters */}
                     <div className="mb-6 flex flex-col md:flex-row gap-4">
                       <div className="flex-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Category
+                          {t('impactBrands.projects.category')}
                         </label>
                         <select
                           value={selectedCategory}
@@ -556,20 +520,20 @@ export default function ImpactBrandsPage() {
                           className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
                         >
                           {categories.map(cat => (
-                            <option key={cat.value} value={cat.value}>{cat.label}</option>
+                            <option key={cat.value} value={cat.value}>{t(cat.labelKey)}</option>
                           ))}
                         </select>
                       </div>
                       <div className="flex-1">
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Country
+                          {t('impactBrands.projects.country')}
                         </label>
                         <select
                           value={selectedCountry}
                           onChange={(e) => setSelectedCountry(e.target.value)}
                           className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
                         >
-                          <option value="all">All Countries</option>
+                          <option value="all">{t('impactBrands.projects.allCountries')}</option>
                           {getUniqueCountries().map(country => (
                             <option key={country} value={country}>{country}</option>
                           ))}
@@ -580,11 +544,11 @@ export default function ImpactBrandsPage() {
                     {getFilteredProjects().length === 0 ? (
                       <div className="text-center py-12">
                         <Heart className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">No active projects</h3>
+                        <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{t('impactBrands.projects.none')}</h3>
                         <p className="text-gray-600 dark:text-gray-400">
                           {selectedCategory !== 'all' || selectedCountry !== 'all'
-                            ? 'Try adjusting your filters'
-                            : 'New projects coming soon'}
+                            ? t('impactBrands.projects.noneFiltered')
+                            : t('impactBrands.projects.noneDefault')}
                         </p>
                       </div>
                     ) : (
@@ -607,7 +571,7 @@ export default function ImpactBrandsPage() {
                                   <div className="mb-4 flex items-center justify-between">
                                     <span className="inline-flex items-center gap-2 px-3 py-1 bg-[#fdda36]/20 text-[#514163] dark:text-[#fdda36] rounded-full text-sm font-medium">
                                       <Target className="w-4 h-4" />
-                                      Your Project
+                                      {t('impactBrands.projects.yourProject')}
                                     </span>
                                     <button
                                       onClick={() => {
@@ -628,7 +592,7 @@ export default function ImpactBrandsPage() {
                                     {project.verified_by && (
                                       <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                                         <CheckCircle className="w-3 h-3" />
-                                        Verified
+                                        {t('impactBrands.projects.verified')}
                                       </span>
                                     )}
                                   </div>
@@ -654,10 +618,10 @@ export default function ImpactBrandsPage() {
                                   <div className="mb-4">
                                     <div className="flex items-center justify-between mb-2">
                                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        {project.currency} {project.total_declared_amount.toLocaleString()} raised
+                                        {project.currency} {project.total_declared_amount.toLocaleString()} {t('impactBrands.projects.raised')}
                                       </span>
                                       <span className="text-sm text-gray-600 dark:text-gray-400">
-                                        of {project.goal_amount.toLocaleString()}
+                                        {t('impactBrands.projects.of')} {project.goal_amount.toLocaleString()}
                                       </span>
                                     </div>
                                     <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
@@ -668,11 +632,11 @@ export default function ImpactBrandsPage() {
                                     </div>
                                     <div className="flex items-center justify-between mt-2">
                                       <span className="text-sm font-semibold text-[#514163] dark:text-[#8b7399]">
-                                        {progress}% funded
+                                        {progress}% {t('impactBrands.projects.funded')}
                                       </span>
                                       {project.visible_supports_count > 0 && (
                                         <span className="text-sm text-gray-600 dark:text-gray-400">
-                                          {project.visible_supports_count} supporters
+                                          {project.visible_supports_count} {t('impactBrands.projects.supporters')}
                                         </span>
                                       )}
                                     </div>
@@ -685,7 +649,7 @@ export default function ImpactBrandsPage() {
                                     className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-[#514163] text-white rounded-lg font-medium hover:bg-[#6b5179] transition-colors"
                                   >
                                     <Heart className="w-5 h-5" />
-                                    Support This Project
+                                    {t('impactBrands.projects.supportThisProject')}
                                   </a>
                                 )}
                               </div>
@@ -704,7 +668,7 @@ export default function ImpactBrandsPage() {
                     <div>
                       <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
                         <Heart className="w-6 h-6 text-[#fdda36]" />
-                        Support Projects
+                        {t('impactBrands.partnerships.supportProjects')}
                       </h2>
                       <SupportMeSectionV2 />
                     </div>
@@ -713,14 +677,14 @@ export default function ImpactBrandsPage() {
                     <div>
                       <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
                         <Handshake className="w-6 h-6 text-[#514163] dark:text-[#fdda36]" />
-                        Benefits for Asciende Athletes
+                        {t('impactBrands.partnerships.benefitsTitle')}
                       </h2>
-                      <p className="text-gray-600 dark:text-gray-400 mb-6">Discover exclusive benefits from independent partner brands.</p>
+                      <p className="text-gray-600 dark:text-gray-400 mb-6">{t('impactBrands.partnerships.benefitsSubtitle')}</p>
 
                       {!membershipLoading && !hasAccess(['intermediate']) && (
                         <div className="mb-6 bg-[#fdda36]/20 border border-[#fdda36] rounded-xl p-5">
-                          <h3 className="font-bold text-[#514163] mb-1">Paid membership required to activate benefits</h3>
-                          <p className="text-sm text-[#514163]/80">You can explore partner offers, but activating a benefit is available with a paid Asciende membership.</p>
+                          <h3 className="font-bold text-[#514163] mb-1">{t('impactBrands.partnerships.membershipRequired')}</h3>
+                          <p className="text-sm text-[#514163]/80">{t('impactBrands.partnerships.membershipRequiredDesc')}</p>
                         </div>
                       )}
 
@@ -731,8 +695,8 @@ export default function ImpactBrandsPage() {
                       {partnerBenefits.length === 0 ? (
                         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
                           <Gift className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">Benefits coming soon</h3>
-                          <p className="text-gray-600 dark:text-gray-400">New partner offers will appear here.</p>
+                          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{t('impactBrands.partnerships.benefitsComingSoon')}</h3>
+                          <p className="text-gray-600 dark:text-gray-400">{t('impactBrands.partnerships.benefitsComingSoonDesc')}</p>
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -752,8 +716,8 @@ export default function ImpactBrandsPage() {
                               <h4 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{benefit.discount_value || benefit.name}</h4>
                               <p className="text-gray-600 dark:text-gray-400 text-sm mb-4 line-clamp-2">{benefit.description || benefit.name}</p>
                               <div className="flex items-center justify-between gap-3">
-                                <button onClick={() => setSelectedBenefit(benefit)} className="text-sm font-medium text-[#514163] dark:text-[#fdda36] hover:underline">View details</button>
-                                <button onClick={() => activateBenefit(benefit)} className="px-4 py-2 bg-[#514163] text-white rounded-lg font-medium hover:bg-[#6b5179] transition-colors">Activate Benefit</button>
+                                <button onClick={() => setSelectedBenefit(benefit)} className="text-sm font-medium text-[#514163] dark:text-[#fdda36] hover:underline">{t('impactBrands.partnerships.viewDetails')}</button>
+                                <button onClick={() => activateBenefit(benefit)} className="px-4 py-2 bg-[#514163] text-white rounded-lg font-medium hover:bg-[#6b5179] transition-colors">{t('impactBrands.partnerships.activateBenefit')}</button>
                               </div>
                             </div>
                           ))}
@@ -762,12 +726,12 @@ export default function ImpactBrandsPage() {
 
                       {myReferrals.length > 0 && (
                         <div className="mt-8">
-                          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">My Activated Benefits</h3>
+                          <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">{t('impactBrands.partnerships.myActivatedBenefits')}</h3>
                           <div className="space-y-3">
                             {myReferrals.map(referral => (
                               <div key={referral.id} className="bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between gap-4">
-                                <div><p className="font-semibold text-gray-900 dark:text-white">{referral.partner_benefits?.name || 'Partner benefit'}</p><p className="font-mono text-sm text-gray-600 dark:text-gray-400">{referral.referral_code}</p></div>
-                                <button onClick={() => openPartner(referral)} className="px-4 py-2 bg-[#fdda36] text-[#514163] rounded-lg font-semibold hover:bg-[#ffd51a] transition-colors">Go to Partner</button>
+                                <div><p className="font-semibold text-gray-900 dark:text-white">{referral.partner_benefits?.name || t('impactBrands.partnerships.partnerBenefit')}</p><p className="font-mono text-sm text-gray-600 dark:text-gray-400">{referral.referral_code}</p></div>
+                                <button onClick={() => openPartner(referral)} className="px-4 py-2 bg-[#fdda36] text-[#514163] rounded-lg font-semibold hover:bg-[#ffd51a] transition-colors">{t('impactBrands.partnerships.goToPartner')}</button>
                               </div>
                             ))}
                           </div>
@@ -784,15 +748,15 @@ export default function ImpactBrandsPage() {
         {/* CTA Section */}
         <div className="bg-gradient-to-r from-[#514163] to-[#6d5581] rounded-2xl p-8 text-center text-white">
           <Globe className="w-12 h-12 mx-auto mb-4" />
-          <h2 className="text-3xl font-bold mb-2">Are you a brand?</h2>
+          <h2 className="text-3xl font-bold mb-2">{t('impactBrands.cta.title')}</h2>
           <p className="text-blue-100 mb-6 max-w-2xl mx-auto">
-            Partner with Asciende to support athletes from the Global South and create meaningful impact
+            {t('impactBrands.cta.desc')}
           </p>
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'about-asciende' }))}
             className="px-8 py-3 bg-white text-[#514163] rounded-lg font-bold hover:bg-gray-50 transition-colors"
           >
-            Become a Partner
+            {t('impactBrands.cta.becomePartner')}
           </button>
         </div>
       </div>
@@ -817,18 +781,18 @@ export default function ImpactBrandsPage() {
                 <p className="text-sm text-gray-500 uppercase tracking-wide">{selectedBenefit.partners.category}</p>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{selectedBenefit.partners.name}</h2>
               </div>
-              <button onClick={() => setSelectedBenefit(null)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><span className="sr-only">Close</span>×</button>
+              <button onClick={() => setSelectedBenefit(null)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><span className="sr-only">{t('impactBrands.partnerships.close')}</span>×</button>
             </div>
             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{selectedBenefit.discount_value || selectedBenefit.name}</h3>
             <p className="text-gray-600 dark:text-gray-400 mb-5">{selectedBenefit.description}</p>
-            {selectedBenefit.eligible_products && <p className="text-sm text-gray-600 dark:text-gray-400 mb-3"><strong>Eligible products:</strong> {selectedBenefit.eligible_products}</p>}
-            {selectedBenefit.how_to_use && <p className="text-sm text-gray-600 dark:text-gray-400 mb-3"><strong>How to use:</strong> {selectedBenefit.how_to_use}</p>}
-            {selectedBenefit.terms && <p className="text-sm text-gray-600 dark:text-gray-400 mb-5"><strong>Terms:</strong> {selectedBenefit.terms}</p>}
+            {selectedBenefit.eligible_products && <p className="text-sm text-gray-600 dark:text-gray-400 mb-3"><strong>{t('impactBrands.partnerships.eligibleProducts')}</strong> {selectedBenefit.eligible_products}</p>}
+            {selectedBenefit.how_to_use && <p className="text-sm text-gray-600 dark:text-gray-400 mb-3"><strong>{t('impactBrands.partnerships.howToUse')}</strong> {selectedBenefit.how_to_use}</p>}
+            {selectedBenefit.terms && <p className="text-sm text-gray-600 dark:text-gray-400 mb-5"><strong>{t('impactBrands.partnerships.terms')}</strong> {selectedBenefit.terms}</p>}
             <div className="bg-gray-50 dark:bg-gray-900/50 rounded-xl p-4 mb-5 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
-              <strong className="block text-gray-900 dark:text-white mb-1">Partner Disclaimer</strong>
-              This benefit is provided by an independent third-party partner. Asciende connects athletes with partner brands and is not the seller or provider of the products or services offered.
+              <strong className="block text-gray-900 dark:text-white mb-1">{t('impactBrands.partnerships.partnerDisclaimer')}</strong>
+              {t('impactBrands.partnerships.partnerDisclaimerText')}
             </div>
-            <button onClick={() => { setSelectedBenefit(null); activateBenefit(selectedBenefit); }} className="w-full px-4 py-3 bg-[#514163] text-white rounded-lg font-semibold hover:bg-[#6b5179] transition-colors">Activate Benefit</button>
+            <button onClick={() => { setSelectedBenefit(null); activateBenefit(selectedBenefit); }} className="w-full px-4 py-3 bg-[#514163] text-white rounded-lg font-semibold hover:bg-[#6b5179] transition-colors">{t('impactBrands.partnerships.activateBenefit')}</button>
           </div>
         </div>
       )}
@@ -837,12 +801,12 @@ export default function ImpactBrandsPage() {
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setActivatedReferral(null)}>
           <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-6 text-center" onClick={event => event.stopPropagation()}>
             <CheckCircle className="w-14 h-14 text-green-600 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Benefit Activated</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{t('impactBrands.partnerships.benefitActivated')}</h2>
             <p className="text-gray-600 dark:text-gray-400 mb-1">{activatedReferral.partner_benefits?.discount_value || activatedReferral.partner_benefits?.name}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">Partner: {activatedReferral.partners?.name}</p>
-            <div className="bg-[#fdda36]/20 border border-[#fdda36] rounded-xl p-4 mb-5"><p className="text-xs text-[#514163] mb-1">Your reference</p><p className="font-mono font-bold text-lg text-[#514163]">{activatedReferral.referral_code}</p></div>
-            <button onClick={() => openPartner(activatedReferral)} className="w-full px-4 py-3 bg-[#514163] text-white rounded-lg font-semibold hover:bg-[#6b5179] transition-colors">Go to Partner</button>
-            <button onClick={() => setActivatedReferral(null)} className="mt-3 text-sm text-gray-500 hover:underline">Close</button>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">{t('impactBrands.partnerships.partner')} {activatedReferral.partners?.name}</p>
+            <div className="bg-[#fdda36]/20 border border-[#fdda36] rounded-xl p-4 mb-5"><p className="text-xs text-[#514163] mb-1">{t('impactBrands.partnerships.yourReference')}</p><p className="font-mono font-bold text-lg text-[#514163]">{activatedReferral.referral_code}</p></div>
+            <button onClick={() => openPartner(activatedReferral)} className="w-full px-4 py-3 bg-[#514163] text-white rounded-lg font-semibold hover:bg-[#6b5179] transition-colors">{t('impactBrands.partnerships.goToPartner')}</button>
+            <button onClick={() => setActivatedReferral(null)} className="mt-3 text-sm text-gray-500 hover:underline">{t('impactBrands.partnerships.close')}</button>
           </div>
         </div>
       )}
