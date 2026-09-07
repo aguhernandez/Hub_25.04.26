@@ -13,6 +13,7 @@ interface SetLine {
   rest_seconds: number;
   rir?: number;
   rpe?: number;
+  working_set?: boolean;
 }
 
 interface AdvancedExerciseProps {
@@ -232,11 +233,12 @@ export default function AdvancedExerciseBuilder({
           <div className="col-span-1">RIR</div>
           <div className="col-span-1">RPE</div>
           <div className="col-span-3">{language === 'es' ? 'Vista' : 'Preview'}</div>
+          <div className="col-span-1 text-center">{language === 'es' ? 'Serie Efectiva' : 'Working Set'}</div>
           <div className="col-span-1"></div>
         </div>
 
         {exercise.set_lines.map((line, index) => (
-          <div key={index} className="space-y-2 p-3 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700/30">
+          <div key={index} className={`space-y-2 p-3 border border-gray-200 dark:border-gray-600 rounded-lg ${line.working_set ? 'bg-red-500/45' : 'bg-gray-50 dark:bg-gray-700/30'}`}>
             {/* Mobile layout - visible on small screens */}
             <div className="md:hidden space-y-2">
               <div className="grid grid-cols-3 gap-2">
@@ -359,7 +361,16 @@ export default function AdvancedExerciseBuilder({
                 </div>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400">
+                  <input
+                    type="checkbox"
+                    checked={line.working_set || false}
+                    onChange={(e) => updateSetLine(index, 'working_set', e.target.checked)}
+                    className="w-4 h-4 accent-red-500 cursor-pointer"
+                  />
+                  {language === 'es' ? 'Serie Efectiva' : 'Working Set'}
+                </label>
                 <button
                   onClick={() => deleteSetLine(index)}
                   className="text-red-500 hover:text-red-700 transition-colors p-1"
@@ -451,6 +462,15 @@ export default function AdvancedExerciseBuilder({
                   {line.rir !== null && line.rir !== undefined && ` • RIR ${line.rir}`}
                   {line.rpe !== null && line.rpe !== undefined && ` • RPE ${line.rpe}`}
                 </span>
+              </div>
+              <div className="col-span-1 flex justify-center">
+                <input
+                  type="checkbox"
+                  checked={line.working_set || false}
+                  onChange={(e) => updateSetLine(index, 'working_set', e.target.checked)}
+                  title={language === 'es' ? 'Serie Efectiva' : 'Working Set'}
+                  className="w-4 h-4 accent-red-500 cursor-pointer"
+                />
               </div>
               <button
                 onClick={() => deleteSetLine(index)}

@@ -22,6 +22,7 @@ interface SetLine {
   primary_metric?: string;
   secondary_metric?: string;
   rest_seconds?: number;
+  working_set?: boolean;
 }
 
 interface Exercise {
@@ -332,10 +333,13 @@ function ExerciseCard({
             <div className="flex flex-wrap gap-2">
               {exercise.set_lines ? (
                 exercise.set_lines.map((line, li) => (
-                  <span key={li} className="inline-flex items-center gap-1 text-xs font-medium text-[#514163] dark:text-[#fdda36] bg-[#fdda36]/10 rounded-full px-2 py-0.5">
+                  <span key={li} className={`inline-flex items-center gap-1 text-xs font-medium ${line.working_set ? 'text-red-600 dark:text-red-400 bg-red-500/15 border border-red-300 dark:border-red-700/40' : 'text-[#514163] dark:text-[#fdda36] bg-[#fdda36]/10'} rounded-full px-2 py-0.5`}>
                     {line.sets} {txt.sets} × {line.primary_value || line.reps}{' '}
                     {metricLabel(line.primary_metric, language)}
                     {line.secondary_value && ` @ ${line.secondary_value} ${metricLabel(line.secondary_metric, language)}`}
+                    {line.working_set && (
+                      <span className="ml-1 text-[10px] font-bold uppercase text-red-500 dark:text-red-400">WS</span>
+                    )}
                     {line.rest_seconds ? (
                       <>
                         <span className="text-gray-400 mx-0.5">·</span>
@@ -446,6 +450,7 @@ function ExerciseCard({
                 <th className="text-center py-1.5 px-1">{txt.reps}</th>
                 <th className="text-center py-1.5 px-1">{txt.weight}</th>
                 <th className="text-center py-1.5 px-1 w-12">{txt.rir}</th>
+                <th className="text-center py-1.5 px-1 w-16">{language === 'es' ? 'Serie Efectiva' : 'Working Set'}</th>
                 <th className="text-center py-1.5 px-1 w-10"></th>
               </tr>
             </thead>
@@ -453,10 +458,15 @@ function ExerciseCard({
               {Array.from({ length: totalSets }, (_, i) => {
                 const setNum = i + 1;
                 const tracking = getTracking(setNum);
+                const setLine = exercise.set_lines?.find((sl, idx) => {
+                  const offset = exercise.set_lines!.slice(0, idx).reduce((s, l) => s + (l.sets || 1), 0);
+                  return setNum > offset && setNum <= offset + (sl.sets || 1);
+                });
+                const isWorkingSet = setLine?.working_set || false;
                 return (
                   <tr
                     key={setNum}
-                    className={`border-t border-gray-100 dark:border-gray-700/40 ${tracking.completed ? 'opacity-50' : ''}`}
+                    className={`border-t border-gray-100 dark:border-gray-700/40 ${tracking.completed ? 'opacity-50' : ''} ${isWorkingSet ? 'bg-red-500/45' : ''}`}
                   >
                     <td className="py-2 px-1">
                       <span className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-600 dark:text-gray-300 font-medium text-xs">
@@ -494,6 +504,13 @@ function ExerciseCard({
                         placeholder="–"
                         className="w-full text-center bg-gray-50 dark:bg-gray-900/60 border border-gray-200 dark:border-gray-700/40 rounded-lg py-1.5 text-gray-900 dark:text-white text-sm focus:outline-none focus:border-[#514163] dark:focus:border-[#fdda36]/60 transition-colors placeholder-gray-300 dark:placeholder-gray-600"
                       />
+                    </td>
+                    <td className="py-2 px-1 text-center">
+                      {isWorkingSet ? (
+                        <span className="text-xs font-bold text-red-600 dark:text-red-400">WS</span>
+                      ) : (
+                        <span className="text-xs text-gray-300 dark:text-gray-600">–</span>
+                      )}
                     </td>
                     <td className="py-2 px-1 text-center">
                       <button
