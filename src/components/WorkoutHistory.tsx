@@ -54,10 +54,15 @@ interface ExerciseHistory {
   records: ExerciseHistoryRecord[];
 }
 
-export default function WorkoutHistory() {
+interface WorkoutHistoryProps {
+  athleteId?: string;
+}
+
+export default function WorkoutHistory({ athleteId }: WorkoutHistoryProps) {
   const { profile } = useAuth();
   const { language } = useLanguage();
   const { success, error } = useToast();
+  const effectiveAthleteId = athleteId || profile?.id;
   const [history, setHistory] = useState<WorkoutHistoryItem[]>([]);
   const [progress, setProgress] = useState<ExerciseProgress[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,12 +74,12 @@ export default function WorkoutHistory() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: string; name: string; date: string; duration: string; tableName: string } | null>(null);
 
   useEffect(() => {
-    if (profile?.id) {
+    if (effectiveAthleteId) {
       loadHistory();
       loadProgress();
       loadExerciseHistory();
     }
-  }, [profile?.id, refreshTrigger]);
+  }, [effectiveAthleteId, refreshTrigger]);
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -87,7 +92,7 @@ export default function WorkoutHistory() {
   }, []);
 
   const loadHistory = async () => {
-    if (!profile?.id) return;
+    if (!effectiveAthleteId) return;
 
     const allActivities: WorkoutHistoryItem[] = [];
 
@@ -107,7 +112,7 @@ export default function WorkoutHistory() {
           name
         )
       `)
-      .eq('athlete_id', profile.id)
+      .eq('athlete_id', effectiveAthleteId)
       .eq('status', 'completed')
       .order('completed_at', { ascending: false })
       .limit(20);
@@ -208,7 +213,7 @@ export default function WorkoutHistory() {
     const { data: extraTraining } = await supabase
       .from('extra_training_logs')
       .select('*')
-      .eq('athlete_id', profile.id)
+      .eq('athlete_id', effectiveAthleteId)
       .order('created_at', { ascending: false })
       .limit(20);
 
@@ -229,7 +234,7 @@ export default function WorkoutHistory() {
     const { data: externalActivities } = await supabase
       .from('external_activities')
       .select('*')
-      .eq('user_id', profile.id)
+      .eq('user_id', effectiveAthleteId)
       .order('start_time', { ascending: false })
       .limit(20);
 
@@ -259,7 +264,7 @@ export default function WorkoutHistory() {
   };
 
   const loadProgress = async () => {
-    if (!profile?.id) return;
+    if (!effectiveAthleteId) return;
 
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
@@ -278,7 +283,7 @@ export default function WorkoutHistory() {
           )
         )
       `)
-      .eq('athlete_id', profile.id)
+      .eq('athlete_id', effectiveAthleteId)
       .gte('logged_at', sixMonthsAgo.toISOString())
       .order('logged_at', { ascending: true });
 
@@ -314,7 +319,7 @@ export default function WorkoutHistory() {
   };
 
   const loadExerciseHistory = async () => {
-    if (!profile?.id) return;
+    if (!effectiveAthleteId) return;
 
     const { data: logs } = await supabase
       .from('training_logs')
@@ -333,7 +338,7 @@ export default function WorkoutHistory() {
           )
         )
       `)
-      .eq('athlete_id', profile.id)
+      .eq('athlete_id', effectiveAthleteId)
       .order('logged_at', { ascending: false });
 
     if (!logs) return;
