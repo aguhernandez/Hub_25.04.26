@@ -38,7 +38,7 @@ export default function ExerciseStatsPanel({
   const [currentExerciseId, setCurrentExerciseId] = useState(exerciseId);
   const [currentExerciseName, setCurrentExerciseName] = useState(exerciseName);
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState<ExerciseOption[]>([]);
+  const [performedExercises, setPerformedExercises] = useState<ExerciseOption[]>([]);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
 
   const [sessions, setSessions] = useState<SessionLog[]>([]);
@@ -171,35 +171,58 @@ export default function ExerciseStatsPanel({
       setSearchTerm('');
       setShowSearchDropdown(false);
       fetchExerciseHistory(exerciseId, exerciseName, athleteId);
+      if (athleteId) {
+        loadPerformedExercises(athleteId);
+      } else {
+        setPerformedExercises([]);
+      }
     }
   }, [isOpen, exerciseId, exerciseName, athleteId, fetchExerciseHistory]);
 
-  useEffect(() => {
-    if (!searchTerm.trim() || searchTerm.trim().length < 2) {
-      setSearchResults([]);
-      setShowSearchDropdown(false);
+  const loadPerformedExercises = useCallback(async (athId: string) => {
+    const { data: logs } = await supabase
+      .from('training_logs')
+      .select(`
+        workout_exercises!inner (
+          exercise_id,
+          exercises (
+            id,
+            exercise,
+            exercise_en,
+            exercise_es
+          )
+        )
+      `)
+      .eq('athlete_id', athId);
+
+    if (!logs) {
+      setPerformedExercises([]);
       return;
     }
 
-    const timer = setTimeout(async () => {
-      const { data } = await supabase
-        .from('exercises')
-        .select('id, exercise, exercise_en, exercise_es')
-        .or(`exercise.ilike.%${searchTerm}%,exercise_en.ilike.%${searchTerm}%,exercise_es.ilike.%${searchTerm}%`)
-        .limit(15);
+    const seen = new Set<string>();
+    const exercises: ExerciseOption[] = [];
+    logs.forEach((log: any) => {
+      const we = log.workout_exercises;
+      const exId = we?.exercise_id || we?.exercises?.id;
+      if (!exId || seen.has(exId)) return;
+      seen.add(exId);
+      const ex = we?.exercises;
+      const name = language === 'es' ? (ex?.exercise_es || ex?.exercise) : (ex?.exercise_en || ex?.exercise);
+      if (name) exercises.push({ id: exId, name });
+    });
 
-      if (data) {
-        const results = data.map((e: any) => ({
-          id: e.id,
-          name: language === 'es' ? (e.exercise_es || e.exercise) : (e.exercise_en || e.exercise),
-        }));
-        setSearchResults(results);
-        setShowSearchDropdown(true);
-      }
-    }, 250);
+    exercises.sort((a, b) => a.name.localeCompare(b.name));
+    setPerformedExercises(exercises);
+  }, [language]);
 
-    return () => clearTimeout(timer);
-  }, [searchTerm, language]);
+  const searchResults = useMemo(() => {
+    if (!searchTerm.trim() || searchTerm.trim().length < 2) return [];
+    const term = searchTerm.toLowerCase();
+    return performedExercises.filter(ex =>
+      ex.name.toLowerCase().includes(term)
+    );
+  }, [searchTerm, performedExercises]);
 
   const selectExercise = (ex: ExerciseOption) => {
     setCurrentExerciseId(ex.id);
@@ -290,12 +313,12 @@ export default function ExerciseStatsPanel({
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                onFocus={() => searchTerm.trim().length >= 2 && setShowSearchDropdown(true)}
+                onFocus={() => setShowSearchDropdown(true)}
                 placeholder={t('Buscar otro ejercicio...', 'Search another exercise...')}
                 className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#fdda36] focus:border-transparent"
               />
             </div>
-            {showSearchDropdown && searchResults.length > 0 && (
+            {showSearchDropdown && performedExercises.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-64 overflow-y-auto z-10">
                 {searchResults.map((ex) => (
                   <button
@@ -308,7 +331,7 @@ export default function ExerciseStatsPanel({
                 ))}
               </div>
             )}
-            {showSearchDropdown && searchResults.length === 0 && searchTerm.trim().length >= 2 && (
+            {showSearchDropdown && searchTerm.trim().length >= 2 && searchResults.length === 0 && performedExercises.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 text-sm text-gray-500 dark:text-gray-400 z-10">
                 {t('No se encontraron ejercicios', 'No exercises found')}
               </div>
