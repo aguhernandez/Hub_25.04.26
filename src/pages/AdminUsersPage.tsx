@@ -58,6 +58,7 @@ function AdminUsersPageContent() {
 
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [roleCounts, setRoleCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
@@ -151,6 +152,14 @@ function AdminUsersPageContent() {
       });
       if (countError) throw countError;
       setTotalCount(countData || 0);
+
+      const { data: countsData, error: countsError } = await supabase.rpc('admin_get_role_counts');
+      if (countsError) throw countsError;
+      const counts: Record<string, number> = {};
+      countsData?.forEach((row: { role: string; count: number }) => {
+        counts[row.role] = Number(row.count);
+      });
+      setRoleCounts(counts);
     } catch (err) {
       console.error('Error loading users:', err);
       error(language === 'es' ? 'Error al cargar usuarios' : 'Error loading users');
@@ -340,7 +349,11 @@ function AdminUsersPageContent() {
 
   const stats = {
     total: totalCount,
-    showing: users.length,
+    athletes: roleCounts['athlete'] || 0,
+    trainers: roleCounts['trainer'] || 0,
+    nutritionists: roleCounts['nutritionist'] || 0,
+    headCoaches: roleCounts['head_coach'] || 0,
+    admins: roleCounts['admin'] || 0,
   };
 
   return (
@@ -357,7 +370,7 @@ function AdminUsersPageContent() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-gray-400" />
@@ -370,27 +383,35 @@ function AdminUsersPageContent() {
               <Trophy className="w-5 h-5 text-green-500" />
               <p className="text-sm text-gray-600 dark:text-gray-400">{t('athletes')}</p>
             </div>
-            <p className="text-2xl font-bold text-green-600 mt-1">
-              {users.filter((u) => u.role === 'athlete').length}
-            </p>
+            <p className="text-2xl font-bold text-green-600 mt-1">{stats.athletes}</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-2">
               <UserCog className="w-5 h-5 text-blue-500" />
               <p className="text-sm text-gray-600 dark:text-gray-400">{t('coaches')}</p>
             </div>
-            <p className="text-2xl font-bold text-blue-600 mt-1">
-              {users.filter((u) => u.role === 'trainer' || u.role === 'head_coach').length}
-            </p>
+            <p className="text-2xl font-bold text-blue-600 mt-1">{stats.trainers}</p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2">
+              <UserCog className="w-5 h-5 text-amber-500" />
+              <p className="text-sm text-gray-600 dark:text-gray-400">{t('nutritionists')}</p>
+            </div>
+            <p className="text-2xl font-bold text-amber-600 mt-1">{stats.nutritionists}</p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2">
+              <UserCog className="w-5 h-5 text-purple-500" />
+              <p className="text-sm text-gray-600 dark:text-gray-400">{t('headCoaches')}</p>
+            </div>
+            <p className="text-2xl font-bold text-purple-600 mt-1">{stats.headCoaches}</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-2">
               <Shield className="w-5 h-5 text-red-500" />
               <p className="text-sm text-gray-600 dark:text-gray-400">{t('admins')}</p>
             </div>
-            <p className="text-2xl font-bold text-red-600 mt-1">
-              {users.filter((u) => u.role === 'admin').length}
-            </p>
+            <p className="text-2xl font-bold text-red-600 mt-1">{stats.admins}</p>
           </div>
         </div>
 
