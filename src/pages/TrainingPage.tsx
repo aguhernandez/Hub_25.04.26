@@ -45,6 +45,7 @@ interface SetLine {
   rpe?: number;
   rest_seconds?: number;
   notes?: string;
+  working_set?: boolean;
 }
 
 interface WorkoutExercise {
@@ -842,6 +843,7 @@ export default function TrainingPage() {
           secondary_value,
           rir,
           rpe,
+          working_set,
           exercise_id,
           exercises (
             id,
@@ -880,7 +882,8 @@ export default function TrainingPage() {
               rir: lastGroup.rir,
               rpe: lastGroup.rpe,
               rest_seconds: lastGroup.rest_seconds,
-              notes: lastGroup.notes
+              notes: lastGroup.notes,
+              working_set: lastGroup.working_set ?? false
             }];
           }
           lastGroup.set_lines.push({
@@ -894,7 +897,8 @@ export default function TrainingPage() {
             rir: ex.rir,
             rpe: ex.rpe,
             rest_seconds: ex.rest_seconds,
-            notes: ex.notes
+            notes: ex.notes,
+            working_set: ex.working_set ?? false
           });
         } else {
           // New exercise group

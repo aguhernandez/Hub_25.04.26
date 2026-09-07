@@ -39,6 +39,7 @@ interface SetLine {
   primary_value?: string;
   secondary_value?: string;
   rest_seconds: number;
+  working_set?: boolean;
 }
 
 interface AdvancedWorkoutExercise {
@@ -259,6 +260,7 @@ export default function WorkoutBuilderPage() {
             primary_metric,
             secondary_metric,
             section_title,
+            working_set,
             exercises (
               id,
               exercise,
@@ -308,7 +310,8 @@ export default function WorkoutBuilderPage() {
             reps: we.reps,
             primary_value: we.primary_value ?? we.reps,
             secondary_value: we.secondary_value ?? null,
-            rest_seconds: we.rest_seconds
+            rest_seconds: we.rest_seconds,
+            working_set: we.working_set ?? false
           });
         });
 
@@ -740,7 +743,8 @@ export default function WorkoutBuilderPage() {
             order_index: exerciseIndex * 100 + lineIndex,
             primary_metric: ex.primary_metric,
             secondary_metric: ex.secondary_metric,
-            section_title: lineIndex === 0 ? ex.section_title : null
+            section_title: lineIndex === 0 ? ex.section_title : null,
+            working_set: line.working_set ?? false
           });
         });
       });
