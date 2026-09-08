@@ -14,14 +14,30 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { email, password, full_name } = body;
-    console.log('🚀 AUTH-SIGNUP - Request for:', email);
+    const { email, password, full_name, role, username, phone } = body;
+    const allowedRoles = ['athlete', 'trainer', 'nutritionist', 'head_coach'] as const;
+    const signupRole = role || 'athlete';
+    console.log('🚀 AUTH-SIGNUP - Request for:', email, 'role:', signupRole);
     console.log('📋 Request body keys:', Object.keys(body));
 
     if (!email || !password) {
       console.error('❌ Missing credentials - email:', !!email, 'password:', !!password);
       return new Response(
         JSON.stringify({ error: 'Email and password are required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!allowedRoles.includes(signupRole)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid account role' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (username !== undefined && (!/^[a-z0-9_]{3,30}$/.test(username) || username !== username.toLowerCase())) {
+      return new Response(
+        JSON.stringify({ error: 'Username must be 3-30 characters using lowercase letters, numbers, or underscores' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -53,12 +69,32 @@ Deno.serve(async (req: Request) => {
       },
     });
 
+    if (username) {
+      const { data: existingUsername, error: usernameError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', username)
+        .maybeSingle();
+      if (usernameError) {
+        return new Response(
+          JSON.stringify({ error: 'Unable to validate username' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      if (existingUsername) {
+        return new Response(
+          JSON.stringify({ error: 'That username is already taken', code: 'USERNAME_EXISTS' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     console.log('1️⃣ Creating auth user via Admin API...');
     const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { full_name: full_name || '' },
+      user_metadata: { full_name: full_name || '', role: signupRole },
     });
 
     if (authError) {
@@ -98,6 +134,22 @@ Deno.serve(async (req: Request) => {
     console.log('⏳ Waiting for trigger to create profile...');
     await new Promise(resolve => setTimeout(resolve, 500));
 
+    console.log('1b️⃣ Updating profile with role/username/phone...');
+    const profileUpdates: Record<string, unknown> = { role: signupRole };
+    if (username) profileUpdates.username = username;
+    if (phone) profileUpdates.phone = phone;
+
+    const { error: profileUpdateError } = await supabase
+      .from('profiles')
+      .update(profileUpdates)
+      .eq('id', userId);
+
+    if (profileUpdateError) {
+      console.warn('⚠️ Warning: Could not update profile:', profileUpdateError.message);
+    } else {
+      console.log('✅ Profile updated with role:', signupRole);
+    }
+
     console.log('2️⃣ Assigning free "Start" membership...');
     const { error: membershipError } = await supabase
       .from('user_memberships')
@@ -121,7 +173,7 @@ Deno.serve(async (req: Request) => {
       token = await new jose.SignJWT({
         user_id: userId,
         email: email,
-        role: 'athlete',
+        role: signupRole,
         active_plan: [],
       })
         .setProtectedHeader({ alg: 'HS256' })
@@ -139,7 +191,7 @@ Deno.serve(async (req: Request) => {
         user: {
           id: userId,
           email: email,
-          role: 'athlete',
+          role: signupRole,
           active_plan: [],
         },
         message: 'Account created successfully',

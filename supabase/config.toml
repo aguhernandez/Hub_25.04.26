@@ -1,2 +1,5 @@
 [functions.trainer-create-athlete]
 verify_jwt = true
+
+[functions.auth-signup]
+verify_jwt = false

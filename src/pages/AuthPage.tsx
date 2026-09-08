@@ -144,9 +144,10 @@ interface AuthPageProps {
   fromSplash?: boolean;
   initialSatelliteId?: string | null;
   onGoBack?: () => void;
+  onSignUpClick?: () => void;
 }
 
-export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoBack }: AuthPageProps) {
+export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoBack, onSignUpClick }: AuthPageProps) {
   const getInitialSatellite = () => {
     if (initialSatelliteId === undefined) return null;
     if (initialSatelliteId === null) return SATELLITES[0];
@@ -1000,6 +1001,16 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoB
             >
               {language === 'es' ? 'Crear una cuenta' : 'Create an account'}
             </button>
+
+            {onSignUpClick && (
+              <button
+                type="button"
+                onClick={onSignUpClick}
+                className="mt-3 w-full text-center text-xs text-[#fdda36]/50 hover:text-[#fdda36] transition-colors py-2 font-medium"
+              >
+                {language === 'es' ? '¿Eres profesional? Regístrate aquí' : 'Are you a professional? Sign up here'}
+              </button>
+            )}
 
             {!redirectUrl && onGoBack && (
               <button

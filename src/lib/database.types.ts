@@ -43,6 +43,16 @@ export type Database = {
           id: string
           email: string
           full_name: string | null
+          username: string | null
+          first_name: string | null
+          last_name: string | null
+          bio: string | null
+          tagline: string | null
+          terms_accepted: boolean | null
+          terms_accepted_at: string | null
+          privacy_accepted: boolean | null
+          privacy_accepted_at: string | null
+          profile_completed: boolean | null
           role: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach'
           country: string | null
           phone: string | null
@@ -62,6 +72,16 @@ export type Database = {
           id: string
           email: string
           full_name?: string | null
+          username?: string | null
+          first_name?: string | null
+          last_name?: string | null
+          bio?: string | null
+          tagline?: string | null
+          terms_accepted?: boolean | null
+          terms_accepted_at?: string | null
+          privacy_accepted?: boolean | null
+          privacy_accepted_at?: string | null
+          profile_completed?: boolean | null
           role?: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach'
           country?: string | null
           phone?: string | null
@@ -78,6 +98,16 @@ export type Database = {
         Update: {
           email?: string
           full_name?: string | null
+          username?: string | null
+          first_name?: string | null
+          last_name?: string | null
+          bio?: string | null
+          tagline?: string | null
+          terms_accepted?: boolean | null
+          terms_accepted_at?: string | null
+          privacy_accepted?: boolean | null
+          privacy_accepted_at?: string | null
+          profile_completed?: boolean | null
           role?: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach'
           country?: string | null
           phone?: string | null

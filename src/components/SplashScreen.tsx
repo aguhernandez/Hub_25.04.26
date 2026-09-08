@@ -76,7 +76,7 @@ function PulseWaveform({ pulseCount }: { pulseCount: number }) {
 
 export default function SplashScreen({ onLoadComplete, onSatelliteSelect, minimal = false, skipAnimation = false }: SplashScreenProps) {
   // phases: enter → hold (pulse animates) → rise (logo rises, phone+sats appear) → interactive (full orbit visible)
-  const [phase, setPhase] = useState<'enter' | 'hold' | 'rise' | 'interactive'>(skipAnimation ? 'interactive' : 'enter');
+  const [phase, setPhase] = useState<'enter' | 'hold' | 'rise' | 'interactive'>(skipAnimation ? 'rise' : 'enter');
   const [pulseCount, setPulseCount] = useState(skipAnimation ? 3 : 0);
   const [viewportW, setViewportW] = useState(() => window.innerWidth);
 
@@ -102,8 +102,13 @@ export default function SplashScreen({ onLoadComplete, onSatelliteSelect, minima
 
   useEffect(() => {
     if (skipAnimation) {
-      called.current = true;
-      return;
+      const timeout = setTimeout(() => {
+        if (!called.current) {
+          called.current = true;
+          onLoadCompleteRef.current();
+        }
+      }, 100);
+      return () => clearTimeout(timeout);
     }
 
     if (minimal) {
@@ -126,7 +131,6 @@ export default function SplashScreen({ onLoadComplete, onSatelliteSelect, minima
           rise1 = setTimeout(() => {
             setPhase('rise');
             rise2 = setTimeout(() => {
-              setPhase('interactive');
               if (!called.current) { called.current = true; onLoadCompleteRef.current(); }
             }, 1100);
           }, 500);
@@ -288,8 +292,8 @@ export default function SplashScreen({ onLoadComplete, onSatelliteSelect, minima
       <div
         className="absolute inset-0 flex items-end justify-center"
         style={{
-          transform: isRising ? 'translateY(0)' : 'translateY(110%)',
-          opacity: isRising ? 1 : 0,
+          transform: 'translateY(110%)',
+          opacity: 0,
           transition: 'transform 1s cubic-bezier(0.16,1,0.3,1) 0.15s, opacity 0.6s ease 0.15s',
           zIndex: 10,
           paddingBottom: '24px',

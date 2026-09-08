@@ -1,5 +1,6 @@
 import { StrictMode, lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 import './index.css';
 
 // Initialize Capacitor for iOS/Android native context
@@ -67,7 +68,9 @@ if (isPublicRoute) {
             <ThemeProvider>
               <LanguageProvider>
                 <AthleteProvider>
-                  <App />
+                  <BrowserRouter>
+                    <App />
+                  </BrowserRouter>
                 </AthleteProvider>
               </LanguageProvider>
             </ThemeProvider>

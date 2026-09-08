@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import AuthPage from './pages/AuthPage';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import SplashScreen from './components/SplashScreen';
+import RoleSelectionScreen from './components/auth/RoleSelectionScreen';
+import ProfessionalSignUp from './components/auth/ProfessionalSignUp';
 import AdminPlatformDashboard from './pages/AdminPlatformDashboard';
 import AdminCommunicationsPage from './pages/AdminCommunicationsPage';
 import AdminUsersPage from './pages/AdminUsersPage';
@@ -84,11 +87,18 @@ function isSatelliteOrigin(url: string): boolean {
 
 function App() {
   const { user, loading, profile } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [programId, setProgramId] = useState<string | null>(null);
   const [racePlanId, setRacePlanId] = useState<string | null>(null);
   const [splashVisible, setSplashVisible] = useState(true);
   const [splashSkipAnimation, setSplashSkipAnimation] = useState(false);
   const [selectedSatelliteId, setSelectedSatelliteId] = useState<string | null | undefined>(undefined);
+  const [authScreen, setAuthScreen] = useState<'splash' | 'role-select' | 'professional-signup'>(() => {
+    if (window.location.pathname === '/signup/role') return 'role-select';
+    if (window.location.pathname.startsWith('/signup/professional')) return 'professional-signup';
+    return 'splash';
+  });
   const satelliteRedirectHandled = useRef(false);
   const splashCompleteHandled = useRef(false);
 
@@ -103,6 +113,30 @@ function App() {
   const handleSatelliteSelect = (satId: string | null) => {
     setSelectedSatelliteId(satId);
     setSplashVisible(false);
+    setAuthScreen('splash');
+  };
+
+  const handleRoleSelectAthlete = () => {
+    setSelectedSatelliteId(null);
+    setSplashVisible(false);
+    setAuthScreen('splash');
+    navigate('/');
+  };
+  const handleRoleSelectProfessional = () => {
+    setAuthScreen('professional-signup');
+    navigate('/signup/professional/step-1');
+  };
+
+  const handleProfessionalComplete = () => {
+    setAuthScreen('splash');
+    navigate('/');
+  };
+
+  const handleRoleSelectBack = () => {
+    setAuthScreen('splash');
+    setSplashSkipAnimation(true);
+    setSplashVisible(true);
+    navigate('/');
   };
 
   const handleGoBack = () => {
@@ -112,14 +146,29 @@ function App() {
   };
 
   useEffect(() => {
-    if (!loading) {
-      // Auth is ready — splash can become interactive. Don't auto-close splash.
+    if (user) return;
+    if (location.pathname === '/signup/role') {
+      setAuthScreen('role-select');
+    } else if (location.pathname.startsWith('/signup/professional')) {
+      setAuthScreen('professional-signup');
+    } else if (authScreen !== 'splash' && !location.pathname.startsWith('/signup/')) {
+      setAuthScreen('splash');
     }
-  }, [loading]);
+  }, [location.pathname, user]);
 
   const handleSplashComplete = useCallback(() => {
-    // Called when the splash interactive phase begins — keep splash shown until user clicks
-  }, []);
+    // When splash animation finishes, go to role selection (unless a satellite redirect is pending)
+    const params = new URLSearchParams(window.location.search);
+    const redirectParam = params.get('redirect');
+    if (redirectParam && isSatelliteOrigin(redirectParam)) {
+      // Satellite redirect — skip role selection, go straight to auth
+      setSelectedSatelliteId(null);
+      setSplashVisible(false);
+    } else {
+      setAuthScreen('role-select');
+      navigate('/signup/role');
+    }
+  }, [navigate]);
 
   const getInitialPage = (): Page => {
     if (profile?.role === 'admin') return 'admin';
@@ -309,12 +358,38 @@ function App() {
     return <div className="fixed inset-0 bg-[#070A0F]" />;
   }
 
-  if (showSplash && !user) {
+  if (showSplash && !user && authScreen === 'splash') {
     return (
       <SplashScreen
         onLoadComplete={handleSplashComplete}
         onSatelliteSelect={handleSatelliteSelect}
         skipAnimation={splashSkipAnimation}
+      />
+    );
+  }
+
+  if (!user && authScreen === 'role-select') {
+    return (
+      <RoleSelectionScreen
+        onSelectAthlete={handleRoleSelectAthlete}
+        onSelectProfessional={handleRoleSelectProfessional}
+        onBack={handleRoleSelectBack}
+      />
+    );
+  }
+
+  if (!user && authScreen === 'professional-signup') {
+    const pathMatch = location.pathname.match(/^\/signup\/professional\/step-([1-4])$/);
+    const initialStep = pathMatch ? Number(pathMatch[1]) : 1;
+    return (
+      <ProfessionalSignUp
+        initialStep={initialStep}
+        onStepChange={(nextStep) => navigate(`/signup/professional/step-${nextStep}`)}
+        onComplete={handleProfessionalComplete}
+        onBack={() => {
+          setAuthScreen('role-select');
+          navigate('/signup/role');
+        }}
       />
     );
   }
@@ -329,7 +404,13 @@ function App() {
         />
       );
     }
-    return <AuthPage initialSatelliteId={selectedSatelliteId} onGoBack={handleGoBack} />;
+    return (
+      <AuthPage
+        initialSatelliteId={selectedSatelliteId}
+        onGoBack={handleGoBack}
+        onSignUpClick={selectedSatelliteId === null ? () => { setAuthScreen('role-select'); navigate('/signup/role'); } : undefined}
+      />
+    );
   }
 
   const renderPage = () => {
