@@ -1617,18 +1617,32 @@ export default function TrainingPage() {
     setContextMenuWorkout(null);
   };
 
-  const executeDuplicate = async (targetDate: string) => {
-    if (!workoutToDuplicate || !effectiveAthleteId) return;
+  const executeDuplicate = async (targetDates: string[]) => {
+    if (!workoutToDuplicate || !effectiveAthleteId || targetDates.length === 0) return;
 
     try {
       const isTrainer = profile?.role === 'trainer' && selectedAthleteId;
-      await deepCopyWorkoutToDate(
-        workoutToDuplicate.workout_id,
-        targetDate,
-        effectiveAthleteId,
-        isTrainer ? profile.id : undefined
-      );
-      success(language === 'es' ? 'Entrenamiento duplicado exitosamente' : 'Workout duplicated successfully');
+      const trainerId = isTrainer ? profile.id : undefined;
+      let succeeded = 0;
+      let failed = 0;
+      for (const targetDate of targetDates) {
+        try {
+          await deepCopyWorkoutToDate(workoutToDuplicate.workout_id, targetDate, effectiveAthleteId, trainerId);
+          succeeded++;
+        } catch (err) {
+          console.error(`Error duplicating to ${targetDate}:`, err);
+          failed++;
+        }
+      }
+      if (succeeded > 0) {
+        success(
+          language === 'es'
+            ? `${succeeded} entrenamiento(s) duplicado(s) exitosamente${failed > 0 ? `, ${failed} fallido(s)` : ''}`
+            : `${succeeded} workout(s) duplicated successfully${failed > 0 ? `, ${failed} failed` : ''}`
+        );
+      } else {
+        error(language === 'es' ? 'Error al duplicar el entrenamiento' : 'Error duplicating workout');
+      }
       await loadWorkouts();
       setShowDuplicateModal(false);
       setWorkoutToDuplicate(null);
