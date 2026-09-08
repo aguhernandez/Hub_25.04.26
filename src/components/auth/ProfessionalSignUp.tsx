@@ -5,7 +5,8 @@ import { supabase } from '../../lib/supabase';
 import AsciendeLogo from '../AsciendeLogo';
 import {
   User, Lock, Mail, Phone, ArrowRight, ArrowLeft, Globe, Check,
-  Dumbbell, Stethoscope, Crown, Shield, CreditCard, Loader2, Eye, EyeOff
+  Dumbbell, Stethoscope, Crown, Shield, CreditCard, Loader2, Eye, EyeOff,
+  Sparkles, Calendar, Users, Clock
 } from 'lucide-react';
 
 type ProfessionalRole = 'trainer' | 'nutritionist' | 'head_coach';
@@ -31,7 +32,12 @@ interface FormData {
   termsAccepted: boolean;
 }
 
-const ROLE_CARDS: { role: ProfessionalRole; icon: typeof Dumbbell; color: string; labelEs: string; labelEn: string; accessEs: string[]; accessEn: string[] }[] = [
+const STRIPE_LINKS: Record<'monthly' | 'yearly', string> = {
+  monthly: 'https://buy.stripe.com/4gM14n1klgUoac55SG9R60d',
+  yearly: 'https://buy.stripe.com/fZu6oHe77cE8fwpgxk9R60e',
+};
+
+const ROLE_CARDS: { role: ProfessionalRole; icon: typeof Dumbbell; color: string; labelEs: string; labelEn: string; accessEs: string[]; accessEn: string[]; locked?: boolean }[] = [
   {
     role: 'trainer',
     icon: Dumbbell,
@@ -58,6 +64,7 @@ const ROLE_CARDS: { role: ProfessionalRole; icon: typeof Dumbbell; color: string
     labelEn: 'Head Coach',
     accessEs: ['Hub', 'Endurance', 'Nutrition', 'LAB', 'Motion', 'Performance', 'Academy'],
     accessEn: ['Hub', 'Endurance', 'Nutrition', 'LAB', 'Motion', 'Performance', 'Academy'],
+    locked: true,
   },
 ];
 
@@ -66,10 +73,28 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
   const { showToast } = useToast();
   const [step, setStep] = useState(initialStep);
   const [loading, setLoading] = useState(false);
+  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [accountCreated, setAccountCreated] = useState(false);
+  const [createdUserId, setCreatedUserId] = useState<string | null>(null);
 
   useEffect(() => {
     setStep(initialStep);
   }, [initialStep]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('professional_payment') === 'success') {
+      const userId = params.get('client_reference_id');
+      if (userId) {
+        setCreatedUserId(userId);
+        setAccountCreated(true);
+        setStep(4);
+        window.history.replaceState({}, '', window.location.pathname);
+        attemptAutoLogin();
+      }
+    }
+  }, []);
+
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
@@ -88,6 +113,19 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
     country: '',
     termsAccepted: false,
   });
+
+  const attemptAutoLogin = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        showToast(language === 'es' ? '¡Pago confirmado! Bienvenido a Asciende.' : 'Payment confirmed! Welcome to Asciende.', 'success');
+        onComplete();
+        return;
+      }
+    } catch {
+      // session not available, user will need to log in manually
+    }
+  };
 
   const update = (field: keyof FormData, value: string | boolean) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -139,6 +177,10 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
       setError(language === 'es' ? 'Selecciona una profesión' : 'Please select a profession');
       return false;
     }
+    if (form.role === 'head_coach') {
+      setError(language === 'es' ? 'Head Coach estará disponible próximamente' : 'Head Coach will be available soon');
+      return false;
+    }
     return true;
   };
 
@@ -155,6 +197,10 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
     if (step === 1 && !validateStep1()) return;
     if (step === 2 && !validateStep2()) return;
     if (step === 3 && !validateStep3()) return;
+    if (step === 3) {
+      void handleCreateAccountAndRedirect();
+      return;
+    }
     const nextStep = Math.min(4, step + 1);
     setStep(nextStep);
     onStepChange?.(nextStep);
@@ -167,10 +213,10 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
     onStepChange?.(previousStep);
   };
 
-  const handleCreateAccount = async () => {
+  const handleCreateAccountAndRedirect = async () => {
     setError('');
     if (!form.firstName.trim() || !form.lastName.trim() || !form.username.trim() || !form.email.trim() || !form.role || !form.termsAccepted) {
-      setError(language === 'es' ? 'Completa los datos obligatorios antes de activar la cuenta' : 'Complete the required information before activating your account');
+      setError(language === 'es' ? 'Completa los datos obligatorios antes de continuar' : 'Complete the required information before continuing');
       return;
     }
     setLoading(true);
@@ -226,19 +272,22 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
           privacy_accepted_at: new Date().toISOString(),
           profile_completed: true,
         }).eq('id', user.id);
-      }
 
-      showToast(language === 'es' ? '¡Cuenta activada! Bienvenido a Asciende.' : 'Account activated! Welcome to Asciende.', 'success');
-      onComplete();
+        setCreatedUserId(user.id);
+        setAccountCreated(true);
+
+        const stripeLink = STRIPE_LINKS[billingCycle];
+        const successUrl = `${window.location.origin}/signup/professional/step-4?professional_payment=success&client_reference_id=${user.id}`;
+        const stripeUrl = `${stripeLink}?client_reference_id=${user.id}&success_url=${encodeURIComponent(successUrl)}`;
+
+        showToast(language === 'es' ? 'Cuenta creada. Redirigiendo a Stripe...' : 'Account created. Redirecting to Stripe...', 'success');
+        window.location.href = stripeUrl;
+      }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handlePaymentComplete = () => {
-    void handleCreateAccount();
   };
 
   const inputClass = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-[#fdda36]/50 focus:bg-white/[0.07] transition-all';
@@ -368,16 +417,28 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
               {ROLE_CARDS.map(card => {
                 const Icon = card.icon;
                 const isSelected = form.role === card.role;
+                const isLocked = card.locked;
                 return (
                   <button
                     key={card.role}
-                    onClick={() => update('role', card.role)}
-                    className="w-full text-left rounded-2xl p-4 transition-all duration-300"
+                    onClick={() => !isLocked && update('role', card.role)}
+                    disabled={isLocked}
+                    className="w-full text-left rounded-2xl p-4 transition-all duration-300 relative"
                     style={{
-                      background: isSelected ? `linear-gradient(145deg, ${card.color}15, ${card.color}05)` : 'rgba(255,255,255,0.03)',
-                      border: isSelected ? `1px solid ${card.color}50` : '1px solid rgba(255,255,255,0.08)',
-                      transform: isSelected ? 'scale(1.02)' : 'scale(1)',
-                      boxShadow: isSelected ? `0 8px 24px ${card.color}20` : 'none',
+                      background: isLocked
+                        ? 'rgba(255,255,255,0.02)'
+                        : isSelected
+                          ? `linear-gradient(145deg, ${card.color}15, ${card.color}05)`
+                          : 'rgba(255,255,255,0.03)',
+                      border: isLocked
+                        ? '1px solid rgba(255,255,255,0.05)'
+                        : isSelected
+                          ? `1px solid ${card.color}50`
+                          : '1px solid rgba(255,255,255,0.08)',
+                      transform: isSelected && !isLocked ? 'scale(1.02)' : 'scale(1)',
+                      boxShadow: isSelected && !isLocked ? `0 8px 24px ${card.color}20` : 'none',
+                      opacity: isLocked ? 0.4 : 1,
+                      cursor: isLocked ? 'not-allowed' : 'pointer',
                     }}
                   >
                     <div className="flex items-center gap-3 mb-3">
@@ -386,8 +447,14 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
                       </div>
                       <div className="flex-1">
                         <h3 className="font-bold text-white">{language === 'es' ? card.labelEs : card.labelEn}</h3>
+                        {isLocked && (
+                          <span className="text-[10px] text-white/40 font-medium uppercase tracking-wide">
+                            {language === 'es' ? 'Próximamente' : 'Coming Soon'}
+                          </span>
+                        )}
                       </div>
-                      {isSelected && <Check className="w-5 h-5" style={{ color: card.color }} />}
+                      {isSelected && !isLocked && <Check className="w-5 h-5" style={{ color: card.color }} />}
+                      {isLocked && <Clock className="w-4 h-4 text-white/30" />}
                     </div>
                     <div className="flex flex-wrap gap-1.5 ml-13">
                       {(language === 'es' ? card.accessEs : card.accessEn).map(a => (
@@ -407,7 +474,7 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
           </div>
         )}
 
-        {/* ── STEP 3: Profile Completion ── */}
+        {/* ── STEP 3: Profile + Billing + Terms ── */}
         {step === 3 && (
           <div className="space-y-4 animate-[fadeIn_0.3s_ease]">
             <div>
@@ -420,13 +487,76 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
             </div>
             <div>
               <label className={labelClass}>{language === 'es' ? 'Biografía corta' : 'Short bio'}</label>
-              <textarea value={form.bio} onChange={e => update('bio', e.target.value)} className={inputClass} rows={3} placeholder={language === 'es' ? 'Cuéntanos sobre tu experiencia...' : 'Tell us about your experience...'} />
+              <textarea value={form.bio} onChange={e => update('bio', e.target.value)} className={inputClass} rows={2} placeholder={language === 'es' ? 'Cuéntanos sobre tu experiencia...' : 'Tell us about your experience...'} />
             </div>
             <div>
               <label className={labelClass}>{language === 'es' ? 'País' : 'Country'}</label>
               <input type="text" value={form.country} onChange={e => update('country', e.target.value)} className={inputClass} placeholder={language === 'es' ? 'España' : 'Spain'} />
             </div>
-            <label className="flex items-start gap-3 cursor-pointer pt-2">
+
+            {/* Billing cycle selection */}
+            <div className="pt-2">
+              <label className={labelClass}>{language === 'es' ? 'Plan de pago' : 'Billing plan'}</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setBillingCycle('monthly')}
+                  className="rounded-xl p-3 text-left transition-all"
+                  style={{
+                    background: billingCycle === 'monthly' ? 'linear-gradient(145deg, rgba(253,218,54,0.12), rgba(253,218,54,0.04))' : 'rgba(255,255,255,0.03)',
+                    border: billingCycle === 'monthly' ? '1px solid rgba(253,218,54,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                  }}
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Calendar className="w-3.5 h-3.5 text-[#fdda36]" />
+                    <span className="text-xs font-bold text-white uppercase">{language === 'es' ? 'Mensual' : 'Monthly'}</span>
+                  </div>
+                  <span className="text-lg font-bold text-white">49€</span>
+                  <span className="text-xs text-white/40">/{language === 'es' ? 'mes' : 'mo'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBillingCycle('yearly')}
+                  className="rounded-xl p-3 text-left transition-all relative"
+                  style={{
+                    background: billingCycle === 'yearly' ? 'linear-gradient(145deg, rgba(253,218,54,0.12), rgba(253,218,54,0.04))' : 'rgba(255,255,255,0.03)',
+                    border: billingCycle === 'yearly' ? '1px solid rgba(253,218,54,0.5)' : '1px solid rgba(255,255,255,0.08)',
+                  }}
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <Sparkles className="w-3.5 h-3.5 text-[#fdda36]" />
+                    <span className="text-xs font-bold text-white uppercase">{language === 'es' ? 'Anual' : 'Yearly'}</span>
+                  </div>
+                  <span className="text-lg font-bold text-white">490€</span>
+                  <span className="text-xs text-white/40">/{language === 'es' ? 'año' : 'yr'}</span>
+                  <span className="absolute -top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/30">
+                    {language === 'es' ? 'Ahorra 2 meses' : 'Save 2 months'}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Trial info */}
+            <div className="rounded-xl p-3 flex items-center gap-2.5" style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)' }}>
+              <Sparkles className="w-4 h-4 text-[#4ade80] shrink-0" />
+              <p className="text-xs text-[#4ade80]/80 font-medium">
+                {language === 'es'
+                  ? '7 días de prueba gratuita. Sin cargo hasta que termine el periodo.'
+                  : '7-day free trial. No charge until the trial period ends.'}
+              </p>
+            </div>
+
+            {/* Athlete limit info */}
+            <div className="rounded-xl p-3 flex items-center gap-2.5" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <Users className="w-4 h-4 text-[#fdda36] shrink-0" />
+              <p className="text-xs text-white/50 font-medium">
+                {language === 'es'
+                  ? 'Gestiona hasta 50 atletas con tu cuenta profesional.'
+                  : 'Manage up to 50 athletes with your professional account.'}
+              </p>
+            </div>
+
+            <label className="flex items-start gap-3 cursor-pointer pt-1">
               <button
                 type="button"
                 onClick={() => update('termsAccepted', !form.termsAccepted)}
@@ -447,62 +577,107 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
           </div>
         )}
 
-        {/* ── STEP 4: Payment ── */}
+        {/* ── STEP 4: Payment (post-redirect) ── */}
         {step === 4 && (
           <div className="space-y-6 text-center animate-[fadeIn_0.3s_ease]">
-            <div className="mx-auto w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(253,218,54,0.12)', border: '1px solid rgba(253,218,54,0.3)' }}>
-              <CreditCard className="w-8 h-8 text-[#fdda36]" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white mb-2">{language === 'es' ? 'Activa tu cuenta' : 'Activate your account'}</h2>
-              <p className="text-sm text-white/50 max-w-xs mx-auto">
-                {language === 'es'
-                  ? 'Tu cuenta está creada. Completa el pago para activarla y desbloquear todas las herramientas.'
-                  : 'Your account is created. Complete payment to activate it and unlock all tools.'}
-              </p>
-            </div>
-            <div className="rounded-2xl p-5 text-left" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-white/60">{language === 'es' ? 'Plan' : 'Plan'}</span>
-                <span className="text-sm font-bold text-white capitalize">
-                  {form.role === 'trainer' ? (language === 'es' ? 'Entrenador' : 'Trainer')
-                    : form.role === 'nutritionist' ? (language === 'es' ? 'Nutricionista' : 'Nutritionist')
-                    : 'Head Coach'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-white/60">{language === 'es' ? 'Acceso' : 'Access'}</span>
-                <span className="text-sm font-bold text-[#fdda36]">Hub + {form.role === 'head_coach' ? (language === 'es' ? 'Todo' : 'Everything') : form.role === 'trainer' ? 'Endurance' : 'Nutrition'}</span>
-              </div>
-              <div className="border-t border-white/10 pt-3 mt-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-white/60">{language === 'es' ? 'Pago único' : 'One-time payment'}</span>
-                  <span className="text-lg font-bold text-white">{language === 'es' ? 'Por confirmar' : 'TBD'}</span>
+            {accountCreated ? (
+              <>
+                <div className="mx-auto w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.3)' }}>
+                  <Check className="w-8 h-8 text-[#4ade80]" />
                 </div>
-              </div>
-            </div>
-            {/* ── STRIPE PLACEHOLDER ── */}
-            <div className="rounded-xl p-4 border-2 border-dashed border-[#fdda36]/30 bg-[#fdda36]/5">
-              <p className="text-xs text-[#fdda36]/70 font-semibold uppercase tracking-wide mb-2">
-                {language === 'es' ? 'Pago Stripe — Próximamente' : 'Stripe Payment — Coming Soon'}
-              </p>
-              <p className="text-xs text-white/40">
-                {language === 'es'
-                  ? 'El enlace de pago de Stripe se inyectará aquí según la profesión seleccionada.'
-                  : 'The Stripe payment link will be injected here based on the selected profession.'}
-              </p>
-            </div>
-            <button
-              onClick={handlePaymentComplete}
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[#fdda36] text-[#1a1428] font-bold rounded-xl hover:bg-[#f5c400] disabled:opacity-50 transition-colors"
-            >
-              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              {loading
-                ? (language === 'es' ? 'Activando cuenta...' : 'Activating account...')
-                : (language === 'es' ? 'Completar pago y activar' : 'Complete payment & activate')}
-              <ArrowRight className="w-4 h-4" />
-            </button>
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-2">
+                    {language === 'es' ? '¡Pago completado!' : 'Payment completed!'}
+                  </h2>
+                  <p className="text-sm text-white/50 max-w-xs mx-auto">
+                    {language === 'es'
+                      ? 'Tu cuenta profesional está activa. Tu prueba gratuita de 7 días ha comenzado.'
+                      : 'Your professional account is active. Your 7-day free trial has started.'}
+                  </p>
+                </div>
+                <div className="rounded-2xl p-5 text-left" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-white/60">{language === 'es' ? 'Plan' : 'Plan'}</span>
+                    <span className="text-sm font-bold text-white capitalize">
+                      {form.role === 'trainer' ? (language === 'es' ? 'Entrenador' : 'Trainer')
+                        : form.role === 'nutritionist' ? (language === 'es' ? 'Nutricionista' : 'Nutritionist')
+                        : 'Head Coach'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-white/60">{language === 'es' ? 'Atletas máx.' : 'Max athletes'}</span>
+                    <span className="text-sm font-bold text-[#fdda36]">50</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-white/60">{language === 'es' ? 'Prueba gratuita' : 'Free trial'}</span>
+                    <span className="text-sm font-bold text-[#4ade80]">7 {language === 'es' ? 'días' : 'days'}</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => { showToast(language === 'es' ? '¡Bienvenido a Asciende!' : 'Welcome to Asciende!', 'success'); onComplete(); }}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[#fdda36] text-[#1a1428] font-bold rounded-xl hover:bg-[#f5c400] transition-colors"
+                >
+                  {language === 'es' ? 'Ir al Hub' : 'Go to Hub'}
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="mx-auto w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(253,218,54,0.12)', border: '1px solid rgba(253,218,54,0.3)' }}>
+                  <CreditCard className="w-8 h-8 text-[#fdda36]" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-white mb-2">{language === 'es' ? 'Activa tu cuenta' : 'Activate your account'}</h2>
+                  <p className="text-sm text-white/50 max-w-xs mx-auto">
+                    {language === 'es'
+                      ? 'Serás redirigido a Stripe para completar el pago de forma segura.'
+                      : 'You will be redirected to Stripe to complete payment securely.'}
+                  </p>
+                </div>
+                <div className="rounded-2xl p-5 text-left" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-white/60">{language === 'es' ? 'Plan' : 'Plan'}</span>
+                    <span className="text-sm font-bold text-white capitalize">
+                      {form.role === 'trainer' ? (language === 'es' ? 'Entrenador' : 'Trainer')
+                        : form.role === 'nutritionist' ? (language === 'es' ? 'Nutricionista' : 'Nutritionist')
+                        : 'Head Coach'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-white/60">{language === 'es' ? 'Facturación' : 'Billing'}</span>
+                    <span className="text-sm font-bold text-[#fdda36]">
+                      {billingCycle === 'monthly' ? (language === 'es' ? 'Mensual — 49€/mes' : 'Monthly — 49€/mo') : (language === 'es' ? 'Anual — 490€/año' : 'Yearly — 490€/yr')}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm text-white/60">{language === 'es' ? 'Atletas máx.' : 'Max athletes'}</span>
+                    <span className="text-sm font-bold text-white">50</span>
+                  </div>
+                  <div className="border-t border-white/10 pt-3 mt-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-white/60">{language === 'es' ? 'Prueba gratuita' : 'Free trial'}</span>
+                      <span className="text-sm font-bold text-[#4ade80]">7 {language === 'es' ? 'días' : 'days'}</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-white/30">
+                  {language === 'es'
+                    ? 'El mismo precio aplica para Entrenadores y Nutricionistas.'
+                    : 'Same price applies for Trainers and Nutritionists.'}
+                </p>
+                <button
+                  onClick={() => void handleCreateAccountAndRedirect()}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-[#fdda36] text-[#1a1428] font-bold rounded-xl hover:bg-[#f5c400] disabled:opacity-50 transition-colors"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {loading
+                    ? (language === 'es' ? 'Redirigiendo...' : 'Redirecting...')
+                    : (language === 'es' ? 'Pagar y activar cuenta' : 'Pay & activate account')}
+                  {!loading && <ArrowRight className="w-4 h-4" />}
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -517,14 +692,14 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
         {step < 4 && (
           <button
             onClick={handleNext}
-            disabled={loading || (step === 1 && usernameAvailable === false)}
+            disabled={loading || (step === 1 && usernameAvailable === false) || (step === 2 && form.role === 'head_coach')}
             className="mt-6 w-full flex items-center justify-center gap-2 px-6 py-3 bg-[#fdda36] text-[#1a1428] font-bold rounded-xl hover:bg-[#f5c400] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
             {loading
               ? (language === 'es' ? 'Creando cuenta...' : 'Creating account...')
               : step === 3
-              ? (language === 'es' ? 'Crear cuenta' : 'Create account')
+              ? (language === 'es' ? 'Ir al pago' : 'Go to payment')
               : (language === 'es' ? 'Continuar' : 'Continue')}
             {!loading && <ArrowRight className="w-4 h-4" />}
           </button>

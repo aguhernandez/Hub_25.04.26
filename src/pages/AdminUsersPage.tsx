@@ -47,6 +47,13 @@ interface AdminUser {
     name_en: string | null;
     slug: string;
   } | null;
+  proSubscription?: {
+    status: string;
+    billing_cycle: string;
+    trial_end: string | null;
+    current_period_end: string | null;
+    max_athletes: number;
+  } | null;
 }
 
 const PAGE_SIZE = 20;
@@ -128,6 +135,19 @@ function AdminUsersPageContent() {
         }
       });
 
+      const { data: proSubs } = await supabase
+        .from('professional_subscriptions')
+        .select('user_id, status, billing_cycle, trial_end, current_period_end, max_athletes')
+        .in('user_id', userIds)
+        .order('created_at', { ascending: false });
+
+      const proSubByUser = new Map<string, any>();
+      proSubs?.forEach((s: any) => {
+        if (!proSubByUser.has(s.user_id)) {
+          proSubByUser.set(s.user_id, s);
+        }
+      });
+
       const usersWithMemberships: AdminUser[] = profiles.map((p: any) => ({
         id: p.id,
         email: p.email,
@@ -141,6 +161,7 @@ function AdminUsersPageContent() {
         country: p.country,
         avatar_url: p.avatar_url,
         membership: membershipByUser.get(p.id) || null,
+        proSubscription: proSubByUser.get(p.id) || null,
       }));
 
       setUsers(usersWithMemberships);
@@ -323,6 +344,14 @@ function AdminUsersPageContent() {
       actions: { es: 'Acciones', en: 'Actions' },
       membership: { es: 'Membresía', en: 'Membership' },
       noMembership: { es: 'Sin membresía', en: 'No membership' },
+      proSub: { es: 'Suscripción Pro', en: 'Pro Subscription' },
+      trialing: { es: 'Prueba', en: 'Trialing' },
+      active: { es: 'Activo', en: 'Active' },
+      pastDue: { es: 'Pago pendiente', en: 'Past Due' },
+      canceled: { es: 'Cancelado', en: 'Canceled' },
+      unpaid: { es: 'Impagado', en: 'Unpaid' },
+      incomplete: { es: 'Incompleto', en: 'Incomplete' },
+      noProSub: { es: 'Sin suscripción', en: 'No subscription' },
       loading: { es: 'Cargando usuarios...', en: 'Loading users...' },
       noUsers: { es: 'No se encontraron usuarios', en: 'No users found' },
       page: { es: 'Página', en: 'Page' },
@@ -496,6 +525,9 @@ function AdminUsersPageContent() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         {t('membership')}
                       </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        {t('proSub')}
+                      </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         {t('actions')}
                       </th>
@@ -599,6 +631,40 @@ function AdminUsersPageContent() {
                             ) : (
                               <span className="text-xs text-gray-400 dark:text-gray-500">
                                 {t('noMembership')}
+                              </span>
+                            )}
+                          </td>
+                          {/* Pro Subscription */}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {user.proSubscription ? (
+                              <div className="flex flex-col gap-1">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                                    user.proSubscription.status === 'active' || user.proSubscription.status === 'trialing'
+                                      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                      : user.proSubscription.status === 'past_due' || user.proSubscription.status === 'unpaid'
+                                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+                                        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                  }`}
+                                >
+                                  {user.proSubscription.status === 'trialing' ? t('trialing')
+                                    : user.proSubscription.status === 'active' ? t('active')
+                                    : user.proSubscription.status === 'past_due' ? t('pastDue')
+                                    : user.proSubscription.status === 'canceled' ? t('canceled')
+                                    : user.proSubscription.status === 'unpaid' ? t('unpaid')
+                                    : t('incomplete')}
+                                </span>
+                                <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                                  {user.proSubscription.billing_cycle === 'monthly'
+                                    ? (language === 'es' ? 'Mensual' : 'Monthly')
+                                    : (language === 'es' ? 'Anual' : 'Yearly')}
+                                  {' · '}
+                                  {user.proSubscription.max_athletes} {language === 'es' ? 'atletas' : 'athletes'}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400 dark:text-gray-500">
+                                {t('noProSub')}
                               </span>
                             )}
                           </td>

@@ -158,6 +158,10 @@ async function handleCheckoutCompleted(supabase: any, event: StripeEvent) {
     await handleMembershipSubscriptionCreated(supabase, session);
     return;
   }
+  if (session.metadata?.type === 'professional_subscription') {
+    await handleProfessionalCheckoutCompleted(supabase, session);
+    return;
+  }
 
   // Generic product purchase path
   const customerEmail = session.customer_email || session.customer_details?.email;
@@ -560,10 +564,77 @@ async function handleMembershipSubscriptionCreated(supabase: any, session: any) 
   log('INFO', 'membership_subscription_complete', { user_id, membership_id });
 }
 
+// ── Professional subscription checkout completed ──────────────────────────────
+async function handleProfessionalCheckoutCompleted(supabase: any, session: any) {
+  const { user_id, billing_cycle, role } = session.metadata ?? {};
+  log('INFO', 'professional_checkout_start', { session_id: session.id, user_id, billing_cycle, role });
+
+  if (!user_id) {
+    log('ERROR', 'professional_checkout_missing_user', { session_id: session.id });
+    return;
+  }
+
+  const trialEnd = session.subscription_details?.trial_end
+    ? new Date(session.subscription_details.trial_end * 1000).toISOString()
+    : null;
+
+  const { error } = await supabase.from('professional_subscriptions').upsert({
+    user_id,
+    stripe_customer_id: session.customer,
+    stripe_subscription_id: session.subscription,
+    stripe_price_id: session.metadata?.price_id || null,
+    billing_cycle: billing_cycle || 'monthly',
+    status: 'trialing',
+    trial_end: trialEnd,
+    current_period_end: session.subscription_details?.trial_end
+      ? new Date(session.subscription_details.trial_end * 1000).toISOString()
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    max_athletes: 50,
+  }, { onConflict: 'stripe_subscription_id' });
+
+  if (error) {
+    log('ERROR', 'professional_subscription_upsert_failed', { error: error.message });
+    throw error;
+  }
+
+  log('INFO', 'professional_subscription_created', { user_id, billing_cycle, trial_end: trialEnd });
+}
+
 // ── Subscription updated ───────────────────────────────────────────────────────
 async function handleSubscriptionUpdated(supabase: any, event: StripeEvent) {
   const subscription = event.data.object;
   log('INFO', 'subscription_updated', { subscription_id: subscription.id });
+
+  // Check if this is a professional subscription
+  const { data: profSub } = await supabase
+    .from('professional_subscriptions')
+    .select('id, user_id')
+    .eq('stripe_subscription_id', subscription.id)
+    .maybeSingle();
+
+  if (profSub) {
+    const status = subscription.status || 'active';
+    const trialEnd = subscription.trial_end
+      ? new Date(subscription.trial_end * 1000).toISOString()
+      : null;
+    const periodEnd = subscription.current_period_end
+      ? new Date(subscription.current_period_end * 1000).toISOString()
+      : null;
+
+    const { error } = await supabase
+      .from('professional_subscriptions')
+      .update({
+        status,
+        trial_end: trialEnd,
+        current_period_end: periodEnd,
+        canceled_at: status === 'canceled' ? new Date().toISOString() : null,
+      })
+      .eq('stripe_subscription_id', subscription.id);
+
+    if (error) log('ERROR', 'professional_subscription_update_failed', { error: error.message });
+    else log('INFO', 'professional_subscription_updated', { subscription_id: subscription.id, status });
+    return;
+  }
 
   const { error } = await supabase
     .from('user_purchases')
@@ -577,6 +648,32 @@ async function handleSubscriptionUpdated(supabase: any, event: StripeEvent) {
 async function handleSubscriptionActive(supabase: any, event: StripeEvent) {
   const subscription = event.data.object;
   log('INFO', 'subscription_active', { subscription_id: subscription.id });
+
+  // Check if this is a professional subscription
+  const { data: profSub } = await supabase
+    .from('professional_subscriptions')
+    .select('id, user_id')
+    .eq('stripe_subscription_id', subscription.id)
+    .maybeSingle();
+
+  if (profSub) {
+    const status = subscription.status || 'active';
+    const periodEnd = subscription.current_period_end
+      ? new Date(subscription.current_period_end * 1000).toISOString()
+      : null;
+
+    const { error } = await supabase
+      .from('professional_subscriptions')
+      .update({
+        status,
+        current_period_end: periodEnd,
+      })
+      .eq('stripe_subscription_id', subscription.id);
+
+    if (error) log('ERROR', 'professional_subscription_active_failed', { error: error.message });
+    else log('INFO', 'professional_subscription_activated', { subscription_id: subscription.id, status });
+    return;
+  }
 
   if (subscription.metadata?.membership_id || subscription.metadata?.type === 'membership_subscription') {
     const { error } = await supabase
@@ -597,6 +694,27 @@ async function handleSubscriptionCanceled(supabase: any, event: StripeEvent) {
   const subscription = event.data.object;
   const stripeSubId = subscription.id || subscription.subscription;
   log('INFO', 'subscription_canceled', { subscription_id: stripeSubId, event_type: event.type });
+
+  // Check if this is a professional subscription
+  const { data: profSub } = await supabase
+    .from('professional_subscriptions')
+    .select('id, user_id')
+    .eq('stripe_subscription_id', stripeSubId)
+    .maybeSingle();
+
+  if (profSub) {
+    const { error } = await supabase
+      .from('professional_subscriptions')
+      .update({
+        status: 'canceled',
+        canceled_at: new Date().toISOString(),
+      })
+      .eq('stripe_subscription_id', stripeSubId);
+
+    if (error) log('ERROR', 'professional_subscription_cancel_failed', { error: error.message });
+    else log('INFO', 'professional_subscription_canceled', { subscription_id: stripeSubId });
+    return;
+  }
 
   if (subscription.metadata?.membership_id || subscription.metadata?.type === 'membership_subscription') {
     const { data: accessRow } = await supabase
