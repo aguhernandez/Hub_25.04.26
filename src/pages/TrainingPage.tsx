@@ -1389,10 +1389,20 @@ export default function TrainingPage() {
 
   const handleWorkoutMove = async (workoutId: string, newDate: string) => {
     try {
-      const { error } = await supabase
-        .from('athlete_workouts')
-        .update({ scheduled_date: newDate })
-        .eq('id', workoutId);
+      let error;
+
+      if (workoutId.startsWith('extra-')) {
+        const realId = workoutId.replace('extra-', '');
+        ({ error } = await supabase
+          .from('extra_training_logs')
+          .update({ training_date: newDate })
+          .eq('id', realId));
+      } else {
+        ({ error } = await supabase
+          .from('athlete_workouts')
+          .update({ scheduled_date: newDate })
+          .eq('id', workoutId));
+      }
 
       if (!error) {
         await loadWorkouts();
@@ -1669,10 +1679,20 @@ export default function TrainingPage() {
     setContextMenuWorkout(null);
 
     try {
-      const { error: deleteError } = await supabase
-        .from('athlete_workouts')
-        .delete()
-        .eq('id', workout.id);
+      let deleteError;
+
+      if (workout.id.startsWith('extra-')) {
+        const realId = workout.id.replace('extra-', '');
+        ({ error: deleteError } = await supabase
+          .from('extra_training_logs')
+          .delete()
+          .eq('id', realId));
+      } else {
+        ({ error: deleteError } = await supabase
+          .from('athlete_workouts')
+          .delete()
+          .eq('id', workout.id));
+      }
 
       if (deleteError) throw deleteError;
 
