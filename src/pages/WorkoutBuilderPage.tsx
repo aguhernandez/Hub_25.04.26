@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAthlete } from '../contexts/AthleteContext';
 import { supabase } from '../lib/supabase';
-import { Dumbbell, Plus, Save, Users, Calendar, Search, X, Play, Trash2, Calculator, Layers, AlertTriangle, ChevronDown, MoveUp, MoveDown, Copy } from 'lucide-react';
+import { Dumbbell, Plus, Save, Users, Calendar, Search, X, Play, Trash2, Calculator, Layers, AlertTriangle, ChevronDown, MoveUp, MoveDown, Copy, FileText } from 'lucide-react';
 import BackButton from '../components/BackButton';
 import AdvancedExerciseBuilder from '../components/training/AdvancedExerciseBuilder';
 import BlockOrderBuilder, { type BlockInstance } from '../components/training/BlockOrderBuilder';
@@ -15,6 +15,8 @@ import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 import { getExerciseName, getExerciseNameForLanguage, bilingualExerciseMatch } from '../utils/exerciseI18n';
 import TagSelector from '../components/tags/TagSelector';
+import MyDraftsPanel from '../components/training/MyDraftsPanel';
+import { createDraft, deleteDraft, updateDraft, type DraftPayload, type WorkoutDraft } from '../utils/workoutDrafts';
 
 interface Exercise {
   id: string;
@@ -116,6 +118,9 @@ export default function WorkoutBuilderPage() {
   const [workoutCircuits, setWorkoutCircuits] = useState<WorkoutCircuit[]>([]);
   const [addPanelTab, setAddPanelTab] = useState<'exercise' | 'circuit'>('exercise');
   const [pendingAthleteChange, setPendingAthleteChange] = useState<string | null>(null);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [draftsRefreshKey, setDraftsRefreshKey] = useState(0);
+  const [publishAfterDraftLoad, setPublishAfterDraftLoad] = useState(false);
 
   useEffect(() => {
     initializeBlocks();
@@ -142,8 +147,12 @@ export default function WorkoutBuilderPage() {
       const savedDate = sessionStorage.getItem('workout_scheduled_date');
       const editWorkoutId = sessionStorage.getItem('edit_workout_id');
       const editScheduledDate = sessionStorage.getItem('edit_scheduled_date');
+      const savedDraftId = sessionStorage.getItem('workout_draft_id');
 
-      if (editWorkoutId && editScheduledDate) {
+      if (savedDraftId) {
+        loadDraft(savedDraftId);
+        sessionStorage.removeItem('workout_draft_id');
+      } else if (editWorkoutId && editScheduledDate) {
         loadWorkoutForEdit(editWorkoutId, editScheduledDate);
         sessionStorage.removeItem('edit_workout_id');
         sessionStorage.removeItem('edit_scheduled_date');
@@ -219,6 +228,92 @@ export default function WorkoutBuilderPage() {
       offset += pageSize;
     }
     setExercises(allData);
+  };
+
+  const loadDraft = async (id: string) => {
+    setLoading(true);
+    try {
+      const { data: draft, error: draftError } = await supabase
+        .from('workout_drafts')
+        .select('id, user_id, name, date, exercises, description, created_at, updated_at')
+        .eq('id', id)
+        .maybeSingle();
+      if (draftError) throw draftError;
+      if (!draft) {
+        error(language === 'es' ? 'Borrador no encontrado' : 'Draft not found');
+        return;
+      }
+
+      const saved = draft.exercises || {};
+      setDraftId(draft.id);
+      setWorkoutName(draft.name || '');
+      setWorkoutDescription(draft.description || '');
+      setScheduledDate(draft.date || '');
+      setWorkoutExercises(Array.isArray(saved.workoutExercises) ? saved.workoutExercises : []);
+      setWorkoutCircuits(Array.isArray(saved.workoutCircuits) ? saved.workoutCircuits : []);
+      setOrderedBlocks(Array.isArray(saved.orderedBlocks) ? saved.orderedBlocks : []);
+      setSessionNotes(saved.sessionNotes || '');
+      setPendingTagIds(Array.isArray(saved.pendingTagIds) ? saved.pendingTagIds : []);
+      setAssignmentType(saved.assignmentType || 'individual');
+      setSelectedAthlete(saved.selectedAthlete || '');
+      setSelectedTeam(saved.selectedTeam || '');
+      setSelectedMembership(saved.selectedMembership || '');
+      setSelectedSection(saved.selectedSection || '');
+      setEditWorkoutId(null);
+      setEditAthleteWorkoutId(null);
+      setSavedWorkoutId(null);
+      success(language === 'es' ? 'Borrador abierto en modo edición' : 'Draft opened in edit mode');
+    } catch (err) {
+      console.error('Error loading workout draft:', err);
+      error(language === 'es' ? 'Error al abrir el borrador' : 'Error opening draft');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getDraftPayload = (): DraftPayload => ({
+    name: workoutName.trim() || (language === 'es' ? 'Borrador sin nombre' : 'Untitled draft'),
+    date: scheduledDate || null,
+    description: workoutDescription,
+    exercises: {
+      workoutExercises,
+      workoutCircuits,
+      orderedBlocks,
+      sessionNotes,
+      pendingTagIds,
+      assignmentType,
+      selectedAthlete,
+      selectedTeam,
+      selectedMembership,
+      selectedSection,
+    },
+  });
+
+  const saveDraft = async () => {
+    setLoading(true);
+    try {
+      const payload = getDraftPayload();
+      if (draftId) {
+        await updateDraft(draftId, payload);
+      } else {
+        const draft = await createDraft(payload);
+        setDraftId(draft.id);
+      }
+      setDraftsRefreshKey(key => key + 1);
+      success(language === 'es' ? 'Borrador guardado' : 'Draft saved');
+    } catch (err: any) {
+      console.error('Error saving workout draft:', err);
+      error(err.message === 'DRAFT_LIMIT_REACHED'
+        ? (language === 'es' ? 'Has alcanzado el límite de 10 borradores. Elimina o publica uno antes de crear otro.' : 'You have reached the 10-draft limit. Delete or publish one before creating another.')
+        : (language === 'es' ? 'Error al guardar el borrador' : 'Error saving draft'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openDraft = (draft: WorkoutDraft, publish = false) => {
+    setPublishAfterDraftLoad(publish);
+    void loadDraft(draft.id);
   };
 
   const loadWorkoutForEdit = async (athleteWorkoutId: string, scheduledDate: string) => {
@@ -834,6 +929,11 @@ export default function WorkoutBuilderPage() {
         await supabase.from('workout_tags').delete().eq('workout_id', workout.id);
       }
 
+      if (draftId) {
+        await deleteDraft(draftId);
+        setDraftsRefreshKey(key => key + 1);
+      }
+
       success(language === 'es'
         ? (editWorkoutId ? 'Entrenamiento actualizado' : 'Entrenamiento guardado')
         : (editWorkoutId ? 'Workout updated' : 'Workout saved')
@@ -851,6 +951,8 @@ export default function WorkoutBuilderPage() {
       setEditAthleteWorkoutId(null);
       setSavedWorkoutId(null);
       setPendingTagIds([]);
+      setDraftId(null);
+      setPublishAfterDraftLoad(false);
 
       window.dispatchEvent(new CustomEvent('navigate', { detail: 'training' }));
     } catch (err: any) {
@@ -860,6 +962,13 @@ export default function WorkoutBuilderPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (publishAfterDraftLoad && draftId && !loading) {
+      setPublishAfterDraftLoad(false);
+      void saveWorkout();
+    }
+  }, [publishAfterDraftLoad, draftId, loading]);
 
   const isTrainerOrAdmin = profile?.role === 'trainer' || profile?.role === 'admin';
   const isAthlete = profile?.role === 'athlete';
@@ -916,6 +1025,11 @@ export default function WorkoutBuilderPage() {
       <BackButton />
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          {draftId && (
+            <span className="px-2.5 py-1 rounded-full bg-amber-500 text-white text-xs font-bold uppercase tracking-wide">
+              {language === 'es' ? 'Borrador' : 'Draft'}
+            </span>
+          )}
           <Dumbbell className="w-8 h-8 text-[#fdda36]" />
           {language === 'es' ? 'Crear Entrenamiento Avanzado' : 'Create Advanced Workout'}
         </h1>
@@ -923,6 +1037,12 @@ export default function WorkoutBuilderPage() {
           {language === 'es' ? 'Diseña entrenamientos con métricas múltiples y líneas de series' : 'Design workouts with multiple metrics and set lines'}
         </p>
       </div>
+
+      <MyDraftsPanel
+        onOpen={(draft) => openDraft(draft)}
+        onPublish={(draft) => openDraft(draft, true)}
+        refreshKey={draftsRefreshKey}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -1598,16 +1718,26 @@ export default function WorkoutBuilderPage() {
             language={language}
           />
 
-          <button
-            onClick={saveWorkout}
-            disabled={loading || (workoutExercises.length === 0 && workoutCircuits.length === 0) || !scheduledDate}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Save className="w-5 h-5" />
-            {loading
-              ? (language === 'es' ? (editWorkoutId ? 'Actualizando...' : 'Guardando...') : (editWorkoutId ? 'Updating...' : 'Saving...'))
-              : (language === 'es' ? (editWorkoutId ? 'Actualizar Entrenamiento' : 'Guardar Entrenamiento') : (editWorkoutId ? 'Update Workout' : 'Save Workout'))}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={saveDraft}
+              disabled={loading}
+              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-amber-500 text-white font-medium rounded-lg hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FileText className="w-5 h-5" />
+              {loading ? (language === 'es' ? 'Guardando...' : 'Saving...') : (language === 'es' ? 'Guardar como borrador' : 'Save as Draft')}
+            </button>
+            <button
+              onClick={saveWorkout}
+              disabled={loading || (workoutExercises.length === 0 && workoutCircuits.length === 0) || !scheduledDate}
+              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Save className="w-5 h-5" />
+              {loading
+                ? (language === 'es' ? (editWorkoutId ? 'Actualizando...' : 'Publicando...') : (editWorkoutId ? 'Updating...' : 'Publishing...'))
+                : (language === 'es' ? (editWorkoutId ? 'Actualizar Entrenamiento' : 'Publicar Entrenamiento') : (editWorkoutId ? 'Update Workout' : 'Publish Workout'))}
+            </button>
+          </div>
         </div>
       </div>
 

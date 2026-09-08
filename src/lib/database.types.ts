@@ -9,6 +9,35 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      workout_drafts: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          date: string | null
+          exercises: Json
+          description: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string
+          name: string
+          date?: string | null
+          exercises?: Json
+          description?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          name?: string
+          date?: string | null
+          exercises?: Json
+          description?: string | null
+          updated_at?: string
+        }
+      }
       profiles: {
         Row: {
           id: string
