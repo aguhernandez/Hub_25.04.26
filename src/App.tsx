@@ -99,6 +99,7 @@ function App() {
     if (window.location.pathname.startsWith('/signup/professional')) return 'professional-signup';
     return 'splash';
   });
+  const [authInitialMode, setAuthInitialMode] = useState<'login' | 'signup'>('login');
   const satelliteRedirectHandled = useRef(false);
   const splashCompleteHandled = useRef(false);
 
@@ -119,6 +120,7 @@ function App() {
   const handleRoleSelectAthlete = () => {
     setSelectedSatelliteId(null);
     setSplashVisible(false);
+    setAuthInitialMode('signup');
     setAuthScreen('splash');
     navigate('/');
   };
@@ -133,9 +135,10 @@ function App() {
   };
 
   const handleRoleSelectBack = () => {
+    setSelectedSatelliteId(null);
+    setAuthInitialMode('login');
+    setSplashVisible(false);
     setAuthScreen('splash');
-    setSplashSkipAnimation(true);
-    setSplashVisible(true);
     navigate('/');
   };
 
@@ -157,18 +160,10 @@ function App() {
   }, [location.pathname, user]);
 
   const handleSplashComplete = useCallback(() => {
-    // When splash animation finishes, go to role selection (unless a satellite redirect is pending)
-    const params = new URLSearchParams(window.location.search);
-    const redirectParam = params.get('redirect');
-    if (redirectParam && isSatelliteOrigin(redirectParam)) {
-      // Satellite redirect — skip role selection, go straight to auth
-      setSelectedSatelliteId(null);
-      setSplashVisible(false);
-    } else {
-      setAuthScreen('role-select');
-      navigate('/signup/role');
-    }
-  }, [navigate]);
+    // Splash finishes → go straight to login screen
+    setSelectedSatelliteId(null);
+    setSplashVisible(false);
+  }, []);
 
   const getInitialPage = (): Page => {
     if (profile?.role === 'admin') return 'admin';
@@ -406,9 +401,11 @@ function App() {
     }
     return (
       <AuthPage
+        key={authInitialMode}
         initialSatelliteId={selectedSatelliteId}
+        initialMode={authInitialMode}
         onGoBack={handleGoBack}
-        onSignUpClick={selectedSatelliteId === null ? () => { setAuthScreen('role-select'); navigate('/signup/role'); } : undefined}
+        onSignUpClick={() => { setAuthScreen('role-select'); navigate('/signup/role'); }}
       />
     );
   }

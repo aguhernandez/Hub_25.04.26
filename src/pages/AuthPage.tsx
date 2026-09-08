@@ -143,11 +143,12 @@ type SignupStep = 1 | 2 | 3;
 interface AuthPageProps {
   fromSplash?: boolean;
   initialSatelliteId?: string | null;
+  initialMode?: 'login' | 'signup';
   onGoBack?: () => void;
   onSignUpClick?: () => void;
 }
 
-export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoBack, onSignUpClick }: AuthPageProps) {
+export default function AuthPage({ fromSplash = false, initialSatelliteId, initialMode, onGoBack, onSignUpClick }: AuthPageProps) {
   const getInitialSatellite = () => {
     if (initialSatelliteId === undefined) return null;
     if (initialSatelliteId === null) return SATELLITES[0];
@@ -156,7 +157,7 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, onGoB
 
   const initialSat = getInitialSatellite();
   const [headerVisible, setHeaderVisible] = useState(true);
-  const [mode, setMode] = useState<AuthMode>(initialSat ? 'login' : 'satellite-select');
+  const [mode, setMode] = useState<AuthMode>(initialMode === 'signup' ? 'signup' : 'login');
   const [selectedSatellite, setSelectedSatellite] = useState<typeof SATELLITES[0] | null>(initialSat);
   const [signupStep, setSignupStep] = useState<SignupStep>(1);
 
