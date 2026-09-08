@@ -536,11 +536,42 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
 
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden"
+      className="min-h-screen flex flex-col items-center justify-center md:items-stretch relative overflow-hidden"
       style={{
         background: 'linear-gradient(155deg, #0D0B14 0%, #110E1C 40%, #0A0814 100%)',
       }}
     >
+      {/* Cinematic login backdrop — desktop only */}
+      <div className="absolute inset-0 hidden md:block overflow-hidden pointer-events-none" aria-hidden="true">
+        <iframe
+          title="Asciende cinematic background"
+          src="https://www.youtube.com/embed/Xyw-1WmgmHM?autoplay=1&mute=1&loop=1&playlist=Xyw-1WmgmHM&controls=0&showinfo=0&rel=0&modestbranding=1"
+          className="absolute top-1/2 left-1/2 min-w-full min-h-full"
+          style={{
+            width: '177.78vh',
+            height: '56.25vw',
+            transform: 'translate(-50%, -50%)',
+            opacity: 0.56,
+            border: 0,
+          }}
+          allow="autoplay; encrypted-media"
+        />
+        <div className="absolute inset-0 bg-black/25" />
+      </div>
+
+      {/* Editorial slogan */}
+      <div className="absolute right-[8%] top-1/2 hidden md:block max-w-[38vw] -translate-y-1/2 pointer-events-none z-10">
+        <p
+          className="text-right text-white text-4xl lg:text-5xl xl:text-6xl leading-[1.12]"
+          style={{
+            fontFamily: "'Krona One', sans-serif",
+            textShadow: '0 4px 28px rgba(0,0,0,0.72)',
+          }}
+        >
+          Applied tools to support athletes in real conditions
+        </p>
+      </div>
+
       {/* Background grid */}
       <div
         className="absolute inset-0 pointer-events-none"
@@ -565,7 +596,7 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
       />
 
       {/* Language + legal top bar */}
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 pt-5 z-10">
+      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 pt-5 z-30">
         <div className="flex items-center gap-2">
           <AsciendeLogo variant="full" height={28} className="opacity-80" />
         </div>
@@ -848,7 +879,8 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
 
       {/* ── LOGIN / SIGNUP / FORGOT ── */}
       {mode !== 'satellite-select' && (
-      <div className="relative z-10 w-full max-w-md md:max-w-xl lg:max-w-2xl mx-auto px-4 md:px-8">
+      <div className="relative z-20 w-full md:w-[38vw] md:max-w-[520px] md:min-h-screen md:mr-auto md:ml-0 md:flex md:items-center md:rounded-r-2xl md:bg-black/45 md:backdrop-blur-xl px-4 md:px-8 lg:px-10 md:py-20">
+        <div className="auth-panel-content w-full max-w-md mx-auto md:scale-[0.82] md:origin-left md:w-[122%]">
 
         {/* LOGIN */}
         {mode === 'login' && (
@@ -1463,6 +1495,7 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
           </div>
         )}
 
+        </div>
       </div>
       )}
 

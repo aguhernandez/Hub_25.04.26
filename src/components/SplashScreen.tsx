@@ -10,6 +10,7 @@ interface SplashScreenProps {
   onSatelliteSelect?: (satelliteId: string | null) => void;
   minimal?: boolean;
   skipAnimation?: boolean;
+  exiting?: boolean;
 }
 
 const SATELLITES = [
@@ -74,7 +75,7 @@ function PulseWaveform({ pulseCount }: { pulseCount: number }) {
   );
 }
 
-export default function SplashScreen({ onLoadComplete, onSatelliteSelect, minimal = false, skipAnimation = false }: SplashScreenProps) {
+export default function SplashScreen({ onLoadComplete, onSatelliteSelect, minimal = false, skipAnimation = false, exiting = false }: SplashScreenProps) {
   // phases: enter → hold (pulse animates) → rise (logo rises, phone+sats appear) → interactive (full orbit visible)
   const [phase, setPhase] = useState<'enter' | 'hold' | 'rise' | 'interactive'>(skipAnimation ? 'rise' : 'enter');
   const [pulseCount, setPulseCount] = useState(skipAnimation ? 3 : 0);
@@ -175,6 +176,8 @@ export default function SplashScreen({ onLoadComplete, onSatelliteSelect, minima
       className="fixed inset-0 z-[9999] overflow-hidden"
       style={{
         background: 'linear-gradient(155deg, #1A1128 0%, #0E0A1A 35%, #160F22 65%, #0A0814 100%)',
+        transform: exiting ? 'translateY(-100%)' : 'translateY(0)',
+        transition: 'transform 750ms cubic-bezier(0.76, 0, 0.24, 1)',
       }}
     >
       {/* Particle field */}

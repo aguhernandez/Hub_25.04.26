@@ -92,6 +92,7 @@ function App() {
   const [programId, setProgramId] = useState<string | null>(null);
   const [racePlanId, setRacePlanId] = useState<string | null>(null);
   const [splashVisible, setSplashVisible] = useState(true);
+  const [splashExiting, setSplashExiting] = useState(false);
   const [splashSkipAnimation, setSplashSkipAnimation] = useState(false);
   const [selectedSatelliteId, setSelectedSatelliteId] = useState<string | null | undefined>(undefined);
   const [authScreen, setAuthScreen] = useState<'splash' | 'role-select' | 'professional-signup'>(() => {
@@ -160,9 +161,9 @@ function App() {
   }, [location.pathname, user]);
 
   const handleSplashComplete = useCallback(() => {
-    // Splash finishes → go straight to login screen
     setSelectedSatelliteId(null);
-    setSplashVisible(false);
+    setSplashExiting(true);
+    window.setTimeout(() => setSplashVisible(false), 750);
   }, []);
 
   const getInitialPage = (): Page => {
@@ -355,11 +356,21 @@ function App() {
 
   if (showSplash && !user && authScreen === 'splash') {
     return (
-      <SplashScreen
-        onLoadComplete={handleSplashComplete}
-        onSatelliteSelect={handleSatelliteSelect}
-        skipAnimation={splashSkipAnimation}
-      />
+      <>
+        <AuthPage
+          key={authInitialMode}
+          initialSatelliteId={selectedSatelliteId ?? null}
+          initialMode={authInitialMode}
+          onGoBack={handleGoBack}
+          onSignUpClick={() => { setAuthScreen('role-select'); navigate('/signup/role'); }}
+        />
+        <SplashScreen
+          onLoadComplete={handleSplashComplete}
+          onSatelliteSelect={handleSatelliteSelect}
+          skipAnimation={splashSkipAnimation}
+          exiting={splashExiting}
+        />
+      </>
     );
   }
 
