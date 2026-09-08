@@ -162,7 +162,7 @@ export default function MembershipsMarketplacePage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-12">
+      <div className="w-full max-w-7xl mx-auto px-6 py-12">
         {/* Current Membership Banner */}
         {activeMembership && !loadingMembership && (
           <div className="mb-8 p-6 bg-gradient-to-r from-[#514163] to-[#6b527a] rounded-2xl shadow-lg">
@@ -218,7 +218,7 @@ export default function MembershipsMarketplacePage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">
             {memberships.filter((membership) => ['inicia', 'pro'].includes(membership.slug)).map((membership) => {
               const hasAccess = hasActiveMembership(membership.id);
               const isCurrentMembership = activeMembership?.membership_id === membership.id;
