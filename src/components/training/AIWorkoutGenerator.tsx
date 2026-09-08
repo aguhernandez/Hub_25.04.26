@@ -713,7 +713,7 @@ export default function AIWorkoutGenerator({
                         type="button"
                         onClick={() => !isLocked && setBlockWeeks(opt.value)}
                         disabled={isLocked}
-                        title={isLocked ? (language === 'es' ? 'Disponible desde plan Intermedio' : 'Available from Intermediate plan') : undefined}
+                        title={isLocked ? (language === 'es' ? 'Disponible desde plan Pro' : 'Available from Pro plan') : undefined}
                         className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-all relative ${
                           isLocked
                             ? 'bg-gray-100 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed border-2 border-dashed border-gray-200 dark:border-gray-700'
@@ -734,8 +734,8 @@ export default function AIWorkoutGenerator({
                   <p className="mt-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 flex-shrink-0" />
                     {language === 'es'
-                      ? 'Plan Inicia: 1 programa por mes, máximo 7 días. Actualizá a Intermedio para bloques de 2 o 4 semanas.'
-                      : 'Inicia plan: 1 program per month, 7 days max. Upgrade to Intermediate for 2 or 4-week blocks.'}
+                      ? 'Plan Inicia: 1 programa por mes, máximo 7 días. Actualizá a Pro para bloques de 2 o 4 semanas.'
+                      : 'Inicia plan: 1 program per month, 7 days max. Upgrade to Pro for 2 or 4-week blocks.'}
                   </p>
                 )}
                 {totalSessions > 1 && startDate && (

@@ -2044,8 +2044,8 @@ export default function TrainingPage() {
               </h2>
               <p className="text-white/70 text-sm">
                 {language === 'es'
-                  ? 'Necesitás al menos el plan Intermedio para acceder a esta función completa.'
-                  : 'You need at least the Intermediate plan to access the full feature.'}
+                  ? 'Necesitás el plan Pro para acceder a esta función completa.'
+                  : 'You need the Pro plan to access the full feature.'}
               </p>
             </div>
 
@@ -2073,8 +2073,8 @@ export default function TrainingPage() {
 
               <p className="text-xs text-center text-gray-500 dark:text-gray-400 mb-4">
                 {language === 'es'
-                  ? 'Con Intermedio o Pro: planes ilimitados, mayor duración y ajuste por rendimiento real.'
-                  : 'With Intermediate or Pro: unlimited plans, longer durations, and real performance adjustments.'}
+                  ? 'Con Pro: planes ilimitados, mayor duración y ajuste por rendimiento real.'
+                  : 'With Pro: unlimited plans, longer durations, and real performance adjustments.'}
               </p>
 
               <div className="flex flex-col gap-2">
@@ -2095,7 +2095,7 @@ export default function TrainingPage() {
                   className="w-full py-3 rounded-xl bg-[#514163] hover:bg-[#3a2f4a] text-white font-semibold transition-colors text-sm flex items-center justify-center gap-2"
                 >
                   <Sparkles className="w-4 h-4 text-[#fdda36]" />
-                  {language === 'es' ? 'Ver plan Intermedio' : 'See Intermediate plan'}
+                  {language === 'es' ? 'Ver plan Pro' : 'See Pro plan'}
                 </button>
               </div>
             </div>
@@ -2122,15 +2122,15 @@ export default function TrainingPage() {
               </h2>
               <p className="text-white/70 text-sm">
                 {language === 'es'
-                  ? 'Necesitás el plan Intermedio o superior para acceder a las evaluaciones CMJ y Bar Velocity.'
-                  : 'You need Intermediate plan or higher to access CMJ and Bar Velocity assessments.'}
+                  ? 'Necesitás el plan Pro para acceder a las evaluaciones CMJ y Bar Velocity.'
+                  : 'You need the Pro plan to access CMJ and Bar Velocity assessments.'}
               </p>
             </div>
 
             <div className="px-6 py-5">
               <div className="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded-xl p-4 mb-5">
                 <p className="text-xs font-bold text-cyan-700 dark:text-cyan-400 uppercase tracking-wide mb-3">
-                  {language === 'es' ? 'Incluido en Intermediate y Pro' : 'Included in Intermediate & Pro'}
+                  {language === 'es' ? 'Incluido en Pro' : 'Included in Pro'}
                 </p>
                 <ul className="space-y-2">
                   {[

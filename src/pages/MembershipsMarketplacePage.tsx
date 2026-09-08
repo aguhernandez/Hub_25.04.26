@@ -70,6 +70,7 @@ export default function MembershipsMarketplacePage() {
         .eq('is_published', true)
         .eq('is_active', true)
         .eq('is_open', true)
+        .in('slug', ['inicia', 'pro'])
         .order('display_order', { ascending: true });
 
       if (error) throw error;
@@ -218,7 +219,7 @@ export default function MembershipsMarketplacePage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {memberships.map((membership) => {
+            {memberships.filter((membership) => ['inicia', 'pro'].includes(membership.slug)).map((membership) => {
               const hasAccess = hasActiveMembership(membership.id);
               const isCurrentMembership = activeMembership?.membership_id === membership.id;
               const priceMonthly = formatPrice(membership.price_monthly, membership.currency);

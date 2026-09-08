@@ -18,7 +18,7 @@ interface Membership {
 interface MembershipUpgradeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  requiredPlan?: 'asciende' | 'pro';
+  requiredPlan?: 'pro';
   feature?: string;
 }
 
@@ -47,7 +47,7 @@ export default function MembershipUpgradeModal({
     const { data } = await supabase
       .from('memberships')
       .select('*')
-      .in('slug', ['intermediate', 'pro'])
+      .eq('slug', 'pro')
       .order('price_monthly', { ascending: true });
 
     setMemberships(data || []);
@@ -80,14 +80,12 @@ export default function MembershipUpgradeModal({
   const getMembershipIcon = (name: string) => {
     const n = name.toLowerCase();
     if (n.includes('pro')) return <Crown className="w-6 h-6" />;
-    if (n.includes('intermediate')) return <Zap className="w-6 h-6" />;
     return <Star className="w-6 h-6" />;
   };
 
   const getMembershipColor = (name: string) => {
     const n = name.toLowerCase();
     if (n.includes('pro')) return 'from-yellow-500 to-yellow-600';
-    if (n.includes('intermediate')) return 'from-[#514163] to-[#6d5581]';
     return 'from-gray-500 to-gray-600';
   };
 
@@ -105,8 +103,8 @@ export default function MembershipUpgradeModal({
               {feature && (
                 <p className="text-sm text-gray-600 dark:text-gray-400 dark:text-gray-400 mt-1">
                   {language === 'es'
-                    ? `Necesitas ${requiredPlan === 'pro' ? 'Asciende Pro' : 'Asciende Intermediate'} o superior para: ${feature}`
-                    : `You need ${requiredPlan === 'pro' ? 'Asciende Pro' : 'Asciende Intermediate'} or higher for: ${feature}`}
+                    ? `Necesitas Asciende Pro o superior para: ${feature}`
+                    : `You need Asciende Pro or higher for: ${feature}`}
                 </p>
               )}
             </div>
@@ -186,7 +184,7 @@ export default function MembershipUpgradeModal({
               {memberships.map((membership) => {
                 const price = billingCycle === 'monthly' ? membership.price_monthly : membership.price_annual;
                 const monthlyPrice = billingCycle === 'yearly' ? (price / 12).toFixed(2) : price;
-                const isRecommended = membership.name.toLowerCase().includes('intermediate');
+                const isRecommended = true;
                 const isCurrentMembership = activeMembership?.membership_id === membership.id;
 
                 return (

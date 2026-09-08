@@ -240,7 +240,7 @@ export default function ImpactBrandsPage() {
 
   const activateBenefit = async (benefit: PartnerBenefit) => {
     setActivationError(null);
-    if (!hasAccess(['intermediate'])) {
+    if (!hasAccess(['pro'])) {
       setActivationError(t('impactBrands.errors.membershipRequiredShort'));
       return;
     }
@@ -681,7 +681,7 @@ export default function ImpactBrandsPage() {
                       </h2>
                       <p className="text-gray-600 dark:text-gray-400 mb-6">{t('impactBrands.partnerships.benefitsSubtitle')}</p>
 
-                      {!membershipLoading && !hasAccess(['intermediate']) && (
+                      {!membershipLoading && !hasAccess(['pro']) && (
                         <div className="mb-6 bg-[#fdda36]/20 border border-[#fdda36] rounded-xl p-5">
                           <h3 className="font-bold text-[#514163] mb-1">{t('impactBrands.partnerships.membershipRequired')}</h3>
                           <p className="text-sm text-[#514163]/80">{t('impactBrands.partnerships.membershipRequiredDesc')}</p>

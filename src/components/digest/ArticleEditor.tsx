@@ -36,7 +36,7 @@ export default function ArticleEditor({ isOpen, onClose, onSaved, article }: Art
     reading_time_minutes: 5,
     is_published: false,
     is_premium: false,
-    required_membership_tier: 'inicia' as 'inicia' | 'intermediate' | 'asciende' | 'pro',
+    required_membership_tier: 'inicia' as 'inicia' | 'pro',
     external_url: '',
     cta_text: '',
     cta_url: '',
@@ -959,30 +959,6 @@ export default function ArticleEditor({ isOpen, onClose, onSaved, article }: Art
                     </div>
                   </label>
 
-                  {/* Intermediate */}
-                  <label className={`relative cursor-pointer rounded-lg border-2 p-4 transition-all ${
-                    formData.required_membership_tier === 'intermediate' || formData.required_membership_tier === 'asciende'
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-gray-300 dark:border-gray-600 hover:border-gray-400'
-                  }`}>
-                    <input
-                      type="radio"
-                      name="membership_tier"
-                      value="intermediate"
-                      checked={formData.required_membership_tier === 'intermediate' || formData.required_membership_tier === 'asciende'}
-                      onChange={(e) => setFormData({ ...formData, required_membership_tier: e.target.value as any })}
-                      className="sr-only"
-                    />
-                    <div className="text-center">
-                      <div className="font-bold text-lg text-gray-900 dark:text-white">
-                        Intermediate
-                      </div>
-                      <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        {language === 'es' ? 'Premium' : 'Premium'}
-                      </div>
-                    </div>
-                  </label>
-
                   {/* Pro */}
                   <label className={`relative cursor-pointer rounded-lg border-2 p-4 transition-all ${
                     formData.required_membership_tier === 'pro'
@@ -1002,7 +978,7 @@ export default function ArticleEditor({ isOpen, onClose, onSaved, article }: Art
                         {language === 'es' ? '⭐ Pro' : '⭐ Pro'}
                       </div>
                       <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        {language === 'es' ? 'Elite' : 'Elite'}
+                        {language === 'es' ? 'Premium' : 'Premium'}
                       </div>
                     </div>
                   </label>
@@ -1017,18 +993,11 @@ export default function ArticleEditor({ isOpen, onClose, onSaved, article }: Art
                           : '✅ This article is free and will be available to all users'}
                       </>
                     )}
-                    {(formData.required_membership_tier === 'intermediate' || formData.required_membership_tier === 'asciende') && (
-                      <>
-                        {language === 'es'
-                          ? '🔒 Solo usuarios con Asciende Intermediate o Pro podrán leer este artículo'
-                          : '🔒 Only users with Asciende Intermediate or Pro membership can read this article'}
-                      </>
-                    )}
                     {formData.required_membership_tier === 'pro' && (
                       <>
                         {language === 'es'
-                          ? '💎 Solo usuarios con membresía Pro (nivel más alto) podrán leer este artículo'
-                          : '💎 Only users with Pro membership (highest tier) can read this article'}
+                          ? '🔒 Solo usuarios con membresía Pro podrán leer este artículo'
+                          : '🔒 Only users with Pro membership can read this article'}
                       </>
                     )}
                   </p>

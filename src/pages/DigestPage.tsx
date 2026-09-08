@@ -54,7 +54,7 @@ interface DigestPageProps {
 export default function DigestPage({ onNavigate }: DigestPageProps) {
   const { profile } = useAuth();
   const { language } = useLanguage();
-  const { hasAsciende, hasPro, loading: membershipLoading } = useMembership();
+  const { hasPro, loading: membershipLoading } = useMembership();
   const [articles, setArticles] = useState<Article[]>([]);
 const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -68,11 +68,11 @@ const [loading, setLoading] = useState(true);
   const [athleteSports, setAthleteSports] = useState<string[]>([]);
 
   const isTrainerOrAdmin = profile?.role === 'trainer' || profile?.role === 'admin';
-  const hasActiveMembership = hasAsciende || hasPro;
+  const hasActiveMembership = hasPro;
 
-  // Tier hierarchy: inicia(1) < intermediate/asciende(2) < pro(3)
-  // Pro sees everything, intermediate sees inicia+intermediate, inicia sees only inicia
-  const TIER_LEVEL: Record<string, number> = { inicia: 1, intermediate: 2, asciende: 2, pro: 3, teams_sports: 3 };
+  // Tier hierarchy: inicia(1) < pro(2)
+  // Pro sees everything, inicia sees only inicia
+  const TIER_LEVEL: Record<string, number> = { inicia: 1, intermediate: 2, asciende: 2, pro: 2, teams_sports: 3 };
 
   const canAccessArticle = (article: Article): boolean => {
     if (isTrainerOrAdmin) return true;
@@ -80,8 +80,6 @@ const [loading, setLoading] = useState(true);
     const required = TIER_LEVEL[requiredTier] ?? 1;
     // Pro
     if (hasPro) return true;
-    // Intermediate/Asciende
-    if (hasAsciende) return required <= 2;
     // Inicia/Free - only inicia content
     return required <= 1;
   };
@@ -454,7 +452,7 @@ const [loading, setLoading] = useState(true);
 
   const ArticlePaywall = ({ article, onUpgrade, language: lang }: { article: any; onUpgrade: () => void; language: string }) => {
     const tierName = article.required_membership_tier === 'pro' ? 'Pro' :
-                     article.required_membership_tier === 'intermediate' ? 'Intermediate' : 'Asciende';
+                     article.required_membership_tier === 'intermediate' ? 'Pro' : 'Pro';
 
     // Show first paragraph as preview, then blur + paywall
     const paragraphs = article.content.split(/\n\n+/).filter((p: string) => p.trim());
@@ -1027,7 +1025,7 @@ const [loading, setLoading] = useState(true);
         }}
         onUpgrade={handleUpgradeClick}
         articleTitle={paywallArticle?.title}
-        requiredTier={paywallArticle?.required_membership_tier || 'intermediate'}
+        requiredTier={paywallArticle?.required_membership_tier || 'pro'}
       />
     </div>
   );

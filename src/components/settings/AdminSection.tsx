@@ -244,14 +244,8 @@ export default function AdminSection({ currentProfile }: AdminSectionProps) {
                 <option value="inicia">
                   {language === 'es' ? '🆓 Inicia (Gratis)' : '🆓 Inicia (Free)'}
                 </option>
-                <option value="intermediate">
-                  {language === 'es' ? 'Asciende Intermediate' : 'Asciende Intermediate'}
-                </option>
                 <option value="pro">
-                  {language === 'es' ? '👑 Pro - $79/mes' : '👑 Pro - $79/mo'}
-                </option>
-                <option value="elite">
-                  {language === 'es' ? '⚡ Elite - $149/mes' : '⚡ Elite - $149/mo'}
+                  {language === 'es' ? '👑 Pro - $14.99/mes' : '👑 Pro - $14.99/mo'}
                 </option>
               </select>
             </div>
@@ -286,28 +280,16 @@ export default function AdminSection({ currentProfile }: AdminSectionProps) {
               </h4>
               <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400 dark:text-gray-400">
                 <p>
-                  <strong>Free:</strong>{' '}
+                  <strong>Inicia (Free):</strong>{' '}
                   {language === 'es'
-                    ? 'Acceso básico, 1 entrenamiento/semana'
-                    : 'Basic access, 1 workout/week'}
+                    ? 'Acceso básico, seguimiento de hábitos, registro de entrenamientos'
+                    : 'Basic access, habit tracking, workout logging'}
                 </p>
                 <p>
-                  <strong>Basic ($29):</strong>{' '}
+                  <strong>Pro ($14.99/mo):</strong>{' '}
                   {language === 'es'
-                    ? 'Planes personalizados, tracking completo'
-                    : 'Custom plans, full tracking'}
-                </p>
-                <p>
-                  <strong>Pro ($79):</strong>{' '}
-                  {language === 'es'
-                    ? 'Todo en Basic + Chat, análisis avanzado'
-                    : 'Everything in Basic + Chat, advanced analytics'}
-                </p>
-                <p>
-                  <strong>Elite ($149):</strong>{' '}
-                  {language === 'es'
-                    ? 'Todo en Pro + Entrenador 24/7, sesiones ilimitadas'
-                    : 'Everything in Pro + Trainer 24/7, unlimited sessions'}
+                    ? 'Planes personalizados, tracking completo, diario alimentario con IA, analítica avanzada, acceso al Digest'
+                    : 'Custom plans, full tracking, AI food diary, advanced analytics, Digest access'}
                 </p>
               </div>
             </div>

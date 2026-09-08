@@ -57,6 +57,7 @@ export default function ChangeMembershipModal({
         .from('memberships')
         .select('*')
         .eq('is_active', true)
+        .eq('slug', 'pro')
         .order('price_monthly', { ascending: true });
 
       if (error) throw error;
@@ -170,9 +171,6 @@ export default function ChangeMembershipModal({
       case 'pro':
       case 'pro-elite':
         return Crown;
-      case 'intermediate':
-      case 'asciende':
-        return Award;
       case 'start':
       case 'inicia':
         return Shield;
@@ -186,9 +184,6 @@ export default function ChangeMembershipModal({
       case 'pro':
       case 'pro-elite':
         return 'from-yellow-500 to-yellow-600';
-      case 'intermediate':
-      case 'asciende':
-        return 'from-[#514163] to-[#6d5581]';
       case 'start':
       case 'inicia':
         return 'from-gray-500 to-gray-600';

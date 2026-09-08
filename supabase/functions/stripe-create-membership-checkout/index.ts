@@ -47,7 +47,11 @@ Deno.serve(async (req: Request) => {
       .from('memberships')
       .select('*')
       .eq('id', membership_id)
-      .single();
+      .in('slug', ['inicia', 'pro'])
+      .eq('is_active', true)
+      .eq('is_published', true)
+      .eq('is_open', true)
+      .maybeSingle();
 
     if (membershipError || !membership) {
       console.error('Membership lookup error:', membershipError);

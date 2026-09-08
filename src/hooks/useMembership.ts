@@ -2,12 +2,10 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
-type MembershipLevel = 'inicia' | 'intermediate' | 'asciende' | 'pro' | 'teams_sports';
+type MembershipLevel = 'inicia' | 'pro' | 'teams_sports';
 
 interface MembershipStatus {
   level: MembershipLevel;
-  hasIntermediate: boolean;
-  hasAsciende: boolean;
   hasPro: boolean;
   hasTeamsSports: boolean;
   canAccessDigest: (requiredLevel: MembershipLevel) => boolean;
@@ -21,11 +19,9 @@ interface MembershipStatus {
 
 const LEVEL_HIERARCHY: Record<string, number> = {
   inicia: 1,
-  asciende: 2,
-  intermediate: 2,
-  pro: 3,
-  'pro-elite': 3,
-  teams_sports: 4
+  pro: 2,
+  'pro-elite': 2,
+  teams_sports: 3
 };
 
 export function useMembership(): MembershipStatus {
@@ -72,13 +68,8 @@ export function useMembership(): MembershipStatus {
         if (name.includes('teams') || slug.includes('teams') || name.includes('sport') || slug.includes('sport')) {
           highestLevel = 'teams_sports';
           break;
-        } else if ((name.includes('pro') || slug === 'pro' || slug === 'pro-elite') && (LEVEL_HIERARCHY[highestLevel] || 0) < LEVEL_HIERARCHY.pro) {
+        } else if ((name.includes('pro') || slug === 'pro' || slug === 'pro-elite' || slug === 'intermediate' || slug === 'asciende') && (LEVEL_HIERARCHY[highestLevel] || 0) < LEVEL_HIERARCHY.pro) {
           highestLevel = 'pro';
-        } else if (
-          (slug === 'intermediate' || slug === 'asciende' || name.includes('intermediate')) &&
-          (LEVEL_HIERARCHY[highestLevel] || 0) < LEVEL_HIERARCHY.intermediate
-        ) {
-          highestLevel = 'intermediate';
         }
       }
 
@@ -106,16 +97,14 @@ export function useMembership(): MembershipStatus {
 
   return {
     level,
-    hasIntermediate: currentLvl >= LEVEL_HIERARCHY.intermediate,
-    hasAsciende: currentLvl >= LEVEL_HIERARCHY.intermediate,
     hasPro: currentLvl >= LEVEL_HIERARCHY.pro,
     hasTeamsSports: level === 'teams_sports',
     canAccessDigest,
     hasAccess,
     canAccessWorkoutBuilder: currentLvl >= LEVEL_HIERARCHY.pro,
     canAccessTeams: level === 'teams_sports',
-    canAccessAIWorkouts: currentLvl >= LEVEL_HIERARCHY.intermediate,
-    canAccessAssessments: currentLvl >= LEVEL_HIERARCHY.intermediate,
+    canAccessAIWorkouts: currentLvl >= LEVEL_HIERARCHY.pro,
+    canAccessAssessments: currentLvl >= LEVEL_HIERARCHY.pro,
     loading
   };
 }

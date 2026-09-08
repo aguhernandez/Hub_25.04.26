@@ -14,12 +14,12 @@
     ]
   },
   {
-    "id": "m002",
-    "name": "Asciende Intermediate",
-    "slug": "intermediate",
-    "description": "Para atletas que quieren ir más lejos",
-    "priceMonthly": 19.99,
-    "priceAnnual": 199.99,
+    "id": "m003",
+    "name": "Asciende Pro",
+    "slug": "pro",
+    "description": "El paquete completo para rendimiento élite",
+    "priceMonthly": 14.99,
+    "priceAnnual": 149.99,
     "features": [
       "Todo lo de Asciende Inicia",
       "Planes de entrenamiento",
@@ -28,24 +28,13 @@
       "Seguimiento de rendimiento",
       "Acceso al Digest",
       "Seguimiento antropométrico",
-      "Soporte prioritario"
-    ]
-  },
-  {
-    "id": "m003",
-    "name": "Asciende Pro",
-    "slug": "pro",
-    "description": "El paquete completo para rendimiento élite",
-    "priceMonthly": 49.99,
-    "priceAnnual": 499.99,
-    "features": [
-      "Todo lo de Asciende Intermediate",
       "Sesiones 1:1 con entrenador",
       "Programas de entrenamiento personalizados",
       "Analítica avanzada",
       "Integración con Intervals.icu",
       "Consultas de video ilimitadas",
-      "Oportunidades de colaboración con marcas"
+      "Oportunidades de colaboración con marcas",
+      "Soporte prioritario"
     ]
   }
 ]

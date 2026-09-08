@@ -656,7 +656,7 @@ interface AcademyPageProps {
 export default function AcademyPage({ onNavigate }: AcademyPageProps) {
   const { profile } = useAuth();
   const { language } = useLanguage();
-  const { hasAsciende, hasPro } = useMembership();
+  const { hasPro } = useMembership();
   const [courses, setCourses] = useState<Course[]>([]);
   const [allCoursesRaw, setAllCoursesRaw] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -725,7 +725,7 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
   const [paywallArticle, setPaywallArticle] = useState<Article | null>(null);
   const [athleteSports, setAthleteSports] = useState<string[]>([]);
 
-  const hasActiveMembership = hasAsciende || hasPro;
+  const hasActiveMembership = hasPro;
 
   const { error: showError } = useToast();
   const isTrainerOrAdmin = profile?.role === 'trainer' || profile?.role === 'admin';
@@ -1025,7 +1025,6 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
     const requiredTier = (article as any).required_membership_tier || 'inicia';
     const required = TIER_LEVEL[requiredTier] ?? 1;
     if (hasPro) return true;
-    if (hasAsciende) return required <= 2;
     return required <= 1;
   };
 
@@ -2200,7 +2199,7 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
         onClose={() => { setShowPaywall(false); setPaywallArticle(null); }}
         onUpgrade={() => { setShowPaywall(false); onNavigate?.('membership'); }}
         articleTitle={paywallArticle?.title}
-        requiredTier={(paywallArticle as any)?.required_membership_tier || 'intermediate'}
+        requiredTier={(paywallArticle as any)?.required_membership_tier || 'pro'}
       />
 
       {/* ── Edit Tag Modal ── */}

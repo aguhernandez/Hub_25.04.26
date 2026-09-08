@@ -19,9 +19,6 @@ export default function MembershipSection() {
       case 'pro':
       case 'pro-elite':
         return Crown;
-      case 'intermediate':
-      case 'asciende':
-        return Award;
       case 'start':
       case 'inicia':
         return Shield;
@@ -38,13 +35,6 @@ export default function MembershipSection() {
           bg: 'from-yellow-500 to-yellow-600',
           badge: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
           text: 'text-yellow-600'
-        };
-      case 'intermediate':
-      case 'asciende':
-        return {
-          bg: 'from-[#514163] to-[#6d5581]',
-          badge: 'bg-[#514163]/10 text-[#514163] dark:bg-[#514163]/30 dark:text-[#fdda36]',
-          text: 'text-[#514163]'
         };
       case 'start':
       case 'inicia':

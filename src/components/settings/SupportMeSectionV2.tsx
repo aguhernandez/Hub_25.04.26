@@ -135,7 +135,7 @@ export default function SupportMeSectionV2() {
     setShowCreateProject(true);
   };
 
-  if (!membership.loading && !membership.hasAsciende) {
+  if (!membership.loading && !membership.hasPro) {
     return (
       <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-800 p-8 text-center">
         <div className="w-16 h-16 rounded-full bg-[#fdda36]/10 border border-[#fdda36]/20 flex items-center justify-center mx-auto mb-5">
@@ -145,7 +145,7 @@ export default function SupportMeSectionV2() {
           Premium Feature
         </h3>
         <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 max-w-xs mx-auto leading-relaxed">
-          Creating a public support page and accepting contributions from your community requires an Asciende or Pro membership.
+          Creating a public support page and accepting contributions from your community requires an Asciende Pro membership.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <a
@@ -158,7 +158,7 @@ export default function SupportMeSectionV2() {
           </a>
         </div>
         <p className="text-xs text-gray-400 dark:text-gray-500 mt-5">
-          Available on Asciende and Pro membership tiers
+          Available on Asciende Pro membership tier
         </p>
       </div>
     );

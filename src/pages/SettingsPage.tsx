@@ -410,7 +410,7 @@ export default function SettingsPage() {
         return { icon: Award, color: 'text-[#514163]', bg: 'bg-[#514163]/10', label: 'Pro' };
       case 'intermediate':
       case 'asciende':
-        return { icon: Award, color: 'text-[#514163]', bg: 'bg-[#514163]/10', label: 'Intermediate' };
+        return { icon: Award, color: 'text-[#514163]', bg: 'bg-[#514163]/10', label: 'Pro' };
       case 'inicia':
         return { icon: Users, color: 'text-gray-500 dark:text-gray-400', bg: 'bg-gray-50 dark:bg-gray-900/20', label: 'Inicia' };
       default:

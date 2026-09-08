@@ -9,7 +9,7 @@ interface PremiumPaywallProps {
   onClose: () => void;
   onUpgrade?: () => void;
   articleTitle?: string;
-  requiredTier?: 'inicia' | 'asciende' | 'intermediate' | 'pro';
+  requiredTier?: 'inicia' | 'pro';
 }
 
 interface MembershipOption {
@@ -22,7 +22,7 @@ interface MembershipOption {
   recommended?: boolean;
 }
 
-export default function PremiumPaywall({ isOpen, onClose, onUpgrade, articleTitle, requiredTier = 'intermediate' }: PremiumPaywallProps) {
+export default function PremiumPaywall({ isOpen, onClose, onUpgrade, articleTitle, requiredTier = 'pro' }: PremiumPaywallProps) {
   const { language } = useLanguage();
   const { profile } = useAuth();
   const [memberships, setMemberships] = useState<MembershipOption[]>([]);
@@ -45,7 +45,7 @@ export default function PremiumPaywall({ isOpen, onClose, onUpgrade, articleTitl
       if (requiredTier === 'pro') {
         slugFilter = ['pro', 'pro-elite'];
       } else {
-        slugFilter = ['intermediate', 'asciende', 'pro', 'pro-elite'];
+        slugFilter = ['pro', 'pro-elite'];
       }
 
       const { data, error } = await supabase
@@ -69,7 +69,7 @@ export default function PremiumPaywall({ isOpen, onClose, onUpgrade, articleTitl
           : (m.features_en || m.features || []),
         recommended: requiredTier === 'pro'
           ? (m.slug === 'pro' || m.slug === 'pro-elite')
-          : (m.slug === 'intermediate' || m.slug === 'asciende')
+          : (m.slug === 'pro' || m.slug === 'pro-elite')
       }));
 
       setMemberships(options);
@@ -163,8 +163,8 @@ export default function PremiumPaywall({ isOpen, onClose, onUpgrade, articleTitl
                 : 'Requires Asciende Pro membership'
             ) : (
               language === 'es'
-                ? 'Requiere Asciende Intermediate o superior'
-                : 'Requires Asciende Intermediate or higher membership'
+                ? 'Requiere Asciende Pro'
+                : 'Requires Asciende Pro membership'
             )}
           </p>
         </div>
