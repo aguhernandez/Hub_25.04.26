@@ -595,11 +595,6 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
         }}
       />
 
-      {/* Top bar — logo only, language selector moved into the dark panel */}
-      <div className="absolute top-0 left-0 right-0 flex items-center px-6 pt-5 z-30">
-        <AsciendeLogo variant="full" height={28} className="opacity-80" />
-      </div>
-
       {/* ── SATELLITE SELECT: phone mockup + orbit ── */}
       {mode === 'satellite-select' && (
         <div
@@ -868,8 +863,8 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
 
       {/* ── LOGIN / SIGNUP / FORGOT ── */}
       {mode !== 'satellite-select' && (
-      <div className="relative z-20 w-full md:w-[38vw] md:max-w-[520px] md:mr-auto md:ml-0 md:rounded-r-2xl md:bg-black/45 md:backdrop-blur-xl px-4 md:px-8 lg:px-10 pt-20 pb-6 md:pt-24 md:pb-8">
-        <div className="auth-panel-content w-full max-w-md mx-auto md:scale-[0.82] md:origin-left md:w-[122%]">
+      <div className="relative z-20 w-full md:w-[38vw] md:max-w-[520px] md:mr-auto md:ml-0 md:rounded-r-2xl md:bg-black/45 md:backdrop-blur-xl px-4 md:pl-12 md:pr-8 lg:pl-16 lg:pr-10 pt-8 pb-5 md:pt-10 md:pb-6">
+        <div className="auth-panel-content w-full max-w-md mx-auto md:w-full" style={{ zoom: 0.78 }}>
 
         {/* Logo + language selector inside the dark panel */}
         <div className="flex items-center justify-between mb-6 md:mb-8">
@@ -1493,18 +1488,16 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
       </div>
       )}
 
-      {/* Legal footer — inside the dark panel, yellow-tinted */}
-      <div className="relative z-20 w-full md:w-[38vw] md:max-w-[520px] md:mr-auto md:ml-0 px-4 md:px-8 lg:px-10 pb-4 md:pb-6">
-        <div className="auth-panel-content w-full max-w-md mx-auto md:scale-[0.82] md:origin-left md:w-[122%]">
-          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
-            <a href="https://asciende.pro/impressum" target="_blank" rel="noopener noreferrer" className="text-[#fdda36]/70 hover:text-[#fdda36] text-[11px] font-medium transition-colors">Imprint</a>
-            <span className="text-[#fdda36]/30">·</span>
-            <a href="https://asciende.pro/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[#fdda36]/70 hover:text-[#fdda36] text-[11px] font-medium transition-colors">{t('auth.privacyPolicy')}</a>
-            <span className="text-[#fdda36]/30">·</span>
-            <a href="https://asciende.pro/terms" target="_blank" rel="noopener noreferrer" className="text-[#fdda36]/70 hover:text-[#fdda36] text-[11px] font-medium transition-colors">{t('auth.termsConditions')}</a>
-            <span className="text-[#fdda36]/30">·</span>
-            <span className="text-[#fdda36]/50 text-[11px] font-medium">© {new Date().getFullYear()} Asciende Pro</span>
-          </div>
+      {/* Legal footer — centered, opaque white, above the video */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-center bg-white/80 px-6 py-3 backdrop-blur-sm">
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-center">
+          <a href="https://asciende.pro/impressum" target="_blank" rel="noopener noreferrer" className="text-[#1a1428] hover:text-[#8a6800] text-sm font-semibold transition-colors">Imprint</a>
+          <span className="text-[#1a1428]/45">·</span>
+          <a href="https://asciende.pro/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[#1a1428] hover:text-[#8a6800] text-sm font-semibold transition-colors">{t('auth.privacyPolicy')}</a>
+          <span className="text-[#1a1428]/45">·</span>
+          <a href="https://asciende.pro/terms" target="_blank" rel="noopener noreferrer" className="text-[#1a1428] hover:text-[#8a6800] text-sm font-semibold transition-colors">{t('auth.termsConditions')}</a>
+          <span className="text-[#1a1428]/45">·</span>
+          <span className="text-[#1a1428]/75 text-sm font-semibold">© {new Date().getFullYear()} Asciende Pro</span>
         </div>
       </div>
 
