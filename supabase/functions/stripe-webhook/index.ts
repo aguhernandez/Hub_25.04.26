@@ -158,9 +158,18 @@ async function handleCheckoutCompleted(supabase: any, event: StripeEvent) {
     await handleMembershipSubscriptionCreated(supabase, session);
     return;
   }
-  if (session.metadata?.type === 'professional_subscription') {
-    await handleProfessionalCheckoutCompleted(supabase, session);
-    return;
+  if (session.metadata?.type === 'professional_subscription' || session.client_reference_id) {
+    const referenceUserId = session.metadata?.user_id || session.client_reference_id;
+    const { data: referencedProfile } = await supabase
+      .from('profiles')
+      .select('id, role')
+      .eq('id', referenceUserId)
+      .maybeSingle();
+
+    if (session.metadata?.type === 'professional_subscription' || referencedProfile?.role === 'trainer' || referencedProfile?.role === 'nutritionist') {
+      await handleProfessionalCheckoutCompleted(supabase, session, referenceUserId);
+      return;
+    }
   }
 
   // Generic product purchase path
@@ -565,12 +574,13 @@ async function handleMembershipSubscriptionCreated(supabase: any, session: any) 
 }
 
 // ── Professional subscription checkout completed ──────────────────────────────
-async function handleProfessionalCheckoutCompleted(supabase: any, session: any) {
+async function handleProfessionalCheckoutCompleted(supabase: any, session: any, referenceUserId?: string) {
   const { user_id, billing_cycle, role } = session.metadata ?? {};
-  log('INFO', 'professional_checkout_start', { session_id: session.id, user_id, billing_cycle, role });
+  const resolvedUserId = user_id || referenceUserId;
+  log('INFO', 'professional_checkout_start', { session_id: session.id, user_id: resolvedUserId, billing_cycle, role });
 
-  if (!user_id) {
-    log('ERROR', 'professional_checkout_missing_user', { session_id: session.id });
+  if (!resolvedUserId || !session.subscription) {
+    log('ERROR', 'professional_checkout_missing_subscription_data', { session_id: session.id, has_user_id: !!resolvedUserId, has_subscription: !!session.subscription });
     return;
   }
 
@@ -579,7 +589,7 @@ async function handleProfessionalCheckoutCompleted(supabase: any, session: any) 
     : null;
 
   const { error } = await supabase.from('professional_subscriptions').upsert({
-    user_id,
+    user_id: resolvedUserId,
     stripe_customer_id: session.customer,
     stripe_subscription_id: session.subscription,
     stripe_price_id: session.metadata?.price_id || null,

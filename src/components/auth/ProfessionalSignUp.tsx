@@ -84,14 +84,10 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('professional_payment') === 'success') {
-      const userId = params.get('client_reference_id');
-      if (userId) {
-        setCreatedUserId(userId);
-        setAccountCreated(true);
-        setStep(4);
-        window.history.replaceState({}, '', window.location.pathname);
-        attemptAutoLogin();
-      }
+      setAccountCreated(true);
+      setStep(4);
+      window.history.replaceState({}, '', window.location.pathname);
+      attemptAutoLogin();
     }
   }, []);
 
@@ -277,8 +273,7 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
         setAccountCreated(true);
 
         const stripeLink = STRIPE_LINKS[billingCycle];
-        const successUrl = `${window.location.origin}/signup/professional/step-4?professional_payment=success&client_reference_id=${user.id}`;
-        const stripeUrl = `${stripeLink}?client_reference_id=${user.id}&success_url=${encodeURIComponent(successUrl)}`;
+        const stripeUrl = `${stripeLink}?client_reference_id=${user.id}`;
 
         showToast(language === 'es' ? 'Cuenta creada. Redirigiendo a Stripe...' : 'Account created. Redirecting to Stripe...', 'success');
         window.location.href = stripeUrl;
