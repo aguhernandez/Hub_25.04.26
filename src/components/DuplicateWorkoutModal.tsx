@@ -24,6 +24,10 @@ export default function DuplicateWorkoutModal({
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const sortedSelectedList = useMemo(() => {
+    return Array.from(selectedDates).sort();
+  }, [selectedDates]);
+
   if (!isOpen) return null;
 
   const t = (es: string, en: string) => language === 'es' ? es : en;
@@ -180,10 +184,6 @@ export default function DuplicateWorkoutModal({
     setErrorMsg(null);
     onClose();
   };
-
-  const sortedSelectedList = useMemo(() => {
-    return Array.from(selectedDates).sort();
-  }, [selectedDates]);
 
   const days = getDaysInMonth(currentMonth);
   const weekDays = language === 'es'
