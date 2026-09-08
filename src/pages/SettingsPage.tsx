@@ -31,6 +31,7 @@ import {
   Link2,
   Plus,
   UserCheck,
+  CreditCard,
 } from 'lucide-react';
 import SecuritySection from '../components/settings/SecuritySection';
 import AdminSection from '../components/settings/AdminSection';
@@ -43,6 +44,7 @@ import SatellitesSection from '../components/settings/SatellitesSection';
 import PlannerConnectionsSection from '../components/settings/PlannerConnectionsSection';
 import MembershipSection from '../components/settings/MembershipSection';
 import InvoicesSection from '../components/settings/InvoicesSection';
+import SubscriptionSection from '../components/settings/SubscriptionSection';
 import CountrySelect from '../components/CountrySelect';
 import PhoneInput from '../components/PhoneInput';
 import SportSelect from '../components/SportSelect';
@@ -148,7 +150,7 @@ export default function SettingsPage() {
 
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [activeSection, setActiveSection] = useState<'profile' | 'security' | 'membership' | 'admin' | 'preferences' | 'support' | 'about-coach' | 'notifications' | 'trainingpeaks' | 'strava' | 'satellites' | 'planner-connections'>('profile');
+  const [activeSection, setActiveSection] = useState<'profile' | 'security' | 'membership' | 'subscription' | 'admin' | 'preferences' | 'support' | 'about-coach' | 'notifications' | 'trainingpeaks' | 'strava' | 'satellites' | 'planner-connections' | 'invoices'>('profile');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = profile?.role === 'admin';
@@ -477,6 +479,19 @@ export default function SettingsPage() {
           <Receipt className="w-4 h-4" />
           {language === 'es' ? 'Facturas' : 'Invoices'}
         </button>
+        {(profile?.role === 'trainer' || profile?.role === 'nutritionist' || profile?.role === 'head_coach') && (
+          <button
+            onClick={() => setActiveSection('subscription')}
+            className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${
+              activeSection === 'subscription'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <CreditCard className="w-4 h-4" />
+            {language === 'es' ? 'Suscripción' : 'Subscription'}
+          </button>
+        )}
         {canAccessAdmin && (
           <button
             onClick={() => setActiveSection('admin')}
@@ -1286,6 +1301,11 @@ export default function SettingsPage() {
           </div>
           <InvoicesSection />
         </div>
+      )}
+
+      {/* Subscription Section */}
+      {activeSection === 'subscription' && (profile?.role === 'trainer' || profile?.role === 'nutritionist' || profile?.role === 'head_coach') && (
+        <SubscriptionSection />
       )}
 
       {/* Satellites Section */}
