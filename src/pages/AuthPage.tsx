@@ -595,20 +595,9 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
         }}
       />
 
-      {/* Language + legal top bar */}
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-6 pt-5 z-30">
-        <div className="flex items-center gap-2">
-          <AsciendeLogo variant="full" height={28} className="opacity-80" />
-        </div>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setLanguage(language === 'en' ? 'es' : 'en')}
-            className="flex items-center gap-1.5 text-xs font-medium text-white/40 hover:text-white/70 transition-colors"
-          >
-            <Globe className="w-3.5 h-3.5" />
-            {language === 'en' ? 'ES' : 'EN'}
-          </button>
-        </div>
+      {/* Top bar — logo only, language selector moved into the dark panel */}
+      <div className="absolute top-0 left-0 right-0 flex items-center px-6 pt-5 z-30">
+        <AsciendeLogo variant="full" height={28} className="opacity-80" />
       </div>
 
       {/* ── SATELLITE SELECT: phone mockup + orbit ── */}
@@ -879,8 +868,20 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
 
       {/* ── LOGIN / SIGNUP / FORGOT ── */}
       {mode !== 'satellite-select' && (
-      <div className="relative z-20 w-full md:w-[38vw] md:max-w-[520px] md:mr-auto md:ml-0 md:rounded-r-2xl md:bg-black/45 md:backdrop-blur-xl px-4 md:px-8 lg:px-10 py-8 md:py-10 lg:py-12">
+      <div className="relative z-20 w-full md:w-[38vw] md:max-w-[520px] md:mr-auto md:ml-0 md:rounded-r-2xl md:bg-black/45 md:backdrop-blur-xl px-4 md:px-8 lg:px-10 pt-20 pb-6 md:pt-24 md:pb-8">
         <div className="auth-panel-content w-full max-w-md mx-auto md:scale-[0.82] md:origin-left md:w-[122%]">
+
+        {/* Logo + language selector inside the dark panel */}
+        <div className="flex items-center justify-between mb-6 md:mb-8">
+          <AsciendeLogo variant="full" height={32} className="opacity-90" />
+          <button
+            onClick={() => setLanguage(language === 'en' ? 'es' : 'en')}
+            className="flex items-center gap-1.5 text-xs font-medium text-white/50 hover:text-[#fdda36] transition-colors"
+          >
+            <Globe className="w-3.5 h-3.5" />
+            {language === 'en' ? 'ES' : 'EN'}
+          </button>
+        </div>
 
         {/* LOGIN */}
         {mode === 'login' && (
@@ -1047,16 +1048,7 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
               </p>
             </div>
 
-            {!redirectUrl && onGoBack && (
-              <button
-                type="button"
-                onClick={() => { onGoBack(); setError(''); }}
-                className="mt-3 w-full flex items-center justify-center gap-2 text-white/25 hover:text-white/50 text-xs transition-colors py-2"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                {language === 'es' ? 'Cambiar destino' : 'Change destination'}
-              </button>
-            )}
+
           </div>
         )}
 
@@ -1501,15 +1493,19 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
       </div>
       )}
 
-      {/* Legal footer */}
-      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-4 py-4 px-6 z-10">
-        <a href="https://asciende.pro/impressum" target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/45 text-[11px] transition-colors">Imprint</a>
-        <span className="text-white/10">·</span>
-        <a href="https://asciende.pro/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/45 text-[11px] transition-colors">{t('auth.privacyPolicy')}</a>
-        <span className="text-white/10">·</span>
-        <a href="https://asciende.pro/terms" target="_blank" rel="noopener noreferrer" className="text-white/20 hover:text-white/45 text-[11px] transition-colors">{t('auth.termsConditions')}</a>
-        <span className="text-white/10">·</span>
-        <span className="text-white/15 text-[11px]">© {new Date().getFullYear()} Asciende Pro</span>
+      {/* Legal footer — inside the dark panel, yellow-tinted */}
+      <div className="relative z-20 w-full md:w-[38vw] md:max-w-[520px] md:mr-auto md:ml-0 px-4 md:px-8 lg:px-10 pb-4 md:pb-6">
+        <div className="auth-panel-content w-full max-w-md mx-auto md:scale-[0.82] md:origin-left md:w-[122%]">
+          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
+            <a href="https://asciende.pro/impressum" target="_blank" rel="noopener noreferrer" className="text-[#fdda36]/70 hover:text-[#fdda36] text-[11px] font-medium transition-colors">Imprint</a>
+            <span className="text-[#fdda36]/30">·</span>
+            <a href="https://asciende.pro/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-[#fdda36]/70 hover:text-[#fdda36] text-[11px] font-medium transition-colors">{t('auth.privacyPolicy')}</a>
+            <span className="text-[#fdda36]/30">·</span>
+            <a href="https://asciende.pro/terms" target="_blank" rel="noopener noreferrer" className="text-[#fdda36]/70 hover:text-[#fdda36] text-[11px] font-medium transition-colors">{t('auth.termsConditions')}</a>
+            <span className="text-[#fdda36]/30">·</span>
+            <span className="text-[#fdda36]/50 text-[11px] font-medium">© {new Date().getFullYear()} Asciende Pro</span>
+          </div>
+        </div>
       </div>
 
       <style>{`
