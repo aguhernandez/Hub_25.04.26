@@ -7,7 +7,7 @@ import {
   Mail, Lock, User, Eye, EyeOff, Globe, Check, ArrowRight,
   ArrowLeft, Activity, Bike, Waves, TrendingUp, Trophy, Dumbbell,
   Flame, Target, Mountain, Heart, Footprints, Camera, Calendar,
-  ChevronRight, Zap, FlaskConical, Salad, GraduationCap, Wind
+  ChevronRight, Zap, FlaskConical, Salad, GraduationCap, Wind, UserPlus
 } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 
@@ -879,7 +879,7 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
 
       {/* ── LOGIN / SIGNUP / FORGOT ── */}
       {mode !== 'satellite-select' && (
-      <div className="relative z-20 w-full md:w-[38vw] md:max-w-[520px] md:min-h-screen md:mr-auto md:ml-0 md:flex md:items-center md:rounded-r-2xl md:bg-black/45 md:backdrop-blur-xl px-4 md:px-8 lg:px-10 md:py-20">
+      <div className="relative z-20 w-full md:w-[38vw] md:max-w-[520px] md:mr-auto md:ml-0 md:rounded-r-2xl md:bg-black/45 md:backdrop-blur-xl px-4 md:px-8 lg:px-10 py-8 md:py-10 lg:py-12">
         <div className="auth-panel-content w-full max-w-md mx-auto md:scale-[0.82] md:origin-left md:w-[122%]">
 
         {/* LOGIN */}
@@ -1027,23 +1027,25 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
               <div className="flex-1 h-px bg-white/8" />
             </div>
 
-            <button
-              type="button"
-              onClick={() => { setMode('signup'); setSignupStep(1); setError(''); }}
-              className="mt-5 md:mt-6 w-full py-3.5 md:py-4 lg:py-5 rounded-xl font-medium text-sm md:text-base border border-white/10 bg-white/3 text-white/70 hover:bg-white/8 hover:text-white hover:border-white/20 transition-all duration-200"
-            >
-              {language === 'es' ? 'Crear una cuenta' : 'Create an account'}
-            </button>
-
-            {onSignUpClick && (
+            {/* Unified Create Account — prominent, separated */}
+            <div className="mt-7 md:mt-8 pt-6 border-t border-white/8">
               <button
                 type="button"
-                onClick={onSignUpClick}
-                className="mt-3 w-full text-center text-xs text-[#fdda36]/50 hover:text-[#fdda36] transition-colors py-2 font-medium"
+                onClick={() => onSignUpClick?.()}
+                className="w-full py-4 md:py-5 rounded-2xl font-bold text-base md:text-lg flex items-center justify-center gap-2.5 transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
+                style={{
+                  background: 'linear-gradient(135deg, #fdda36 0%, #f5c400 100%)',
+                  color: '#1a1428',
+                  boxShadow: '0 8px 32px rgba(253,218,54,0.28), 0 2px 8px rgba(253,218,54,0.15)',
+                }}
               >
-                {language === 'es' ? '¿Eres profesional? Regístrate aquí' : 'Are you a professional? Sign up here'}
+                <UserPlus className="w-5 h-5 md:w-6 md:h-6" />
+                {language === 'es' ? 'Crear una cuenta' : 'Create an account'}
               </button>
-            )}
+              <p className="mt-2.5 text-center text-xs text-white/35">
+                {language === 'es' ? 'Atleta o profesional — elige tu camino' : 'Athlete or professional — choose your path'}
+              </p>
+            </div>
 
             {!redirectUrl && onGoBack && (
               <button
