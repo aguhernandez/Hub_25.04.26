@@ -112,33 +112,60 @@ Deno.serve(async (req: Request) => {
       apiVersion: '2023-10-16',
     });
 
-    // Retrieve the price from Stripe to verify it exists and is active
-    let priceActive = false;
+    // Retrieve the price from Stripe; if it's inactive (archived), auto-resolve the active price
+    let activePriceId = priceId;
     try {
       const price = await stripe.prices.retrieve(priceId);
       console.log('Stripe price retrieved:', JSON.stringify({
-        id: price.id,
-        active: price.active,
-        type: price.type,
-        currency: price.currency,
-        livemode: price.livemode,
-        product: price.product,
+        id: price.id, active: price.active, type: price.type,
+        currency: price.currency, livemode: price.livemode, product: price.product,
       }));
-      priceActive = price.active;
+
+      if (!price.active) {
+        console.log(`Price ${priceId} is archived, searching for active replacement...`);
+        const productId = typeof price.product === 'string' ? price.product : price.product.id;
+        const interval = billing_cycle === 'monthly' ? 'month' : 'year';
+
+        const activePrices = await stripe.prices.list({
+          product: productId,
+          active: true,
+          limit: 100,
+        });
+
+        const match = activePrices.data.find(
+          (p) => p.active && p.recurring?.interval === interval
+        );
+
+        if (!match) {
+          throw new Error(
+            `The ${billing_cycle} price for this membership was archived and no active ` +
+            `${interval}ly replacement was found. Please create a new ${billing_cycle} ` +
+            `price in Stripe for product ${productId}.`
+          );
+        }
+
+        activePriceId = match.id;
+        console.log(`Found active replacement price: ${activePriceId} (was ${priceId})`);
+
+        // Persist the new price ID back to the database
+        const updateField = billing_cycle === 'monthly'
+          ? 'stripe_price_id_monthly'
+          : 'stripe_price_id_annual';
+        await adminClient
+          .from('memberships')
+          .update({ [updateField]: activePriceId })
+          .eq('id', membership_id);
+        console.log(`Updated membership ${membership_id} ${updateField} to ${activePriceId}`);
+      }
     } catch (priceErr: any) {
+      if (priceErr?.message?.includes('archived') || priceErr?.message?.includes('replacement')) {
+        throw priceErr;
+      }
       console.error('Failed to retrieve price from Stripe:', priceErr?.message);
       throw new Error(
         `Price ${priceId} could not be found with the configured Stripe key ` +
         `(mode: ${isTestKey ? 'TEST' : 'LIVE'}). ` +
-        `This usually means the price was created in the other Stripe mode. ` +
         `Stripe error: ${priceErr?.message || 'unknown'}`
-      );
-    }
-
-    if (!priceActive) {
-      throw new Error(
-        `Price ${priceId} is inactive in Stripe (key mode: ${isTestKey ? 'TEST' : 'LIVE'}). ` +
-        `Please reactivate it in the Stripe Dashboard or use a price from the correct mode.`
       );
     }
 
@@ -169,7 +196,7 @@ Deno.serve(async (req: Request) => {
       customer_email: profile?.email || user.email,
       line_items: [
         {
-          price: priceId,
+          price: activePriceId,
           quantity: 1,
         },
       ],
@@ -181,7 +208,7 @@ Deno.serve(async (req: Request) => {
         user_id: user.id,
         membership_id: membership_id,
         billing_cycle: billing_cycle,
-        price_id: priceId,
+        price_id: activePriceId,
         type: 'membership_subscription',
       },
       subscription_data: {
@@ -189,7 +216,7 @@ Deno.serve(async (req: Request) => {
           user_id: user.id,
           membership_id: membership_id,
           billing_cycle: billing_cycle,
-          price_id: priceId,
+          price_id: activePriceId,
           type: 'membership_subscription',
         },
       },
