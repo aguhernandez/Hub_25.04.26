@@ -125,7 +125,16 @@ export default function MembershipsMarketplacePage() {
       }
     } catch (err: any) {
       console.error('Error creating checkout:', err);
-      showToast(err.message || (language === 'es' ? 'Error al procesar' : 'Error processing'), 'error');
+      let message = err?.message || (language === 'es' ? 'Error al procesar' : 'Error processing');
+      if (err?.context instanceof Response) {
+        try {
+          const payload = await err.context.json();
+          message = payload?.error || message;
+        } catch {
+          // Keep the generic message when the response is not JSON.
+        }
+      }
+      showToast(message, 'error');
       setProcessing(false);
     }
   };
@@ -205,6 +214,15 @@ export default function MembershipsMarketplacePage() {
                 </p>
               </div>
             </div>
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: activeMembership?.source === 'stripe' ? '/settings?section=athlete-subscription' : '/settings?section=membership' }))}
+              className="mt-5 inline-flex items-center gap-2 px-4 py-2.5 bg-white/15 hover:bg-white/25 border border-white/30 text-white rounded-lg font-semibold transition-colors"
+            >
+              <CreditCard className="w-4 h-4" />
+              {activeMembership?.source === 'stripe'
+                ? (language === 'es' ? 'Gestionar suscripción' : 'Manage subscription')
+                : (language === 'es' ? 'Gestionar membresía' : 'Manage membership')}
+            </button>
           </div>
         )}
 

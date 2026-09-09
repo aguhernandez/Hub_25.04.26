@@ -45,6 +45,7 @@ import PlannerConnectionsSection from '../components/settings/PlannerConnections
 import MembershipSection from '../components/settings/MembershipSection';
 import InvoicesSection from '../components/settings/InvoicesSection';
 import SubscriptionSection from '../components/settings/SubscriptionSection';
+import AthleteSubscriptionSection from '../components/settings/AthleteSubscriptionSection';
 import CountrySelect from '../components/CountrySelect';
 import PhoneInput from '../components/PhoneInput';
 import SportSelect from '../components/SportSelect';
@@ -150,9 +151,9 @@ export default function SettingsPage() {
 
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [activeSection, setActiveSection] = useState<'profile' | 'security' | 'membership' | 'subscription' | 'admin' | 'preferences' | 'support' | 'about-coach' | 'notifications' | 'trainingpeaks' | 'strava' | 'satellites' | 'planner-connections' | 'invoices'>(() => {
+  const [activeSection, setActiveSection] = useState<'profile' | 'security' | 'membership' | 'athlete-subscription' | 'subscription' | 'admin' | 'preferences' | 'support' | 'about-coach' | 'notifications' | 'trainingpeaks' | 'strava' | 'satellites' | 'planner-connections' | 'invoices'>(() => {
     const section = new URLSearchParams(window.location.search).get('section');
-    return section === 'membership' ? 'membership' : 'profile';
+    return section === 'membership' ? 'membership' : section === 'athlete-subscription' ? 'athlete-subscription' : 'profile';
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -238,8 +239,8 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('section') === 'membership' && profile?.role === 'athlete') {
-      setActiveSection('membership');
+    if (profile?.role === 'athlete' && (params.get('section') === 'membership' || params.get('section') === 'athlete-subscription')) {
+      setActiveSection(params.get('section') === 'athlete-subscription' ? 'athlete-subscription' : 'membership');
     }
   }, [profile?.role]);
 
@@ -468,17 +469,30 @@ export default function SettingsPage() {
           {language === 'es' ? 'Seguridad' : 'Security'}
         </button>
         {profile?.role === 'athlete' && (
-          <button
-            onClick={() => setActiveSection('membership')}
-            className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${
-              activeSection === 'membership'
-                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-            }`}
-          >
-            <Crown className="w-4 h-4" />
-            {language === 'es' ? 'Membresía' : 'Membership'}
-          </button>
+          <>
+            <button
+              onClick={() => setActiveSection('membership')}
+              className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${
+                activeSection === 'membership'
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              <Crown className="w-4 h-4" />
+              {language === 'es' ? 'Membresía' : 'Membership'}
+            </button>
+            <button
+              onClick={() => setActiveSection('athlete-subscription')}
+              className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${
+                activeSection === 'athlete-subscription'
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              <CreditCard className="w-4 h-4" />
+              {language === 'es' ? 'Suscripción' : 'Subscription'}
+            </button>
+          </>
         )}
         <button
           onClick={() => setActiveSection('invoices')}
@@ -1313,6 +1327,11 @@ export default function SettingsPage() {
           </div>
           <InvoicesSection />
         </div>
+      )}
+
+      {/* Athlete Subscription Section */}
+      {activeSection === 'athlete-subscription' && profile?.role === 'athlete' && (
+        <AthleteSubscriptionSection />
       )}
 
       {/* Subscription Section */}

@@ -32,6 +32,11 @@ Deno.serve(async (req: Request) => {
       throw new Error('Not authenticated');
     }
 
+    const adminClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+    );
+
     const body = await req.json();
     console.log('Request body:', body);
 
@@ -43,7 +48,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Get membership details
-    const { data: membership, error: membershipError } = await supabaseClient
+    const { data: membership, error: membershipError } = await adminClient
       .from('memberships')
       .select('*')
       .eq('id', membership_id)
@@ -61,7 +66,7 @@ Deno.serve(async (req: Request) => {
     console.log('Membership found:', membership.name);
 
     // Check if already has active membership
-    const { data: existingAccess, error: accessError } = await supabaseClient
+    const { data: existingAccess, error: accessError } = await adminClient
       .from('membership_access')
       .select('*')
       .eq('user_id', user.id)
@@ -105,7 +110,7 @@ Deno.serve(async (req: Request) => {
     });
 
     // Get user email
-    const { data: profile, error: profileError } = await supabaseClient
+    const { data: profile, error: profileError } = await adminClient
       .from('profiles')
       .select('email, full_name, role')
       .eq('id', user.id)
@@ -113,6 +118,10 @@ Deno.serve(async (req: Request) => {
 
     if (profileError) {
       console.error('Error fetching profile:', profileError);
+      throw new Error('Could not load your athlete profile');
+    }
+    if (profile?.role !== 'athlete') {
+      throw new Error('Only athlete accounts can purchase an athlete membership');
     }
 
     // Get custom success/cancel URLs if provided
