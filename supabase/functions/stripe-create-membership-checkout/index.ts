@@ -105,9 +105,42 @@ Deno.serve(async (req: Request) => {
       throw new Error('Stripe is not configured. Please contact the administrator.');
     }
 
+    const isTestKey = stripeKey.startsWith('sk_test_');
+    console.log('Stripe key mode:', isTestKey ? 'TEST' : 'LIVE');
+
     const stripe = new Stripe(stripeKey, {
       apiVersion: '2023-10-16',
     });
+
+    // Retrieve the price from Stripe to verify it exists and is active
+    let priceActive = false;
+    try {
+      const price = await stripe.prices.retrieve(priceId);
+      console.log('Stripe price retrieved:', JSON.stringify({
+        id: price.id,
+        active: price.active,
+        type: price.type,
+        currency: price.currency,
+        livemode: price.livemode,
+        product: price.product,
+      }));
+      priceActive = price.active;
+    } catch (priceErr: any) {
+      console.error('Failed to retrieve price from Stripe:', priceErr?.message);
+      throw new Error(
+        `Price ${priceId} could not be found with the configured Stripe key ` +
+        `(mode: ${isTestKey ? 'TEST' : 'LIVE'}). ` +
+        `This usually means the price was created in the other Stripe mode. ` +
+        `Stripe error: ${priceErr?.message || 'unknown'}`
+      );
+    }
+
+    if (!priceActive) {
+      throw new Error(
+        `Price ${priceId} is inactive in Stripe (key mode: ${isTestKey ? 'TEST' : 'LIVE'}). ` +
+        `Please reactivate it in the Stripe Dashboard or use a price from the correct mode.`
+      );
+    }
 
     // Get user email
     const { data: profile, error: profileError } = await adminClient
