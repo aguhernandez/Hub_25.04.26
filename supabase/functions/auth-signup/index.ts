@@ -14,7 +14,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { email, password, full_name, role, username, phone } = body;
+    const { email, password, full_name, role, username, phone, first_name, last_name, bio, tagline, country, terms_accepted } = body;
     const allowedRoles = ['athlete', 'trainer', 'nutritionist', 'head_coach'] as const;
     const signupRole = role || 'athlete';
     console.log('🚀 AUTH-SIGNUP - Request for:', email, 'role:', signupRole);
@@ -138,6 +138,18 @@ Deno.serve(async (req: Request) => {
     const profileUpdates: Record<string, unknown> = { role: signupRole };
     if (username) profileUpdates.username = username;
     if (phone) profileUpdates.phone = phone;
+    if (first_name) profileUpdates.first_name = first_name;
+    if (last_name) profileUpdates.last_name = last_name;
+    if (bio) profileUpdates.bio = bio;
+    if (tagline) profileUpdates.tagline = tagline;
+    if (country) profileUpdates.country = country;
+    if (terms_accepted) {
+      profileUpdates.terms_accepted = true;
+      profileUpdates.terms_accepted_at = new Date().toISOString();
+      profileUpdates.privacy_accepted = true;
+      profileUpdates.privacy_accepted_at = new Date().toISOString();
+      profileUpdates.profile_completed = true;
+    }
 
     const { error: profileUpdateError } = await supabase
       .from('profiles')

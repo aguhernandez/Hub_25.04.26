@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import SplashScreen from './components/SplashScreen';
 import RoleSelectionScreen from './components/auth/RoleSelectionScreen';
 import ProfessionalSignUp from './components/auth/ProfessionalSignUp';
+import ProfessionalPaywall from './components/ProfessionalPaywall';
 import AdminPlatformDashboard from './pages/AdminPlatformDashboard';
 import AdminCommunicationsPage from './pages/AdminCommunicationsPage';
 import AdminUsersPage from './pages/AdminUsersPage';
@@ -586,6 +587,7 @@ function App() {
       <AdaptiveNavigation currentPage={currentPage} onNavigate={setCurrentPage} />
 
       <AppUpdateBanner />
+      <ProfessionalPaywall />
     </>
   );
 }

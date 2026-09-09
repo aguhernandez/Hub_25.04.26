@@ -230,6 +230,12 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
           role: form.role,
           username: form.username,
           phone: form.phone || undefined,
+          first_name: form.firstName,
+          last_name: form.lastName,
+          bio: form.bio || undefined,
+          tagline: form.tagline || undefined,
+          country: form.country || undefined,
+          terms_accepted: true,
         }),
       });
 
@@ -241,43 +247,21 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
         return;
       }
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: form.email,
-        password: form.password,
-      });
-
-      if (signInError) {
-        setError(language === 'es' ? 'Cuenta creada. Por favor inicia sesión.' : 'Account created. Please sign in.');
+      const userId = result.user?.id || result.userId;
+      if (!userId) {
+        setError(language === 'es' ? 'Error al crear la cuenta' : 'Error creating account');
         setLoading(false);
         return;
       }
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('profiles').update({
-          first_name: form.firstName,
-          last_name: form.lastName,
-          username: form.username,
-          phone: form.phone || null,
-          bio: form.bio || null,
-          tagline: form.tagline || null,
-          country: form.country || null,
-          terms_accepted: true,
-          terms_accepted_at: new Date().toISOString(),
-          privacy_accepted: true,
-          privacy_accepted_at: new Date().toISOString(),
-          profile_completed: true,
-        }).eq('id', user.id);
+      setCreatedUserId(userId);
+      setAccountCreated(true);
 
-        setCreatedUserId(user.id);
-        setAccountCreated(true);
+      const stripeLink = STRIPE_LINKS[billingCycle];
+      const stripeUrl = `${stripeLink}?client_reference_id=${userId}`;
 
-        const stripeLink = STRIPE_LINKS[billingCycle];
-        const stripeUrl = `${stripeLink}?client_reference_id=${user.id}`;
-
-        showToast(language === 'es' ? 'Cuenta creada. Redirigiendo a Stripe...' : 'Account created. Redirecting to Stripe...', 'success');
-        window.location.href = stripeUrl;
-      }
+      showToast(language === 'es' ? 'Cuenta creada. Redirigiendo a Stripe...' : 'Account created. Redirecting to Stripe...', 'success');
+      window.location.href = stripeUrl;
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');
     } finally {
