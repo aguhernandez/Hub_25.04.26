@@ -244,6 +244,17 @@ export default function SettingsPage() {
     }
   }, [profile?.role]);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const section = (e as CustomEvent<string>).detail;
+      if (section === 'membership' || section === 'athlete-subscription') {
+        setActiveSection(section as typeof activeSection);
+      }
+    };
+    window.addEventListener('settings-section', handler);
+    return () => window.removeEventListener('settings-section', handler);
+  }, []);
+
   const loadTrainers = async () => {
     try {
       const { data, error } = await supabase

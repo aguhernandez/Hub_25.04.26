@@ -160,6 +160,10 @@ Deno.serve(async (req: Request) => {
           type: 'membership_subscription',
         },
       },
+    }).catch((stripeError: any) => {
+      console.error('Stripe API error:', JSON.stringify(stripeError, null, 2));
+      const msg = stripeError?.message || 'Unknown Stripe error';
+      throw new Error(`Stripe: ${msg}`);
     });
 
     console.log('Stripe session created successfully:', session.id);

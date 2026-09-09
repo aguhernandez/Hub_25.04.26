@@ -211,6 +211,28 @@ function App() {
         if (e.detail.racePlanId !== undefined) {
           setRacePlanId(e.detail.racePlanId);
         }
+      } else if (typeof e.detail === 'string') {
+        const raw = e.detail;
+        const [path, queryStr] = raw.split('?');
+        const pageMap: Record<string, Page> = {
+          '/settings': 'settings',
+          '/memberships': 'memberships-marketplace',
+          '/dashboard': 'dashboard',
+          '/training': 'training',
+          '/nutrition': 'nutrition-dashboard',
+          '/chat': 'chat',
+          '/performance': 'performance',
+        };
+        const page = pageMap[path] ?? (path as Page);
+        navigateToPage(page);
+        setProgramId(null);
+        if (queryStr) {
+          const params = new URLSearchParams(queryStr);
+          const section = params.get('section');
+          if (section) {
+            window.dispatchEvent(new CustomEvent('settings-section', { detail: section }));
+          }
+        }
       } else {
         navigateToPage(e.detail);
         setProgramId(null);
