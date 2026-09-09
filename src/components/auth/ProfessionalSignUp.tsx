@@ -93,6 +93,9 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
 
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordMismatch, setPasswordMismatch] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [usernameCheckTimeout, setUsernameCheckTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
@@ -161,8 +164,8 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
       setError(language === 'es' ? 'Por favor ingresa un email válido' : 'Please enter a valid email');
       return false;
     }
-    if (form.password.length < 6) {
-      setError(language === 'es' ? 'La contraseña debe tener al menos 6 caracteres' : 'Password must be at least 6 characters');
+    if (form.password !== confirmPassword) {
+      setError(language === 'es' ? 'Las contraseñas no coinciden' : 'Passwords do not match');
       return false;
     }
     return true;
@@ -364,11 +367,24 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
               <label className={labelClass}>{language === 'es' ? 'Contraseña' : 'Password'}</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-                <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => update('password', e.target.value)} className={inputClass} style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem' }} placeholder="••••••••" />
+                <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => { update('password', e.target.value); setPasswordMismatch(confirmPassword.length > 0 && e.target.value !== confirmPassword); }} className={inputClass} style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem' }} placeholder="••••••••" />
                 <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
+            </div>
+            <div>
+              <label className={labelClass}>{language === 'es' ? 'Confirmar contraseña' : 'Confirm password'}</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                <input type={showConfirmPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => { setConfirmPassword(e.target.value); setPasswordMismatch(e.target.value !== form.password && e.target.value.length > 0); }} className={`${inputClass} ${passwordMismatch ? 'border-red-500/50' : ''}`} style={{ paddingLeft: '2.5rem', paddingRight: '2.5rem' }} placeholder="••••••••" />
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {passwordMismatch && (
+                <p className="text-xs text-red-400 mt-1">Las contraseñas no coinciden</p>
+              )}
             </div>
             <div>
               <label className={labelClass}>

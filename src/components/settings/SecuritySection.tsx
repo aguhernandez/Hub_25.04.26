@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
-import { Lock, Mail, Save, AlertCircle, AlertTriangle, Trash2 } from 'lucide-react';
+import { Lock, Mail, Save, AlertCircle, AlertTriangle, Trash2, Eye, EyeOff } from 'lucide-react';
 
 export default function SecuritySection() {
   const { language } = useLanguage();
@@ -13,6 +13,10 @@ export default function SecuritySection() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordMismatch, setPasswordMismatch] = useState(false);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -51,12 +55,7 @@ export default function SecuritySection() {
     }
 
     if (newPassword !== confirmPassword) {
-      alert(language === 'es' ? 'Las contraseñas no coinciden' : 'Passwords do not match');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      alert(language === 'es' ? 'La contraseña debe tener al menos 6 caracteres' : 'Password must be at least 6 characters');
+      setPasswordMismatch(true);
       return;
     }
 
@@ -70,6 +69,7 @@ export default function SecuritySection() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setPasswordMismatch(false);
     } catch (error: any) {
       console.error('Error updating password:', error);
       alert(language === 'es' ? `Error: ${error.message}` : `Error: ${error.message}`);
@@ -173,47 +173,62 @@ export default function SecuritySection() {
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {language === 'es' ? 'Contraseña Actual' : 'Current Password'}
             </label>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#fdda36]"
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                type={showCurrentPassword ? 'text' : 'password'}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#fdda36]"
+                placeholder="••••••••"
+              />
+              <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {language === 'es' ? 'Nueva Contraseña' : 'New Password'}
             </label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#fdda36]"
-              placeholder="••••••••"
-            />
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {language === 'es' ? 'Mínimo 6 caracteres' : 'Minimum 6 characters'}
-            </p>
+            <div className="relative">
+              <input
+                type={showNewPassword ? 'text' : 'password'}
+                value={newPassword}
+                onChange={(e) => { setNewPassword(e.target.value); setPasswordMismatch(confirmPassword.length > 0 && e.target.value !== confirmPassword); }}
+                className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#fdda36]"
+                placeholder="••••••••"
+              />
+              <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {language === 'es' ? 'Confirmar Nueva Contraseña' : 'Confirm New Password'}
             </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#fdda36]"
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={(e) => { setConfirmPassword(e.target.value); setPasswordMismatch(e.target.value !== newPassword && e.target.value.length > 0); }}
+                className={`w-full px-3 py-2 pr-10 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#fdda36] ${passwordMismatch ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
+                placeholder="••••••••"
+              />
+              <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            {passwordMismatch && (
+              <p className="text-xs text-red-500 mt-1">Las contraseñas no coinciden</p>
+            )}
           </div>
 
           <button
             onClick={handlePasswordChange}
-            disabled={loading || !currentPassword || !newPassword || !confirmPassword}
+            disabled={loading || !currentPassword || !newPassword || !confirmPassword || passwordMismatch}
             className="flex items-center gap-2 px-4 py-2 bg-[#fdda36] text-[#514163] rounded-lg font-semibold hover:bg-[#ffd51a] transition-colors disabled:opacity-50"
           >
             <Save className="w-4 h-4" />

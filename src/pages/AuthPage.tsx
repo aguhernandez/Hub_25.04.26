@@ -163,7 +163,10 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordMismatch, setPasswordMismatch] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
@@ -434,10 +437,6 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
       setError(language === 'es' ? 'Por favor ingresa un email válido' : 'Please enter a valid email');
       return;
     }
-    if (password.length < 6) {
-      setError(language === 'es' ? 'La contraseña debe tener al menos 6 caracteres' : 'Password must be at least 6 characters');
-      return;
-    }
     if (!firstName.trim() || !lastName.trim()) {
       setError(language === 'es' ? 'Completa nombre y apellido' : 'Please complete first and last name');
       return;
@@ -448,6 +447,10 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
   const handleSignupFinal = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (password !== confirmPassword) {
+      setError(language === 'es' ? 'Las contraseñas no coinciden' : 'Passwords do not match');
+      return;
+    }
     setLoading(true);
 
     try {
@@ -1185,14 +1188,34 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
                     required
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    placeholder={language === 'es' ? 'Contraseña (mín. 6 caracteres)' : 'Password (min. 6 chars)'}
+                    placeholder={language === 'es' ? 'Contraseña' : 'Password'}
                     className="w-full bg-white/5 border border-white/10 rounded-xl pl-11 pr-12 py-3.5 text-white placeholder-white/25 text-sm focus:outline-none focus:border-[#fdda36]/50 transition-all"
-                    minLength={6}
                   />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    required
+                    value={confirmPassword}
+                    onChange={e => {
+                      setConfirmPassword(e.target.value);
+                      setPasswordMismatch(e.target.value !== password && e.target.value.length > 0);
+                    }}
+                    placeholder={language === 'es' ? 'Confirmar contraseña' : 'Confirm password'}
+                    className={`w-full bg-white/5 border rounded-xl pl-11 pr-12 py-3.5 text-white placeholder-white/25 text-sm focus:outline-none transition-all ${passwordMismatch ? 'border-red-500/50 focus:border-red-500/70' : 'border-white/10 focus:border-[#fdda36]/50'}`}
+                  />
+                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/60 transition-colors">
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {passwordMismatch && (
+                  <p className="text-xs text-red-400 -mt-2">Las contraseñas no coinciden</p>
+                )}
 
                 <label className="flex items-start gap-3 cursor-pointer group">
                   <input
