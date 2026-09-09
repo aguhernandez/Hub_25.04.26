@@ -114,9 +114,6 @@ Deno.serve(async (req: Request) => {
     if (profileError) {
       console.error('Error fetching profile:', profileError);
     }
-    if (profile?.role !== 'athlete') {
-      throw new Error('Only athlete accounts can purchase an athlete membership');
-    }
 
     // Get custom success/cancel URLs if provided
     const customSuccessUrl = body.success_url;
