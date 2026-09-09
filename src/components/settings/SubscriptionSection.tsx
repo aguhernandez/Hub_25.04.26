@@ -15,7 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 
-const STRIPE_PORTAL_URL = 'https://billing.stripe.com/p/login/bJe9ATbYZ0VQ5VP3Ky9R600';
+const STRIPE_PORTAL_URL = 'https://billing.stripe.com/p/login/bJe9ATbYZ0Vq5VP3Ky9R600';
 
 interface ProSubscription {
   status: string;
