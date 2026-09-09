@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { supabase } from '../../lib/supabase';
@@ -13,9 +13,8 @@ import {
   ExternalLink,
   Loader2,
   Sparkles,
+  AlertTriangle,
 } from 'lucide-react';
-
-const STRIPE_PORTAL_URL = 'https://billing.stripe.com/p/login/bJe9ATbYZ0Vq5VP3Ky9R600';
 
 interface ProSubscription {
   status: string;
@@ -24,6 +23,7 @@ interface ProSubscription {
   current_period_end: string | null;
   max_athletes: number;
   stripe_customer_id: string | null;
+  cancel_at_period_end: boolean;
 }
 
 export default function SubscriptionSection() {
@@ -31,20 +31,18 @@ export default function SubscriptionSection() {
   const { language } = useLanguage();
   const [subscription, setSubscription] = useState<ProSubscription | null>(null);
   const [loading, setLoading] = useState(true);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
 
   const isEs = language === 'es';
 
-  useEffect(() => {
-    loadSubscription();
-  }, [profile?.id]);
-
-  const loadSubscription = async () => {
+  const loadSubscription = useCallback(async () => {
     if (!profile?.id) return;
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('professional_subscriptions')
-        .select('status, billing_cycle, trial_end, current_period_end, max_athletes, stripe_customer_id')
+        .select('status, billing_cycle, trial_end, current_period_end, max_athletes, stripe_customer_id, cancel_at_period_end')
         .eq('user_id', profile.id)
         .order('created_at', { ascending: false })
         .maybeSingle();
@@ -56,7 +54,19 @@ export default function SubscriptionSection() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [profile?.id]);
+
+  useEffect(() => {
+    loadSubscription();
+  }, [loadSubscription]);
+
+  // Re-fetch when returning from Stripe portal (URL hash or query param)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('portal_return') === 'true') {
+      loadSubscription();
+    }
+  }, [loadSubscription]);
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-';
@@ -120,6 +130,40 @@ export default function SubscriptionSection() {
     }
   };
 
+  const handleManageSubscription = async () => {
+    setPortalLoading(true);
+    setPortalError(null);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const accessToken = session.session?.access_token;
+      if (!accessToken) throw new Error(isEs ? 'No hay sesión activa' : 'No active session');
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/stripe-create-portal-session`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        },
+      );
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to open billing portal');
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error(isEs ? 'No se pudo obtener el enlace del portal' : 'Could not get portal URL');
+      }
+    } catch (err: any) {
+      setPortalError(err.message || (isEs ? 'Error al abrir el portal' : 'Error opening portal'));
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -174,6 +218,18 @@ export default function SubscriptionSection() {
               </p>
             </div>
           </div>
+
+          {/* Cancellation scheduled banner */}
+          {subscription.cancel_at_period_end && subscription.status !== 'canceled' && (
+            <div className="mb-4 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/50 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                {isEs
+                  ? `Tu suscripción está cancelada pero seguirás teniendo acceso hasta el ${formatDate(subscription.current_period_end)}. Puedes reactivarla desde el portal de Stripe.`
+                  : `Your subscription is scheduled to cancel but you'll keep access until ${formatDate(subscription.current_period_end)}. You can reactivate it from the Stripe portal.`}
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Trial end */}
@@ -236,16 +292,24 @@ export default function SubscriptionSection() {
                     : 'Update your payment method, change plans, or cancel your subscription through the secure Stripe portal.'}
                 </p>
               </div>
-              <a
-                href={STRIPE_PORTAL_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-5 py-2.5 bg-[#514163] text-white rounded-lg font-semibold text-sm hover:bg-[#3d3050] transition-colors whitespace-nowrap"
+              <button
+                onClick={handleManageSubscription}
+                disabled={portalLoading}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#514163] text-white rounded-lg font-semibold text-sm hover:bg-[#3d3050] transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <ExternalLink className="w-4 h-4" />
-                {isEs ? 'Abrir portal de Stripe' : 'Open Stripe portal'}
-              </a>
+                {portalLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ExternalLink className="w-4 h-4" />
+                )}
+                {portalLoading
+                  ? (isEs ? 'Abriendo...' : 'Opening...')
+                  : (isEs ? 'Gestionar suscripción' : 'Manage subscription')}
+              </button>
             </div>
+            {portalError && (
+              <p className="text-xs text-red-500 mt-2">{portalError}</p>
+            )}
           </div>
         </div>
       ) : (

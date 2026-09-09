@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import Stripe from 'npm:stripe@14.21.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -33,15 +34,18 @@ Deno.serve(async (req: Request) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
   const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
+  const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
 
   log('INFO', 'webhook_received', { method: req.method });
 
   const body = await req.text();
   log('INFO', 'body_read', { bytes: body.length });
 
-  // ── Signature verification ─────────────────────────────────────────────────
+  // ── Signature verification (real Stripe SDK verification) ────────────────────
   const signature = req.headers.get('stripe-signature');
-  if (webhookSecret) {
+  let event: StripeEvent;
+
+  if (webhookSecret && stripeKey) {
     if (!signature) {
       log('ERROR', 'signature_missing');
       return new Response(
@@ -49,21 +53,28 @@ Deno.serve(async (req: Request) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
-    log('INFO', 'signature_present', { sig_prefix: signature.slice(0, 20) });
+    try {
+      const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' });
+      event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret) as unknown as StripeEvent;
+      log('INFO', 'signature_verified', { event_id: event.id, event_type: event.type });
+    } catch (verifyErr: any) {
+      log('ERROR', 'signature_verification_failed', { error: verifyErr.message });
+      return new Response(
+        JSON.stringify({ error: 'Invalid signature' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
   } else {
-    log('WARN', 'signature_check_skipped', { reason: 'STRIPE_WEBHOOK_SECRET not configured' });
-  }
-
-  // ── Parse event ────────────────────────────────────────────────────────────
-  let event: StripeEvent;
-  try {
-    event = JSON.parse(body);
-  } catch (parseErr: any) {
-    log('ERROR', 'body_parse_failed', { error: parseErr.message });
-    return new Response(
-      JSON.stringify({ error: 'Invalid JSON body' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
+    log('WARN', 'signature_check_skipped', { reason: 'STRIPE_WEBHOOK_SECRET or STRIPE_SECRET_KEY not configured' });
+    try {
+      event = JSON.parse(body);
+    } catch (parseErr: any) {
+      log('ERROR', 'body_parse_failed', { error: parseErr.message });
+      return new Response(
+        JSON.stringify({ error: 'Invalid JSON body' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
   }
 
   log('INFO', 'event_parsed', { event_id: event.id, event_type: event.type });
@@ -104,8 +115,16 @@ Deno.serve(async (req: Request) => {
         await handleSubscriptionUpdated(supabase, event);
         break;
       case 'customer.subscription.deleted':
+        await handleSubscriptionCanceled(supabase, event);
+        break;
+      case 'invoice.paid':
+        await handleSubscriptionActive(supabase, event);
+        break;
       case 'invoice.payment_failed':
         await handleSubscriptionCanceled(supabase, event);
+        break;
+      case 'customer.updated':
+        log('INFO', 'customer_updated', { customer_id: event.data.object.id });
         break;
       default:
         log('INFO', 'event_unhandled', { event_type: event.type });
@@ -631,12 +650,15 @@ async function handleSubscriptionUpdated(supabase: any, event: StripeEvent) {
       ? new Date(subscription.current_period_end * 1000).toISOString()
       : null;
 
+    const cancelAtPeriodEnd = subscription.cancel_at_period_end ?? false;
+
     const { error } = await supabase
       .from('professional_subscriptions')
       .update({
         status,
         trial_end: trialEnd,
         current_period_end: periodEnd,
+        cancel_at_period_end: cancelAtPeriodEnd,
         canceled_at: status === 'canceled' ? new Date().toISOString() : null,
       })
       .eq('stripe_subscription_id', subscription.id);
