@@ -150,7 +150,10 @@ export default function SettingsPage() {
 
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [activeSection, setActiveSection] = useState<'profile' | 'security' | 'membership' | 'subscription' | 'admin' | 'preferences' | 'support' | 'about-coach' | 'notifications' | 'trainingpeaks' | 'strava' | 'satellites' | 'planner-connections' | 'invoices'>('profile');
+  const [activeSection, setActiveSection] = useState<'profile' | 'security' | 'membership' | 'subscription' | 'admin' | 'preferences' | 'support' | 'about-coach' | 'notifications' | 'trainingpeaks' | 'strava' | 'satellites' | 'planner-connections' | 'invoices'>(() => {
+    const section = new URLSearchParams(window.location.search).get('section');
+    return section === 'membership' ? 'membership' : 'profile';
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = profile?.role === 'admin';
@@ -232,6 +235,13 @@ export default function SettingsPage() {
       loadAthleteTrainers();
     }
   }, [profile?.role, profile?.id]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('section') === 'membership' && profile?.role === 'athlete') {
+      setActiveSection('membership');
+    }
+  }, [profile?.role]);
 
   const loadTrainers = async () => {
     try {
@@ -457,17 +467,19 @@ export default function SettingsPage() {
           <Lock className="w-4 h-4" />
           {language === 'es' ? 'Seguridad' : 'Security'}
         </button>
-        <button
-          onClick={() => setActiveSection('membership')}
-          className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${
-            activeSection === 'membership'
-              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
-              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-          }`}
-        >
-          <Crown className="w-4 h-4" />
-          {language === 'es' ? 'Membresía' : 'Membership'}
-        </button>
+        {profile?.role === 'athlete' && (
+          <button
+            onClick={() => setActiveSection('membership')}
+            className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${
+              activeSection === 'membership'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <Crown className="w-4 h-4" />
+            {language === 'es' ? 'Membresía' : 'Membership'}
+          </button>
+        )}
         <button
           onClick={() => setActiveSection('invoices')}
           className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${
@@ -1089,7 +1101,7 @@ export default function SettingsPage() {
       )}
 
       {/* Membership Section */}
-      {activeSection === 'membership' && (
+      {activeSection === 'membership' && profile?.role === 'athlete' && (
         <MembershipSection />
       )}
 

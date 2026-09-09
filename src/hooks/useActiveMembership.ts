@@ -8,6 +8,11 @@ interface ActiveMembership {
   start_date: string;
   end_date: string | null;
   source?: string;
+  billing_cycle?: string | null;
+  trial_end?: string | null;
+  current_period_end?: string | null;
+  cancel_at_period_end?: boolean;
+  stripe_customer_id?: string | null;
   membership: {
     id: string;
     name: string;
@@ -41,6 +46,11 @@ export function useActiveMembership(userId?: string) {
           start_date,
           end_date,
           source,
+          billing_cycle,
+          trial_end,
+          current_period_end,
+          cancel_at_period_end,
+          stripe_customer_id,
           membership:memberships (
             id,
             name,

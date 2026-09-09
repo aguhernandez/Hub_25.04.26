@@ -107,18 +107,22 @@ Deno.serve(async (req: Request) => {
     // Get user email
     const { data: profile, error: profileError } = await supabaseClient
       .from('profiles')
-      .select('email, full_name')
+      .select('email, full_name, role')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
     if (profileError) {
       console.error('Error fetching profile:', profileError);
+    }
+    if (profile?.role !== 'athlete') {
+      throw new Error('Only athlete accounts can purchase an athlete membership');
     }
 
     // Get custom success/cancel URLs if provided
     const customSuccessUrl = body.success_url;
     const customCancelUrl = body.cancel_url;
     const origin = req.headers.get('origin') || Deno.env.get('SITE_URL') || '';
+    const returnUrl = `${origin}/settings?section=membership`;
 
     // Create checkout session
     console.log('Creating Stripe checkout session...');
@@ -132,12 +136,13 @@ Deno.serve(async (req: Request) => {
       ],
       mode: 'subscription',
       allow_promotion_codes: true,
-      success_url: customSuccessUrl || `${origin}/memberships?success=true`,
-      cancel_url: customCancelUrl || `${origin}/memberships?canceled=true`,
+      success_url: customSuccessUrl || `${returnUrl}&membership_success=true`,
+      cancel_url: customCancelUrl || `${returnUrl}&membership_canceled=true`,
       metadata: {
         user_id: user.id,
         membership_id: membership_id,
         billing_cycle: billing_cycle,
+        price_id: priceId,
         type: 'membership_subscription',
       },
       subscription_data: {
@@ -145,6 +150,8 @@ Deno.serve(async (req: Request) => {
           user_id: user.id,
           membership_id: membership_id,
           billing_cycle: billing_cycle,
+          price_id: priceId,
+          type: 'membership_subscription',
         },
       },
     });

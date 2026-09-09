@@ -117,11 +117,11 @@ Deno.serve(async (req: Request) => {
       case 'customer.subscription.deleted':
         await handleSubscriptionCanceled(supabase, event);
         break;
-      case 'invoice.paid':
-        await handleSubscriptionActive(supabase, event);
-        break;
       case 'invoice.payment_failed':
-        await handleSubscriptionCanceled(supabase, event);
+        log('WARN', 'invoice_payment_failed', {
+          invoice_id: event.data.object.id,
+          subscription_id: event.data.object.subscription,
+        });
         break;
       case 'customer.updated':
         log('INFO', 'customer_updated', { customer_id: event.data.object.id });
@@ -571,6 +571,15 @@ async function handleMembershipSubscriptionCreated(supabase: any, session: any) 
     stripe_customer_id: session.customer,
     stripe_subscription_id: session.subscription,
     stripe_checkout_session_id: session.id,
+    billing_cycle: billing_cycle || null,
+    stripe_price_id: session.metadata?.price_id || null,
+    trial_end: session.subscription_details?.trial_end
+      ? new Date(session.subscription_details.trial_end * 1000).toISOString()
+      : null,
+    current_period_end: session.subscription_details?.trial_end
+      ? new Date(session.subscription_details.trial_end * 1000).toISOString()
+      : null,
+    cancel_at_period_end: false,
     notes: `Subscribed via Stripe (${billing_cycle})`,
   });
 
@@ -632,7 +641,9 @@ async function handleProfessionalCheckoutCompleted(supabase: any, session: any, 
 // ── Subscription updated ───────────────────────────────────────────────────────
 async function handleSubscriptionUpdated(supabase: any, event: StripeEvent) {
   const subscription = event.data.object;
-  log('INFO', 'subscription_updated', { subscription_id: subscription.id });
+  const subscriptionId = subscription.id;
+  const status = subscription.status || 'active';
+  log('INFO', 'subscription_updated', { subscription_id: subscriptionId });
 
   // Check if this is a professional subscription
   const { data: profSub } = await supabase
@@ -661,17 +672,46 @@ async function handleSubscriptionUpdated(supabase: any, event: StripeEvent) {
         cancel_at_period_end: cancelAtPeriodEnd,
         canceled_at: status === 'canceled' ? new Date().toISOString() : null,
       })
-      .eq('stripe_subscription_id', subscription.id);
+      .eq('stripe_subscription_id', subscriptionId);
 
     if (error) log('ERROR', 'professional_subscription_update_failed', { error: error.message });
-    else log('INFO', 'professional_subscription_updated', { subscription_id: subscription.id, status });
+    else log('INFO', 'professional_subscription_updated', { subscription_id: subscriptionId, status });
+    return;
+  }
+
+  const { data: membershipAccess } = await supabase
+    .from('membership_access')
+    .select('id')
+    .eq('stripe_subscription_id', subscriptionId)
+    .maybeSingle();
+
+  if (membershipAccess) {
+    const periodEnd = subscription.current_period_end
+      ? new Date(subscription.current_period_end * 1000).toISOString()
+      : null;
+    const trialEnd = subscription.trial_end
+      ? new Date(subscription.trial_end * 1000).toISOString()
+      : null;
+    const { error } = await supabase
+      .from('membership_access')
+      .update({
+        status: 'active',
+        end_date: periodEnd,
+        current_period_end: periodEnd,
+        trial_end: trialEnd,
+        cancel_at_period_end: subscription.cancel_at_period_end ?? false,
+        stripe_price_id: subscription.items?.data?.[0]?.price?.id || null,
+      })
+      .eq('stripe_subscription_id', subscriptionId);
+    if (error) log('ERROR', 'membership_subscription_update_failed', { error: error.message });
+    else log('INFO', 'membership_subscription_updated', { subscription_id: subscriptionId, status });
     return;
   }
 
   const { error } = await supabase
     .from('user_purchases')
-    .update({ next_billing_date: new Date(subscription.current_period_end * 1000).toISOString() })
-    .eq('stripe_subscription_id', subscription.id);
+    .update({ next_billing_date: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null })
+    .eq('stripe_subscription_id', subscriptionId);
 
   if (error) log('ERROR', 'subscription_update_failed', { error: error.message });
 }
@@ -679,13 +719,14 @@ async function handleSubscriptionUpdated(supabase: any, event: StripeEvent) {
 // ── Subscription active (invoice.paid) ────────────────────────────────────────
 async function handleSubscriptionActive(supabase: any, event: StripeEvent) {
   const subscription = event.data.object;
-  log('INFO', 'subscription_active', { subscription_id: subscription.id });
+  const subscriptionId = event.type === 'invoice.paid' ? subscription.subscription : subscription.id;
+  log('INFO', 'subscription_active', { subscription_id: subscriptionId, event_type: event.type });
 
   // Check if this is a professional subscription
   const { data: profSub } = await supabase
     .from('professional_subscriptions')
     .select('id, user_id')
-    .eq('stripe_subscription_id', subscription.id)
+    .eq('stripe_subscription_id', subscriptionId)
     .maybeSingle();
 
   if (profSub) {
@@ -700,24 +741,34 @@ async function handleSubscriptionActive(supabase: any, event: StripeEvent) {
         status,
         current_period_end: periodEnd,
       })
-      .eq('stripe_subscription_id', subscription.id);
+      .eq('stripe_subscription_id', subscriptionId);
 
     if (error) log('ERROR', 'professional_subscription_active_failed', { error: error.message });
-    else log('INFO', 'professional_subscription_activated', { subscription_id: subscription.id, status });
+    else log('INFO', 'professional_subscription_activated', { subscription_id: subscriptionId, status });
     return;
   }
 
-  if (subscription.metadata?.membership_id || subscription.metadata?.type === 'membership_subscription') {
+  const { data: membershipAccess } = await supabase
+    .from('membership_access')
+    .select('id')
+    .eq('stripe_subscription_id', subscriptionId)
+    .maybeSingle();
+
+  if (membershipAccess) {
+    const periodEnd = event.type === 'invoice.paid'
+      ? (subscription.lines?.data?.[0]?.period?.end || subscription.period_end)
+      : subscription.current_period_end;
     const { error } = await supabase
       .from('membership_access')
       .update({
         status: 'active',
-        end_date: new Date(subscription.current_period_end * 1000).toISOString(),
+        end_date: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+        current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
       })
-      .eq('stripe_subscription_id', subscription.id);
+      .eq('stripe_subscription_id', subscriptionId);
 
     if (error) log('ERROR', 'membership_access_update_failed', { error: error.message });
-    else log('INFO', 'membership_access_renewed', { subscription_id: subscription.id });
+    else log('INFO', 'membership_access_renewed', { subscription_id: subscriptionId });
   }
 }
 
@@ -748,18 +799,18 @@ async function handleSubscriptionCanceled(supabase: any, event: StripeEvent) {
     return;
   }
 
-  if (subscription.metadata?.membership_id || subscription.metadata?.type === 'membership_subscription') {
-    const { data: accessRow } = await supabase
-      .from('membership_access')
-      .select('user_id')
-      .eq('stripe_subscription_id', stripeSubId)
-      .maybeSingle();
+  const { data: accessRow } = await supabase
+    .from('membership_access')
+    .select('user_id')
+    .eq('stripe_subscription_id', stripeSubId)
+    .maybeSingle();
 
-    if (accessRow?.user_id) {
-      await supabase
-        .from('membership_access')
-        .update({ status: 'canceled', end_date: new Date().toISOString() })
-        .eq('stripe_subscription_id', stripeSubId);
+  if (accessRow?.user_id) {
+
+    await supabase
+      .from('membership_access')
+      .update({ status: 'canceled', end_date: new Date().toISOString(), current_period_end: null, cancel_at_period_end: false })
+      .eq('stripe_subscription_id', stripeSubId);
 
       const { data: iniciaData } = await supabase
         .from('memberships')
@@ -768,20 +819,26 @@ async function handleSubscriptionCanceled(supabase: any, event: StripeEvent) {
         .maybeSingle();
 
       if (iniciaData?.id) {
-        await supabase.from('membership_access').insert({
-          user_id: accessRow.user_id,
-          membership_id: iniciaData.id,
-          status: 'active',
-          start_date: new Date().toISOString(),
-          end_date: null,
-          source: 'manual',
-          notes: 'Reverted to Inicia after Stripe subscription canceled',
-        });
+        const { data: existingInicia } = await supabase
+          .from('membership_access')
+          .select('id')
+          .eq('user_id', accessRow.user_id)
+          .eq('membership_id', iniciaData.id)
+          .eq('status', 'active')
+          .maybeSingle();
+        if (!existingInicia) {
+          await supabase.from('membership_access').insert({
+            user_id: accessRow.user_id,
+            membership_id: iniciaData.id,
+            status: 'active',
+            start_date: new Date().toISOString(),
+            end_date: null,
+            source: 'manual',
+            notes: 'Reverted to Inicia after Stripe subscription ended',
+          });
+        }
         log('INFO', 'membership_reverted_to_inicia', { user_id: accessRow.user_id });
       }
-    } else {
-      log('WARN', 'subscription_canceled_no_access_row', { subscription_id: stripeSubId });
-    }
     return;
   }
 
