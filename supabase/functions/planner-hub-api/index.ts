@@ -2331,6 +2331,274 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // ──────────────────────────────────────────────────────────────────
+    // GET /planner-hub-api/tdee
+    // Nutrition Planner: reads the athlete's daily caloric need (TDEE)
+    // Returns per-day TDEE for a date range, calculated from planned training.
+    // Query params: date_from, date_to (default: current week Mon–Sun)
+    // ──────────────────────────────────────────────────────────────────
+    if (endpoint === "tdee" && req.method === "GET") {
+      const dateFrom = url.searchParams.get("date_from") || (() => {
+        const now = new Date();
+        const day = now.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        const monday = new Date(now);
+        monday.setDate(now.getDate() + diff);
+        return monday.toISOString().split("T")[0];
+      })();
+      const dateTo = url.searchParams.get("date_to") || (() => {
+        const start = new Date(dateFrom + "T00:00:00");
+        const sunday = new Date(start);
+        sunday.setDate(start.getDate() + 6);
+        return sunday.toISOString().split("T")[0];
+      })();
+
+      // 1. Load TDEE config from database
+      const { data: configRows } = await supabaseAdmin
+        .from("tdee_config")
+        .select("config_key, config_value");
+
+      const cfg: Record<string, any> = {
+        met_5zones: { Z1: 4, Z2: 6, Z3: 8, Z4: 10, Z5: 12 },
+        met_7zones: { Z1: 4, Z2: 5, Z3: 6, Z4: 7.5, Z5: 9, Z6: 10.5, Z7: 12 },
+        neat_factor: 1.25,
+        met_endurance_default: 7,
+        met_gym_default: 5,
+      };
+      for (const row of configRows || []) {
+        if (row.config_key === "neat_factor" || row.config_key === "met_endurance_default" || row.config_key === "met_gym_default") {
+          cfg[row.config_key] = typeof row.config_value === "number" ? row.config_value : Number(row.config_value);
+        } else if (row.config_key === "met_5zones" || row.config_key === "met_7zones") {
+          if (typeof row.config_value === "object" && row.config_value !== null) cfg[row.config_key] = row.config_value;
+        }
+      }
+
+      // 2. Load active biological passport
+      const { data: passport } = await supabaseAdmin
+        .from("biological_passports")
+        .select("id, weight_kg, height_cm, lean_mass_kg, body_fat_percent, training_zones")
+        .eq("athlete_id", athleteId)
+        .eq("status", "active")
+        .order("measurement_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!passport || !passport.weight_kg || !passport.height_cm) {
+        await logAccess(plannerInfo.id, athleteId, "read", endpoint, 200);
+        return new Response(JSON.stringify({
+          athlete_id: athleteId,
+          date_from: dateFrom,
+          date_to: dateTo,
+          tdee: null,
+          message: "No active biological passport with weight_kg and height_cm found for this athlete",
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // 3. Calculate age from date_of_birth
+      const dob = athleteProfile.date_of_birth;
+      if (!dob) {
+        await logAccess(plannerInfo.id, athleteId, "read", endpoint, 200);
+        return new Response(JSON.stringify({
+          athlete_id: athleteId,
+          date_from: dateFrom,
+          date_to: dateTo,
+          tdee: null,
+          message: "Athlete date_of_birth is missing, cannot calculate BMR",
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const today = new Date();
+      const birthDate = new Date(dob);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+
+      const sex: "male" | "female" = athleteProfile.gender === "female" ? "female" : "male";
+
+      // 4. Calculate BMR
+      const ffmKg = passport.lean_mass_kg;
+      let bmr: number;
+      let bmr_method: string;
+      if (ffmKg != null && ffmKg > 0) {
+        bmr = 500 + 22 * ffmKg;
+        bmr_method = "cunningham";
+      } else {
+        if (sex === "male") {
+          bmr = 10 * passport.weight_kg + 6.25 * passport.height_cm - 5 * age + 5;
+        } else {
+          bmr = 10 * passport.weight_kg + 6.25 * passport.height_cm - 5 * age - 161;
+        }
+        bmr_method = "mifflin_st_jeor";
+      }
+
+      const neatBase = bmr * cfg.neat_factor;
+      const defaultZoneSystem = passport.training_zones?.default_display === "7" ? 7 : 5;
+
+      // 5. Fetch endurance workouts
+      const { data: enduranceWorkouts } = await supabaseAdmin
+        .from("external_endurance_workouts")
+        .select("id, name, sport, scheduled_date, estimated_duration_minutes, steps, status")
+        .eq("athlete_id", athleteId)
+        .gte("scheduled_date", dateFrom)
+        .lte("scheduled_date", dateTo)
+        .order("scheduled_date", { ascending: true });
+
+      // 6. Fetch gym workouts
+      const { data: gymWorkouts } = await supabaseAdmin
+        .from("athlete_workouts")
+        .select("id, scheduled_date, workout_id, source, external_title, raw_description")
+        .eq("athlete_id", athleteId)
+        .gte("scheduled_date", dateFrom)
+        .lte("scheduled_date", dateTo)
+        .order("scheduled_date", { ascending: true });
+
+      // Join gym workout durations
+      const gymWorkoutIds = (gymWorkouts || []).map((g: any) => g.workout_id).filter(Boolean);
+      let workoutDurationMap: Record<string, number> = {};
+      if (gymWorkoutIds.length > 0) {
+        const { data: workoutsData } = await supabaseAdmin
+          .from("workouts")
+          .select("id, duration_minutes")
+          .in("id", gymWorkoutIds);
+        for (const w of (workoutsData || [])) {
+          workoutDurationMap[w.id] = w.duration_minutes || 0;
+        }
+      }
+
+      // 7. Build per-day sessions
+      const dayMap: Record<string, any[]> = {};
+
+      for (const ew of (enduranceWorkouts || [])) {
+        if (ew.status === "skipped") continue;
+        const steps = ew.steps || [];
+        let totalKcal = 0;
+        let hasZones = false;
+        const zoneBreakdown: Record<string, { hours: number; kcal: number }> = {};
+
+        for (const step of steps) {
+          if (step.duration_type !== "time" || !step.duration_value) continue;
+          const hours = step.duration_value / 3600;
+          if (hours <= 0) continue;
+
+          const zone = step.target_zone;
+          const zoneSystem = step.zone_system ?? defaultZoneSystem;
+          const metTable = zoneSystem === 7 ? cfg.met_7zones : cfg.met_5zones;
+
+          if (zone != null && zone >= 1) {
+            const met = metTable[`Z${zone}`];
+            if (met != null) {
+              const kcal = hours * met * passport.weight_kg;
+              totalKcal += kcal;
+              hasZones = true;
+              const key = `Z${zone}`;
+              if (!zoneBreakdown[key]) zoneBreakdown[key] = { hours: 0, kcal: 0 };
+              zoneBreakdown[key].hours += hours;
+              zoneBreakdown[key].kcal += kcal;
+            }
+          }
+        }
+
+        if (!hasZones) {
+          const hours = (ew.estimated_duration_minutes || 0) / 60;
+          totalKcal = hours * cfg.met_endurance_default * passport.weight_kg;
+        }
+
+        const day = ew.scheduled_date;
+        if (!dayMap[day]) dayMap[day] = [];
+        dayMap[day].push({
+          name: ew.name,
+          source: "endurance",
+          kcal: Math.round(totalKcal),
+          duration_minutes: ew.estimated_duration_minutes || 0,
+          zone_breakdown: hasZones ? Object.entries(zoneBreakdown).map(([zone, v]) => ({
+            zone, hours: Math.round(v.hours * 100) / 100, kcal: Math.round(v.kcal),
+          })) : null,
+        });
+      }
+
+      for (const gw of (gymWorkouts || [])) {
+        const duration = workoutDurationMap[gw.workout_id] ?? 0;
+        const hours = duration / 60;
+        const kcal = hours * cfg.met_gym_default * passport.weight_kg;
+        const day = gw.scheduled_date;
+        if (!dayMap[day]) dayMap[day] = [];
+        dayMap[day].push({
+          name: gw.external_title || gw.raw_description || "Gym Session",
+          source: "gym",
+          kcal: Math.round(kcal),
+          duration_minutes: duration,
+          zone_breakdown: null,
+        });
+      }
+
+      // 8. Generate daily TDEE results
+      const daily: any[] = [];
+      const start = new Date(dateFrom + "T00:00:00");
+      const end = new Date(dateTo + "T00:00:00");
+      let totalEAT = 0;
+      let restDays = 0;
+      let trainingDays = 0;
+
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toISOString().split("T")[0];
+        const sessions = dayMap[dateStr] || [];
+        const eat = sessions.reduce((s: number, ses: any) => s + ses.kcal, 0);
+        const tdee = neatBase + eat;
+
+        daily.push({
+          date: dateStr,
+          bmr: Math.round(bmr),
+          neat_base: Math.round(neatBase),
+          eat: Math.round(eat),
+          tdee: Math.round(tdee),
+          tdee_low: Math.round(tdee * 0.92),
+          tdee_high: Math.round(tdee * 1.08),
+          sessions,
+        });
+
+        totalEAT += eat;
+        if (sessions.length > 0) trainingDays++;
+        else restDays++;
+      }
+
+      const avgTDEE = daily.length > 0 ? Math.round(daily.reduce((s: number, day: any) => s + day.tdee, 0) / daily.length) : 0;
+      const avgTDEELow = daily.length > 0 ? Math.round(daily.reduce((s: number, day: any) => s + day.tdee_low, 0) / daily.length) : 0;
+      const avgTDEEHigh = daily.length > 0 ? Math.round(daily.reduce((s: number, day: any) => s + day.tdee_high, 0) / daily.length) : 0;
+
+      await logAccess(plannerInfo.id, athleteId, "read", endpoint, 200);
+
+      return new Response(JSON.stringify({
+        athlete_id: athleteId,
+        date_from: dateFrom,
+        date_to: dateTo,
+        tdee: {
+          bmr: Math.round(bmr),
+          bmr_method: bmr_method,
+          neat_factor: cfg.neat_factor,
+          neat_base: Math.round(neatBase),
+          met_endurance_default: cfg.met_endurance_default,
+          met_gym_default: cfg.met_gym_default,
+          zone_scheme: defaultZoneSystem === 7 ? "7_zones" : "5_zones",
+          ffm_kg_used: ffmKg != null && ffmKg > 0,
+          daily,
+          weekly_summary: {
+            avg_tdee: avgTDEE,
+            avg_tdee_low: avgTDEELow,
+            avg_tdee_high: avgTDEEHigh,
+            total_eat: Math.round(totalEAT),
+            training_days: trainingDays,
+            rest_days: restDays,
+          },
+        },
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({
       error: "Unknown endpoint",
       available_endpoints: {
@@ -2346,6 +2614,7 @@ Deno.serve(async (req: Request) => {
           "GET /athlete-habits",
           "GET /wellness",
           "GET /athlete-satellite-tags",
+          "GET /tdee",
         ],
         "planner_write": [
           "POST /push-nutrition-plan",
