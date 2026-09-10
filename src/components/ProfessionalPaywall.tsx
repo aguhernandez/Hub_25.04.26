@@ -34,6 +34,17 @@ export default function ProfessionalPaywall() {
     let mounted = true;
 
     (async () => {
+      // Check both paid subscription and complimentary access in one call
+      const { data: accessData } = await supabase.rpc('get_my_paid_access_status').maybeSingle();
+
+      if (!mounted) return;
+
+      if (accessData?.is_access_active) {
+        setSubState({ status: 'active', trialEnd: null, loading: false });
+        return;
+      }
+
+      // Fallback: check professional_subscriptions directly for trial state
       const { data, error } = await supabase
         .from('professional_subscriptions')
         .select('status, trial_end')

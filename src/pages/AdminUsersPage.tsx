@@ -27,7 +27,9 @@ import {
   UserCheck,
   AlertTriangle,
   X,
+  Gift,
 } from 'lucide-react';
+import ComplimentaryAccessPanel from '../components/admin/ComplimentaryAccessPanel';
 
 interface AdminUser {
   id: string;
@@ -86,6 +88,8 @@ function AdminUsersPageContent() {
 
   const [editTarget, setEditTarget] = useState<AdminUser | null>(null);
   const [editName, setEditName] = useState('');
+
+  const [complimentaryTarget, setComplimentaryTarget] = useState<AdminUser | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -689,6 +693,13 @@ function AdminUsersPageContent() {
                                 <Crown className="w-4 h-4" />
                               </button>
                               <button
+                                onClick={() => setComplimentaryTarget(user)}
+                                className="p-2 text-gray-500 hover:text-amber-600 dark:text-gray-400 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors"
+                                title="Complimentary Access"
+                              >
+                                <Gift className="w-4 h-4" />
+                              </button>
+                              <button
                                 onClick={() => setDeleteTarget(user)}
                                 className="p-2 text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                                 title={t('delete')}
@@ -742,6 +753,31 @@ function AdminUsersPageContent() {
             </>
           )}
         </div>
+
+        {/* Complimentary Access Modal */}
+        {complimentaryTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <Gift className="w-5 h-5 text-amber-500" />
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">Complimentary Access</h3>
+                </div>
+                <button
+                  onClick={() => setComplimentaryTarget(null)}
+                  className="p-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <ComplimentaryAccessPanel
+                userId={complimentaryTarget.id}
+                userName={complimentaryTarget.full_name || complimentaryTarget.email}
+                onSaved={() => setComplimentaryTarget(null)}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Delete Confirmation Modal */}
         {deleteTarget && (
