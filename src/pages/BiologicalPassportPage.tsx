@@ -12,6 +12,7 @@ import {
 import type { BiologicalPassport, CreatePassportPayload, SportContext } from '../types/biologicalPassport.types';
 import PassportCard from '../components/passport/PassportCard';
 import PassportForm from '../components/passport/PassportForm';
+import TDEECard from '../components/passport/TDEECard';
 import {
   Fingerprint, Plus, ChevronDown, Users, Search,
   ClipboardList, Clock, Layers, AlertCircle, RefreshCw,
@@ -492,6 +493,11 @@ export default function BiologicalPassportPage() {
                   )}
                 </div>
               </div>
+            )}
+
+            {/* TDEE Card */}
+            {activePassport && (
+              <TDEECard athleteId={selectedAthleteId} passport={activePassport} />
             )}
 
             {/* Version history */}
