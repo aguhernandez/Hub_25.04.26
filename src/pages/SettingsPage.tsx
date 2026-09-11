@@ -259,8 +259,10 @@ export default function SettingsPage() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, full_name, email, trainer_role_type')
-        .eq('role', 'trainer')
+        .select('id, first_name, last_name, full_name, email, trainer_role_type, role')
+        .in('role', ['trainer', 'nutritionist', 'head_coach'])
+        .eq('is_active', true)
+        .eq('is_accepting_clients', true)
         .order('full_name');
 
       if (error) throw error;

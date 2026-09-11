@@ -76,7 +76,7 @@ export default function ProfessionalServicesPage() {
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
 
   const isNutritionist = profile?.role === 'nutritionist';
-  const isTrainer = profile?.role === 'trainer';
+  const isTrainer = profile?.role === 'trainer' || profile?.role === 'head_coach';
 
   const allowedCategories = isNutritionist
     ? ['nutrition', 'race_nutrition']
@@ -160,11 +160,14 @@ export default function ProfessionalServicesPage() {
   const loadProducts = useCallback(async () => {
     if (!profile?.id) return;
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('stripe_products')
       .select('*')
       .eq('professional_id', profile.id)
       .order('created_at', { ascending: false });
+    if (error) {
+      console.error('Error loading services:', error);
+    }
     setProducts(data || []);
     setLoading(false);
   }, [profile?.id]);
@@ -587,6 +590,13 @@ export default function ProfessionalServicesPage() {
           <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400 font-medium">{t('noServices')}</p>
           <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">{t('noServicesDesc')}</p>
+          <button
+            onClick={() => setShowForm(true)}
+            className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 bg-[#fdda36] text-[#514163] rounded-lg font-semibold text-sm hover:bg-[#ffd51a] transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            {t('newService')}
+          </button>
         </div>
       ) : (
         <div className="space-y-4">
