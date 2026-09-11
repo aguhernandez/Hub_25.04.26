@@ -18,6 +18,8 @@ import CoachWellnessDashboard from '../components/training/wellness/CoachWellnes
 import CMJAssessment from '../components/training/cmj/CMJAssessment';
 import BarVelocityTracker from '../components/training/barvelocity/BarVelocityTracker';
 import EnduranceWorkoutCard, { type EnduranceWorkout } from '../components/training/EnduranceWorkoutCard';
+import { useProfessionalServiceAccess } from '../hooks/useProfessionalServiceAccess';
+import ServiceAccessGate from '../components/ServiceAccessGate';
 import LogWorkoutModal from '../components/training/LogWorkoutModal';
 import WorkoutReassignModal from '../components/training/WorkoutReassignModal';
 import GPSActivityDetailModal from '../components/training/GPSActivityDetailModal';
@@ -27,7 +29,7 @@ import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 import { useMembership } from '../hooks/useMembership';
 import WorkoutTagsSection from '../components/tags/WorkoutTagsSection';
-import { Dumbbell, Calendar, Plus, Play, ChevronLeft, ChevronRight, TrendingUp, Clock, Weight, History, Copy, Activity, Clipboard, MoreVertical, GripVertical, Trash2, X, CreditCard as Edit, Calculator, RotateCw, Sparkles, Heart, Zap, BarChart2, Users, ChevronDown, BookOpen, CheckCircle2, Flag, Flame } from 'lucide-react';
+import { Dumbbell, Calendar, Plus, Play, ChevronLeft, ChevronRight, TrendingUp, Clock, Weight, History, Copy, Activity, Clipboard, MoreVertical, GripVertical, Trash2, X, CreditCard as Edit, Calculator, RotateCw, Sparkles, Heart, Zap, BarChart2, Users, ChevronDown, BookOpen, CheckCircle2, Flag, Flame, Lock } from 'lucide-react';
 
 interface Exercise {
   id: string;
@@ -105,6 +107,8 @@ export default function TrainingPage() {
   const { selectedAthleteId, selectedAthleteName, clearSelectedAthlete } = useAthlete();
   const effectiveAthleteId = profile?.role === 'trainer' && selectedAthleteId ? selectedAthleteId : profile?.id;
   const { canAccessAIWorkouts, canAccessAssessments } = useMembership();
+  const trainingAccess = useProfessionalServiceAccess('training');
+  const [showTrainingAccessModal, setShowTrainingAccessModal] = useState(false);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [calendarView, setCalendarView] = useState<CalendarView>('month');
@@ -1162,6 +1166,19 @@ export default function TrainingPage() {
                       const planWeekId = (workout as any).plan_week_id as string | undefined;
                       const isStale = planWeekId ? staledPlanIds.has(planWeekId) : false;
                       const isDeleting = deletingPlanIds.has(workout.id);
+                      if (trainingAccess.status === 'restricted' || trainingAccess.status === 'blocked') {
+                        return (
+                          <div
+                            onClick={(e) => { e.stopPropagation(); setShowTrainingAccessModal(true); }}
+                            className="w-full text-xs p-2 pl-3 pr-3 rounded text-left relative blur-sm opacity-50 cursor-pointer bg-sky-100 dark:bg-sky-900/20 text-sky-800 dark:text-sky-400 border-l-2 border-sky-400"
+                          >
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <Lock className="w-3 h-3 flex-shrink-0" />
+                              <span className="font-semibold truncate">{workout.name}</span>
+                            </div>
+                          </div>
+                        );
+                      }
                       if (isStale) {
                         return (
                           <div className="w-full text-xs p-2 pl-3 rounded border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center gap-1.5 animate-pulse">
@@ -3525,6 +3542,40 @@ export default function TrainingPage() {
           animation: fade-in-up 0.2s ease-out both;
         }
       `}</style>
+
+      {showTrainingAccessModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          onClick={e => { if (e.target === e.currentTarget) setShowTrainingAccessModal(false); }}
+        >
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowTrainingAccessModal(false)} />
+          <div className="relative w-full max-w-md rounded-2xl shadow-2xl bg-white dark:bg-gray-900 p-6">
+            <button
+              onClick={() => setShowTrainingAccessModal(false)}
+              className="absolute top-4 right-4 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex flex-col items-center text-center mb-5">
+              <div className="w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center mb-4">
+                <Lock className="w-7 h-7 text-amber-600 dark:text-amber-400" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
+                {language === 'es' ? 'Tu servicio profesional está inactivo' : 'Your professional service is currently inactive'}
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                {trainingAccess.hasPendingPayment
+                  ? (language === 'es'
+                      ? 'Tienes un pago pendiente para tu plan de entrenamiento. Completa tu pago para restaurar el acceso.'
+                      : 'You have a pending payment for your training plan. Complete your payment to restore access.')
+                  : (language === 'es'
+                      ? 'Tu servicio de entrenamiento profesional no está activo. Contacta a tu entrenador para restaurar el acceso.'
+                      : 'Your professional training service is not active. Contact your coach to restore access.')}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

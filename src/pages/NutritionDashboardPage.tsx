@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
+import { useProfessionalServiceAccess } from '../hooks/useProfessionalServiceAccess';
+import ServiceAccessGate from '../components/ServiceAccessGate';
 import {
   Apple,
   BookOpen,
@@ -183,6 +185,7 @@ export default function NutritionDashboardPage() {
 
   const t = (en: string, es: string) => language === 'es' ? es : en;
   const isCoach = profile?.role === 'trainer' || profile?.role === 'admin';
+  const nutritionAccess = useProfessionalServiceAccess('nutrition');
 
   useEffect(() => {
     if (profile) loadSatelliteData();
@@ -384,6 +387,12 @@ export default function NutritionDashboardPage() {
       </div>
 
       {/* --- PUSHED PLAN SECTION --- */}
+      <ServiceAccessGate
+        blocked={nutritionAccess.status === 'restricted' || nutritionAccess.status === 'blocked'}
+        serviceType="nutrition"
+        hasPendingPayment={nutritionAccess.hasPendingPayment}
+        blurHeight="400px"
+      >
       {pushedPlan ? (
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
           {/* Plan header */}
@@ -643,6 +652,7 @@ export default function NutritionDashboardPage() {
           )}
         </div>
       )}
+      </ServiceAccessGate>
 
       {/* Adherence + Diary row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
