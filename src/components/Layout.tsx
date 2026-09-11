@@ -188,7 +188,8 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
         { section: 'TOOLS', items: [
           { id: 'marketplace', icon: ShoppingBag, label: 'Memberships' },
           { id: 'programs-marketplace', icon: Target, label: 'Programs' },
-          { id: 'services', icon: Briefcase, label: 'Coaching' }
+          { id: 'services', icon: Briefcase, label: 'Coaching' },
+          { id: 'professional-services', icon: Briefcase, label: 'My Services' }
         ]},
         { section: 'SYSTEM', items: [
           { id: 'exercises', icon: Target, label: 'Exercise Library' },
@@ -196,15 +197,6 @@ export default function Layout({ children, currentPage, onNavigate }: LayoutProp
           { id: 'bioimpedance', icon: Ruler, label: 'Body Composition' },
           { id: 'workout-builder', icon: Dumbbell, label: 'Workout Builder' },
           { id: 'program-builder', icon: BookOpen, label: 'Program Builder' }
-        ]},
-      ];
-    }
-
-    if (profile.role === 'nutritionist') {
-      return [
-        { section: 'ATHLETES', items: [
-          { id: 'my-athletes', icon: Users, label: 'My Athletes' },
-          { id: 'habits', icon: CheckSquare, label: 'Habits & Goals' },
         ]},
       ];
     }

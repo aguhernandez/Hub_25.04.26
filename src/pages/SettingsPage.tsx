@@ -56,13 +56,8 @@ import { ROLE_LABELS, ROLE_LABELS_ES, USER_ROLES, type UserRole } from '../types
 
 const TRAINER_ROLE_OPTIONS = [
   { value: 'head_coach',     labelEs: 'Entrenador Principal',              labelEn: 'Head Coach' },
-  { value: 'strength_coach', labelEs: 'Entrenador de Fuerza',              labelEn: 'Strength Coach' },
-  { value: 'sport_coach',    labelEs: 'Entrenador Específico de Deporte',  labelEn: 'Sport-Specific Coach' },
+  { value: 'trainer',        labelEs: 'Entrenador',                        labelEn: 'Trainer' },
   { value: 'nutritionist',   labelEs: 'Nutricionista',                     labelEn: 'Nutritionist' },
-  { value: 'biomechanist',   labelEs: 'Biomecánico',                       labelEn: 'Biomechanist' },
-  { value: 'physiologist',   labelEs: 'Fisiólogo',                         labelEn: 'Physiologist' },
-  { value: 'data_analyst',   labelEs: 'Analista de Datos',                 labelEn: 'Data Analyst' },
-  { value: 'other',          labelEs: 'Otro',                              labelEn: 'Other' },
 ];
 
 interface AddTrainerRowProps {
@@ -158,7 +153,7 @@ export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = profile?.role === 'admin';
-  const isTrainer = profile?.role === 'trainer';
+  const isTrainer = profile?.role === 'trainer' || profile?.role === 'head_coach' || profile?.role === 'nutritionist';
   const canAccessAdmin = isAdmin || isTrainer;
 
   // Profile fields
