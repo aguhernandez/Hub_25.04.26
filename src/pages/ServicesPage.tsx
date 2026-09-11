@@ -515,6 +515,15 @@ export default function ServicesPage() {
     const profIds: string[] = [];
     if (profile.assigned_trainer_id) profIds.push(profile.assigned_trainer_id);
     if (profile.assigned_nutritionist_id) profIds.push(profile.assigned_nutritionist_id);
+
+    const { data: trainerRows } = await supabase
+      .from('athlete_trainers')
+      .select('trainer_id')
+      .eq('athlete_id', profile.id);
+    (trainerRows || []).forEach((r: { trainer_id: string }) => {
+      if (r.trainer_id && !profIds.includes(r.trainer_id)) profIds.push(r.trainer_id);
+    });
+
     if (profIds.length === 0) {
       setCoachingProducts([]);
       return;
@@ -706,15 +715,25 @@ export default function ServicesPage() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-                  {coachingProducts.map(product => (
-                    <CoachingCard
-                      key={product.id}
-                      product={product}
-                      onApply={() => setSelectedProduct(product)}
-                    />
-                  ))}
-                </div>
+                {coachingProducts.length === 0 ? (
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-16 text-center mb-10">
+                    <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Award className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No coaching services available</h3>
+                    <p className="text-gray-500 dark:text-gray-400">Your assigned professional hasn't published any coaching services yet. Check back soon or contact your coach directly.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                    {coachingProducts.map(product => (
+                      <CoachingCard
+                        key={product.id}
+                        product={product}
+                        onApply={() => setSelectedProduct(product)}
+                      />
+                    ))}
+                  </div>
+                )}
 
                 {/* Trainer bio strip */}
                 <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 flex flex-col sm:flex-row items-center gap-6">
