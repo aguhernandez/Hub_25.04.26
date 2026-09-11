@@ -8,6 +8,8 @@ import TrainingCalendar from '../components/TrainingCalendar';
 import DailyWorkoutView from '../components/DailyWorkoutView';
 import DuplicateWorkoutModal from '../components/DuplicateWorkoutModal';
 import AddExtraTrainingModal from '../components/AddExtraTrainingModal';
+import CalendarEventModal, { type CalendarEventItem } from '../components/CalendarEventModal';
+import { Sofa, StickyNote } from 'lucide-react';
 import StrengthEstimator from '../components/training/StrengthEstimator';
 import AIWorkoutGenerator from '../components/training/AIWorkoutGenerator';
 import WellnessCheckinModal from '../components/training/wellness/WellnessCheckinModal';
@@ -117,6 +119,10 @@ export default function TrainingPage() {
   const [workoutToDuplicate, setWorkoutToDuplicate] = useState<Workout | null>(null);
   const [contextMenuWorkout, setContextMenuWorkout] = useState<string | null>(null);
   const [showExtraTrainingModal, setShowExtraTrainingModal] = useState(false);
+  const [showCalendarEventModal, setShowCalendarEventModal] = useState(false);
+  const [calendarEventType, setCalendarEventType] = useState<'rest_day' | 'note'>('rest_day');
+  const [calendarEventDate, setCalendarEventDate] = useState<string | undefined>(undefined);
+  const [existingCalendarEvent, setExistingCalendarEvent] = useState<CalendarEventItem | null>(null);
   const [showMonthlyDayModal, setShowMonthlyDayModal] = useState(false);
   const [showAddMenuForDate, setShowAddMenuForDate] = useState<string | null>(null);
   const [showQuickActionMenu, setShowQuickActionMenu] = useState(false);
@@ -790,6 +796,34 @@ export default function TrainingPage() {
         };
       }).filter((rp: any) => rp.scheduled_date >= startDateStr && rp.scheduled_date <= endDateStr);
 
+      // Load calendar events (rest_day, note)
+      const { data: calendarEventsData } = await supabase
+        .from('calendar_events')
+        .select(`
+          id, athlete_id, created_by, type, description, event_date, created_at, updated_at,
+          creator:created_by (full_name, role)
+        `)
+        .eq('athlete_id', effectiveAthleteId)
+        .gte('event_date', startDateStr)
+        .lte('event_date', endDateStr)
+        .order('created_at', { ascending: true });
+
+      const formattedCalendarEvents: any[] = (calendarEventsData || []).map((ev: any) => ({
+        id: `cal-event-${ev.id}`,
+        calendar_event_id: ev.id,
+        name: ev.type === 'rest_day'
+          ? (language === 'es' ? 'Descanso' : 'Rest Day')
+          : (language === 'es' ? 'Nota' : 'Note'),
+        description: ev.description || '',
+        scheduled_date: ev.event_date,
+        status: 'planned',
+        source: 'calendar_event',
+        type: ev.type,
+        exercises: [],
+        creator_name: ev.creator?.full_name || null,
+        creator_role: ev.creator?.role || null,
+      }));
+
       // Combine all activities
       const allActivities = [
         ...formattedWorkouts,
@@ -797,7 +831,8 @@ export default function TrainingPage() {
         ...formattedExtra,
         ...formattedExternal,
         ...formattedEndurancePlans,
-        ...formattedRacePlans
+        ...formattedRacePlans,
+        ...formattedCalendarEvents,
       ].sort((a, b) => {
         return parseDateStr(a.scheduled_date).getTime() - parseDateStr(b.scheduled_date).getTime();
       });
@@ -1065,6 +1100,34 @@ export default function TrainingPage() {
                           >
                             <Activity className="w-4 h-4" />
                             {language === 'es' ? 'Agregar Entrenamiento Extra' : 'Add Extra Training'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowAddMenuForDate(null);
+                              setSelectedDate(date);
+                              setCalendarEventType('rest_day');
+                              setCalendarEventDate(formatDateLocal(date));
+                              setExistingCalendarEvent(null);
+                              setShowCalendarEventModal(true);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left text-gray-700 dark:text-gray-300"
+                          >
+                            <Sofa className="w-4 h-4" />
+                            {language === 'es' ? 'Día de Descanso' : 'Rest Day'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowAddMenuForDate(null);
+                              setSelectedDate(date);
+                              setCalendarEventType('note');
+                              setCalendarEventDate(formatDateLocal(date));
+                              setExistingCalendarEvent(null);
+                              setShowCalendarEventModal(true);
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left text-gray-700 dark:text-gray-300"
+                          >
+                            <StickyNote className="w-4 h-4" />
+                            {language === 'es' ? 'Nota' : 'Note'}
                           </button>
                         </div>
                       </>
@@ -2432,6 +2495,37 @@ export default function TrainingPage() {
                   setSelectedDate(date);
                   setShowExtraTrainingModal(true);
                 }}
+                onAddRestDay={(date) => {
+                  setSelectedDate(date);
+                  setCalendarEventType('rest_day');
+                  setCalendarEventDate(formatDateLocal(date));
+                  setExistingCalendarEvent(null);
+                  setShowCalendarEventModal(true);
+                }}
+                onAddNote={(date) => {
+                  setSelectedDate(date);
+                  setCalendarEventType('note');
+                  setCalendarEventDate(formatDateLocal(date));
+                  setExistingCalendarEvent(null);
+                  setShowCalendarEventModal(true);
+                }}
+                onCalendarEventClick={(event) => {
+                  setCalendarEventType(event.type);
+                  setCalendarEventDate(event.scheduled_date);
+                  setExistingCalendarEvent({
+                    id: event.calendar_event_id,
+                    athlete_id: effectiveAthleteId || '',
+                    created_by: '',
+                    type: event.type,
+                    description: event.description,
+                    event_date: event.scheduled_date,
+                    created_at: '',
+                    updated_at: null,
+                    creator_name: event.creator_name,
+                    creator_role: event.creator_role,
+                  });
+                  setShowCalendarEventModal(true);
+                }}
                 wellnessEntries={wellnessEntries}
                 onWellnessClick={(entry) => setSelectedWellnessEntry(entry)}
               />
@@ -2927,8 +3021,20 @@ export default function TrainingPage() {
       <AddExtraTrainingModal
         isOpen={showExtraTrainingModal}
         onClose={() => setShowExtraTrainingModal(false)}
-        athleteId={profile?.id || ''}
+        athleteId={effectiveAthleteId || profile?.id || ''}
         selectedDate={formatDateLocal(selectedDate)}
+        onSuccess={() => {
+          loadWorkouts();
+        }}
+      />
+
+      <CalendarEventModal
+        isOpen={showCalendarEventModal}
+        onClose={() => setShowCalendarEventModal(false)}
+        athleteId={effectiveAthleteId || profile?.id || ''}
+        eventType={calendarEventType}
+        selectedDate={calendarEventDate}
+        existingEvent={existingCalendarEvent}
         onSuccess={() => {
           loadWorkouts();
         }}
@@ -3326,6 +3432,44 @@ export default function TrainingPage() {
                 className="w-12 h-12 rounded-full bg-[#fdda36] shadow-lg flex items-center justify-center text-[#514163] hover:bg-[#ffd51a] transition-all hover:scale-110"
               >
                 <Dumbbell className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Rest Day */}
+            <div className="flex items-center gap-3 animate-fade-in-up" style={{ animationDelay: '240ms' }}>
+              <span className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-sm font-semibold px-4 py-2 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 whitespace-nowrap">
+                {language === 'es' ? 'Día de Descanso' : 'Rest Day'}
+              </span>
+              <button
+                onClick={() => {
+                  setShowFAB(false);
+                  setCalendarEventType('rest_day');
+                  setCalendarEventDate(undefined);
+                  setExistingCalendarEvent(null);
+                  setShowCalendarEventModal(true);
+                }}
+                className="w-12 h-12 rounded-full bg-teal-500 shadow-lg flex items-center justify-center text-white hover:bg-teal-600 transition-all hover:scale-110"
+              >
+                <Sofa className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Note */}
+            <div className="flex items-center gap-3 animate-fade-in-up" style={{ animationDelay: '300ms' }}>
+              <span className="bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 text-sm font-semibold px-4 py-2 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 whitespace-nowrap">
+                {language === 'es' ? 'Nota' : 'Note'}
+              </span>
+              <button
+                onClick={() => {
+                  setShowFAB(false);
+                  setCalendarEventType('note');
+                  setCalendarEventDate(undefined);
+                  setExistingCalendarEvent(null);
+                  setShowCalendarEventModal(true);
+                }}
+                className="w-12 h-12 rounded-full bg-amber-500 shadow-lg flex items-center justify-center text-white hover:bg-amber-600 transition-all hover:scale-110"
+              >
+                <StickyNote className="w-5 h-5" />
               </button>
             </div>
           </>

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   ChevronLeft, ChevronRight, Dumbbell, Activity, MoreVertical,
   Copy, Trash2, Plus, CreditCard as Edit, Bike, PersonStanding, Waves,
-  ChevronDown, Heart, CheckCircle2, Flag
+  ChevronDown, Heart, CheckCircle2, Flag, Sofa, StickyNote
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -37,6 +37,9 @@ interface TrainingCalendarProps {
   onWorkoutDelete?: (workoutId: string) => void;
   onAddWorkout?: (date: Date) => void;
   onAddExtraTraining?: (date: Date) => void;
+  onAddRestDay?: (date: Date) => void;
+  onAddNote?: (date: Date) => void;
+  onCalendarEventClick?: (event: any) => void;
 }
 
 const SESSION_DOT_COLORS: Record<string, string> = {
@@ -339,6 +342,9 @@ export default function TrainingCalendar({
   onWorkoutDelete,
   onAddWorkout,
   onAddExtraTraining,
+  onAddRestDay,
+  onAddNote,
+  onCalendarEventClick,
   wellnessEntries = [],
   onWellnessClick,
 }: TrainingCalendarProps) {
@@ -691,6 +697,24 @@ export default function TrainingCalendar({
                                 {language === 'es' ? 'Agregar Entrenamiento Extra' : 'Add Extra Training'}
                               </button>
                             )}
+                            {onAddRestDay && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setShowAddMenuForDate(null); onAddRestDay(day.date); }}
+                                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left text-gray-700 dark:text-gray-300"
+                              >
+                                <Sofa className="w-4 h-4" />
+                                {language === 'es' ? 'Día de Descanso' : 'Rest Day'}
+                              </button>
+                            )}
+                            {onAddNote && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setShowAddMenuForDate(null); onAddNote(day.date); }}
+                                className="w-full flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-left text-gray-700 dark:text-gray-300"
+                              >
+                                <StickyNote className="w-4 h-4" />
+                                {language === 'es' ? 'Nota' : 'Note'}
+                              </button>
+                            )}
                           </div>
                         </>
                       )}
@@ -718,6 +742,46 @@ export default function TrainingCalendar({
                     const statusColor = workout.status === 'completed' ? 'bg-teal-500'
                       : workout.status === 'skipped' ? 'bg-neutral-400'
                       : 'bg-[#fdda36]';
+
+                    if (workout.type === 'rest_day') {
+                      return (
+                        <div
+                          key={workout.id || idx}
+                          onClick={(e) => { e.stopPropagation(); if (onCalendarEventClick) onCalendarEventClick(workout); }}
+                          className="text-xs p-1.5 rounded bg-teal-50 dark:bg-teal-900/20 border-l-2 border-teal-500 cursor-pointer hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex items-center gap-1">
+                            <Sofa className="w-3 h-3 flex-shrink-0 text-teal-600 dark:text-teal-400" />
+                            <span className="font-semibold text-teal-800 dark:text-teal-300 truncate text-[10px]">
+                              {language === 'es' ? 'Descanso' : 'Rest Day'}
+                            </span>
+                          </div>
+                          {workout.description && (
+                            <p className="text-[9px] text-teal-700 dark:text-teal-400 mt-0.5 truncate">{workout.description}</p>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (workout.type === 'note') {
+                      return (
+                        <div
+                          key={workout.id || idx}
+                          onClick={(e) => { e.stopPropagation(); if (onCalendarEventClick) onCalendarEventClick(workout); }}
+                          className="text-xs p-1.5 rounded bg-amber-50 dark:bg-amber-900/20 border-l-2 border-amber-500 cursor-pointer hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex items-center gap-1">
+                            <StickyNote className="w-3 h-3 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+                            <span className="font-semibold text-amber-800 dark:text-amber-300 truncate text-[10px]">
+                              {language === 'es' ? 'Nota' : 'Note'}
+                            </span>
+                          </div>
+                          {workout.description && (
+                            <p className="text-[9px] text-amber-700 dark:text-amber-400 mt-0.5 truncate">{workout.description}</p>
+                          )}
+                        </div>
+                      );
+                    }
 
                     if (workout.type === 'race_plan') {
                       return (
