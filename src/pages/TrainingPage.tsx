@@ -2663,6 +2663,18 @@ export default function TrainingPage() {
                     athleteId={effectiveAthleteId}
                     onWorkoutUpdate={loadWorkouts}
                     onOpenExtraTraining={() => setShowExtraTrainingModal(true)}
+                    onOpenRestDay={() => {
+                      setCalendarEventType('rest_day');
+                      setCalendarEventDate(formatDateLocal(selectedDate));
+                      setExistingCalendarEvent(null);
+                      setShowCalendarEventModal(true);
+                    }}
+                    onOpenNote={() => {
+                      setCalendarEventType('note');
+                      setCalendarEventDate(formatDateLocal(selectedDate));
+                      setExistingCalendarEvent(null);
+                      setShowCalendarEventModal(true);
+                    }}
                   />
                 )}
               </div>
@@ -3068,6 +3080,20 @@ export default function TrainingPage() {
                 onOpenExtraTraining={() => {
                   setShowMonthlyDayModal(false);
                   setShowExtraTrainingModal(true);
+                }}
+                onOpenRestDay={() => {
+                  setShowMonthlyDayModal(false);
+                  setCalendarEventType('rest_day');
+                  setCalendarEventDate(formatDateLocal(selectedDate));
+                  setExistingCalendarEvent(null);
+                  setShowCalendarEventModal(true);
+                }}
+                onOpenNote={() => {
+                  setShowMonthlyDayModal(false);
+                  setCalendarEventType('note');
+                  setCalendarEventDate(formatDateLocal(selectedDate));
+                  setExistingCalendarEvent(null);
+                  setShowCalendarEventModal(true);
                 }}
               />
             </div>

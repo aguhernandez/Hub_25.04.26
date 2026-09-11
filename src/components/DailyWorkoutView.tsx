@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Check, Clock, Dumbbell, Play, X, ChevronDown, ChevronUp, Timer, Weight, Calendar, Trash2, Activity, Plus, CreditCard as Edit, Save, Calculator, Zap, Share2 } from 'lucide-react';
+import { Check, Clock, Dumbbell, Play, X, ChevronDown, ChevronUp, Timer, Weight, Calendar, Trash2, Activity, Plus, CreditCard as Edit, Save, Calculator, Zap, Share2, Sofa, StickyNote } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
@@ -57,10 +57,12 @@ interface DailyWorkoutViewProps {
   selectedDate: Date;
   onWorkoutUpdate: () => void;
   onOpenExtraTraining?: () => void;
+  onOpenRestDay?: () => void;
+  onOpenNote?: () => void;
   athleteId?: string;
 }
 
-export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpenExtraTraining, athleteId }: DailyWorkoutViewProps) {
+export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpenExtraTraining, onOpenRestDay, onOpenNote, athleteId }: DailyWorkoutViewProps) {
   const { profile } = useAuth();
   const effectiveAthleteId = athleteId || profile?.id;
   const { t, language } = useLanguage();
@@ -1088,6 +1090,22 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
           >
             <Activity className="w-5 h-5" />
             {language === 'es' ? 'Agregar Entrenamiento Extra' : 'Add Extra Training'}
+          </button>
+        </div>
+        <div className="mt-3 flex flex-col sm:flex-row gap-3 justify-center">
+          <button
+            onClick={() => onOpenRestDay && onOpenRestDay()}
+            className="px-6 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition-colors flex items-center gap-2 justify-center"
+          >
+            <Sofa className="w-5 h-5" />
+            {language === 'es' ? 'Día de Descanso' : 'Rest Day'}
+          </button>
+          <button
+            onClick={() => onOpenNote && onOpenNote()}
+            className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors flex items-center gap-2 justify-center"
+          >
+            <StickyNote className="w-5 h-5" />
+            {language === 'es' ? 'Nota' : 'Note'}
           </button>
         </div>
       </div>
