@@ -5,9 +5,11 @@ import {
 } from 'lucide-react';
 import {
   calculateTDEEForDateRange,
+  fetchBodyMetrics,
   getWeekDateRange,
   type TDEEWeeklySummary,
   type TDEEDayResult,
+  type BodyMetrics,
 } from '../../utils/tdeeCalculator';
 import type { BiologicalPassport } from '../../types/biologicalPassport.types';
 import { supabase } from '../../lib/supabase';
@@ -19,16 +21,26 @@ interface TDEECardProps {
 
 export default function TDEECard({ athleteId, passport }: TDEECardProps) {
   const [summary, setSummary] = useState<TDEEWeeklySummary | null>(null);
+  const [bodyMetrics, setBodyMetrics] = useState<BodyMetrics | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'daily' | 'weekly'>('daily');
 
   const loadTDEE = useCallback(async () => {
-    if (!athleteId || !passport) return;
+    if (!athleteId) return;
     setLoading(true);
     setError(null);
     try {
+      const metrics = await fetchBodyMetrics(athleteId, passport);
+      if (!metrics) {
+        setError('No body measurements found. TDEE requires at least one of: biological passport, anthropometry, or bioimpedance.');
+        setBodyMetrics(null);
+        setSummary(null);
+        return;
+      }
+      setBodyMetrics(metrics);
+
       const { data: profile } = await supabase
         .from('profiles')
         .select('date_of_birth, gender')
@@ -86,7 +98,7 @@ export default function TDEECard({ athleteId, passport }: TDEECardProps) {
           <h3 className="font-bold text-gray-900 dark:text-white text-sm">Daily Caloric Need (TDEE)</h3>
         </div>
         <p className="text-xs text-gray-400 dark:text-gray-500">
-          {error || 'TDEE calculation requires weight, height, and date of birth in the passport.'}
+          {error || 'TDEE requires body measurements (passport, anthropometry, or bioimpedance) and date of birth.'}
         </p>
       </div>
     );
@@ -206,9 +218,14 @@ export default function TDEECard({ athleteId, passport }: TDEECardProps) {
             <div>
               <p className="text-xs text-gray-400">Method</p>
               <p className="text-sm font-bold text-gray-900 dark:text-white">
-                {passport?.lean_mass_kg ? 'Cunningham' : 'Mifflin-St Jeor'}
+                {bodyMetrics?.leanMassKg ? 'Cunningham' : 'Mifflin-St Jeor'}
               </p>
-              <p className="text-xs text-gray-400">{passport?.lean_mass_kg ? 'FFM-based' : 'Weight-based'}</p>
+              <p className="text-xs text-gray-400">
+                {bodyMetrics?.source === 'biological_passport' ? 'Lab passport'
+                  : bodyMetrics?.source === 'anthropometry' ? 'ISAK anthropometry'
+                  : bodyMetrics?.source === 'bioimpedance' ? 'Bioimpedance'
+                  : '—'}
+              </p>
             </div>
           </div>
         </div>

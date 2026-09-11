@@ -1,6 +1,14 @@
 import { supabase } from '../lib/supabase';
 import type { BiologicalPassport } from '../types/biologicalPassport.types';
 
+export interface BodyMetrics {
+  weightKg: number;
+  heightCm: number;
+  leanMassKg: number | null;
+  source: 'biological_passport' | 'anthropometry' | 'bioimpedance';
+  trainingZones: { default_display?: string } | null;
+}
+
 export interface TDEEDayResult {
   date: string;
   bmr: number;
@@ -209,6 +217,59 @@ function calculateGymSessionKcal(workout: GymWorkout, weightKg: number, cfg: TDE
   };
 }
 
+export async function fetchBodyMetrics(athleteId: string, passport: BiologicalPassport | null): Promise<BodyMetrics | null> {
+  // a) Try biological passport first
+  if (passport && passport.weight_kg && passport.height_cm) {
+    return {
+      weightKg: passport.weight_kg,
+      heightCm: passport.height_cm,
+      leanMassKg: passport.lean_mass_kg ?? null,
+      source: 'biological_passport',
+      trainingZones: passport.training_zones ?? null,
+    };
+  }
+
+  // b) Fallback: anthropometry_results
+  const { data: anthro } = await supabase
+    .from('anthropometry_results')
+    .select('weight_avg, height_avg, lean_mass_kg')
+    .eq('user_id', athleteId)
+    .order('calculated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (anthro && anthro.weight_avg && anthro.height_avg) {
+    return {
+      weightKg: Number(anthro.weight_avg),
+      heightCm: Number(anthro.height_avg),
+      leanMassKg: anthro.lean_mass_kg ? Number(anthro.lean_mass_kg) : null,
+      source: 'anthropometry',
+      trainingZones: null,
+    };
+  }
+
+  // c) Fallback: bioimpedance_measurements
+  const { data: bio } = await supabase
+    .from('bioimpedance_measurements')
+    .select('weight, height, muscle_mass_kg')
+    .eq('user_id', athleteId)
+    .order('measurement_date', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (bio && bio.weight && bio.height) {
+    return {
+      weightKg: Number(bio.weight),
+      heightCm: Number(bio.height),
+      leanMassKg: bio.muscle_mass_kg ? Number(bio.muscle_mass_kg) : null,
+      source: 'bioimpedance',
+      trainingZones: null,
+    };
+  }
+
+  return null;
+}
+
 export async function calculateTDEEForDateRange(
   athleteId: string,
   passport: BiologicalPassport | null,
@@ -216,7 +277,8 @@ export async function calculateTDEEForDateRange(
   startDate: string,
   endDate: string
 ): Promise<TDEEWeeklySummary | null> {
-  if (!passport || !passport.weight_kg || !passport.height_cm) return null;
+  const bodyData = await fetchBodyMetrics(athleteId, passport);
+  if (!bodyData) return null;
 
   const cfg = await loadConfig();
   const age = profile?.date_of_birth ? calculateAge(profile.date_of_birth) : 0;
@@ -227,15 +289,15 @@ export async function calculateTDEEForDateRange(
     : 'male';
 
   const bmr = calculateBMR(
-    passport.weight_kg,
-    passport.height_cm,
+    bodyData.weightKg,
+    bodyData.heightCm,
     age,
     sex,
-    passport.lean_mass_kg
+    bodyData.leanMassKg
   );
 
   const neatBase = bmr * cfg.neatFactor;
-  const defaultZoneSystem = passport.training_zones?.default_display === '7' ? 7 : 5;
+  const defaultZoneSystem = bodyData.trainingZones?.default_display === '7' ? 7 : 5;
 
   // Fetch endurance workouts for date range
   const { data: enduranceWorkouts, error: enduranceErr } = await supabase
@@ -264,7 +326,7 @@ export async function calculateTDEEForDateRange(
 
   for (const ew of (enduranceWorkouts || []) as EnduranceWorkout[]) {
     if (ew.status === 'skipped') continue;
-    const kcal = calculateEnduranceSessionKcal(ew, passport.weight_kg, cfg, defaultZoneSystem);
+    const kcal = calculateEnduranceSessionKcal(ew, bodyData.weightKg, cfg, defaultZoneSystem);
     const day = ew.scheduled_date;
     if (!dayMap.has(day)) dayMap.set(day, []);
     dayMap.get(day)!.push(kcal);
@@ -286,7 +348,7 @@ export async function calculateTDEEForDateRange(
   for (const gw of (gymWorkouts || []) as GymWorkout[]) {
     const duration = workoutDurationMap.get(gw.workout_id) ?? gw.duration_minutes ?? 0;
     const enrichedGw = { ...gw, duration_minutes: duration };
-    const kcal = calculateGymSessionKcal(enrichedGw, passport.weight_kg, cfg);
+    const kcal = calculateGymSessionKcal(enrichedGw, bodyData.weightKg, cfg);
     const day = gw.scheduled_date;
     if (!dayMap.has(day)) dayMap.set(day, []);
     dayMap.get(day)!.push(kcal);

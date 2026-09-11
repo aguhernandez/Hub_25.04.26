@@ -495,8 +495,8 @@ export default function BiologicalPassportPage() {
               </div>
             )}
 
-            {/* TDEE Card */}
-            {activePassport && (
+            {/* TDEE Card — available for all athletes, not just those with a lab passport */}
+            {selectedAthleteId && (
               <TDEECard athleteId={selectedAthleteId} passport={activePassport} />
             )}
 

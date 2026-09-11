@@ -2373,7 +2373,13 @@ Deno.serve(async (req: Request) => {
         }
       }
 
-      // 2. Load active biological passport
+      // 2. Load body metrics with fallback chain:
+      //    a) biological_passports (lab) — most accurate
+      //    b) anthropometry_results (ISAK) — has weight_avg, height_avg, lean_mass_kg
+      //    c) bioimpedance_measurements — has weight, height, muscle_mass_kg
+      let bodyData: { weight_kg: number; height_cm: number; lean_mass_kg: number | null; source: string; training_zones: any } | null = null;
+
+      // a) Try biological passport first
       const { data: passport } = await supabaseAdmin
         .from("biological_passports")
         .select("id, weight_kg, height_cm, lean_mass_kg, body_fat_percent, training_zones")
@@ -2383,14 +2389,66 @@ Deno.serve(async (req: Request) => {
         .limit(1)
         .maybeSingle();
 
-      if (!passport || !passport.weight_kg || !passport.height_cm) {
+      if (passport && passport.weight_kg && passport.height_cm) {
+        bodyData = {
+          weight_kg: passport.weight_kg,
+          height_cm: passport.height_cm,
+          lean_mass_kg: passport.lean_mass_kg ?? null,
+          source: "biological_passport",
+          training_zones: passport.training_zones,
+        };
+      }
+
+      // b) Fallback: anthropometry_results
+      if (!bodyData) {
+        const { data: anthro } = await supabaseAdmin
+          .from("anthropometry_results")
+          .select("weight_avg, height_avg, lean_mass_kg, fat_percentage")
+          .eq("user_id", athleteId)
+          .order("calculated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (anthro && anthro.weight_avg && anthro.height_avg) {
+          bodyData = {
+            weight_kg: Number(anthro.weight_avg),
+            height_cm: Number(anthro.height_avg),
+            lean_mass_kg: anthro.lean_mass_kg ? Number(anthro.lean_mass_kg) : null,
+            source: "anthropometry",
+            training_zones: null,
+          };
+        }
+      }
+
+      // c) Fallback: bioimpedance_measurements
+      if (!bodyData) {
+        const { data: bio } = await supabaseAdmin
+          .from("bioimpedance_measurements")
+          .select("weight, height, muscle_mass_kg, basal_metabolic_rate")
+          .eq("user_id", athleteId)
+          .order("measurement_date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (bio && bio.weight && bio.height) {
+          bodyData = {
+            weight_kg: Number(bio.weight),
+            height_cm: Number(bio.height),
+            lean_mass_kg: bio.muscle_mass_kg ? Number(bio.muscle_mass_kg) : null,
+            source: "bioimpedance",
+            training_zones: null,
+          };
+        }
+      }
+
+      if (!bodyData) {
         await logAccess(plannerInfo.id, athleteId, "read", endpoint, 200);
         return new Response(JSON.stringify({
           athlete_id: athleteId,
           date_from: dateFrom,
           date_to: dateTo,
           tdee: null,
-          message: "No active biological passport with weight_kg and height_cm found for this athlete",
+          message: "No body measurements found (biological passport, anthropometry, or bioimpedance) for this athlete",
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -2420,7 +2478,7 @@ Deno.serve(async (req: Request) => {
       const sex: "male" | "female" = athleteProfile.gender === "female" ? "female" : "male";
 
       // 4. Calculate BMR
-      const ffmKg = passport.lean_mass_kg;
+      const ffmKg = bodyData.lean_mass_kg;
       let bmr: number;
       let bmr_method: string;
       if (ffmKg != null && ffmKg > 0) {
@@ -2428,15 +2486,15 @@ Deno.serve(async (req: Request) => {
         bmr_method = "cunningham";
       } else {
         if (sex === "male") {
-          bmr = 10 * passport.weight_kg + 6.25 * passport.height_cm - 5 * age + 5;
+          bmr = 10 * bodyData.weight_kg + 6.25 * bodyData.height_cm - 5 * age + 5;
         } else {
-          bmr = 10 * passport.weight_kg + 6.25 * passport.height_cm - 5 * age - 161;
+          bmr = 10 * bodyData.weight_kg + 6.25 * bodyData.height_cm - 5 * age - 161;
         }
         bmr_method = "mifflin_st_jeor";
       }
 
       const neatBase = bmr * cfg.neat_factor;
-      const defaultZoneSystem = passport.training_zones?.default_display === "7" ? 7 : 5;
+      const defaultZoneSystem = bodyData.training_zones?.default_display === "7" ? 7 : 5;
 
       // 5. Fetch endurance workouts
       const { data: enduranceWorkouts } = await supabaseAdmin
@@ -2491,7 +2549,7 @@ Deno.serve(async (req: Request) => {
           if (zone != null && zone >= 1) {
             const met = metTable[`Z${zone}`];
             if (met != null) {
-              const kcal = hours * met * passport.weight_kg;
+              const kcal = hours * met * bodyData.weight_kg;
               totalKcal += kcal;
               hasZones = true;
               const key = `Z${zone}`;
@@ -2504,7 +2562,7 @@ Deno.serve(async (req: Request) => {
 
         if (!hasZones) {
           const hours = (ew.estimated_duration_minutes || 0) / 60;
-          totalKcal = hours * cfg.met_endurance_default * passport.weight_kg;
+          totalKcal = hours * cfg.met_endurance_default * bodyData.weight_kg;
         }
 
         const day = ew.scheduled_date;
@@ -2523,7 +2581,7 @@ Deno.serve(async (req: Request) => {
       for (const gw of (gymWorkouts || [])) {
         const duration = workoutDurationMap[gw.workout_id] ?? 0;
         const hours = duration / 60;
-        const kcal = hours * cfg.met_gym_default * passport.weight_kg;
+        const kcal = hours * cfg.met_gym_default * bodyData.weight_kg;
         const day = gw.scheduled_date;
         if (!dayMap[day]) dayMap[day] = [];
         dayMap[day].push({
@@ -2578,6 +2636,7 @@ Deno.serve(async (req: Request) => {
         tdee: {
           bmr: Math.round(bmr),
           bmr_method: bmr_method,
+          data_source: bodyData.source,
           neat_factor: cfg.neat_factor,
           neat_base: Math.round(neatBase),
           met_endurance_default: cfg.met_endurance_default,
