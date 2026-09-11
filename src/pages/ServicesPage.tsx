@@ -21,9 +21,14 @@ import {
   X,
   RefreshCw,
   Loader2,
+  Link2,
+  FileText,
+  CreditCard,
+  Ban,
+  AlertCircle,
 } from 'lucide-react';
 
-type TabType = 'book' | 'events' | 'history';
+type TabType = 'book' | 'events' | 'history' | 'my-services';
 
 interface CoachingProduct {
   id: string;
@@ -38,6 +43,24 @@ interface CoachingProduct {
   checkout_url: string | null;
   stripe_product_id: string | null;
   image_url: string | null;
+  payment_link: string | null;
+  payment_instructions: string | null;
+  payment_method: string | null;
+  professional_id: string | null;
+}
+
+interface AthleteEnrollment {
+  id: string;
+  service_id: string;
+  status: string;
+  payment_status: string;
+  athlete_payment_confirmed: boolean;
+  professional_payment_confirmed: boolean;
+  service_name: string | null;
+  professional_name: string | null;
+  price: number | null;
+  category: string | null;
+  created_at: string;
 }
 
 interface Event {
@@ -104,12 +127,18 @@ const CATEGORY_CONFIG: Record<string, {
   },
 };
 
-function ApplyModal({ product, onClose }: { product: CoachingProduct; onClose: () => void }) {
+function ApplyModal({ product, onClose, onEnrolled }: { product: CoachingProduct; onClose: () => void; onEnrolled?: () => void }) {
   const cfg = CATEGORY_CONFIG[product.category] ?? CATEGORY_CONFIG.strength;
   const Icon = cfg.icon;
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [enrolled, setEnrolled] = useState(false);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const { profile } = useAuth();
+
+  const isStripe = product.stripe_product_id && product.checkout_url;
+  const isManualLink = product.payment_method === 'manual_link' && product.payment_link;
+  const isManualInstructions = product.payment_method === 'manual_instructions' && product.payment_instructions;
 
   const handleCheckout = async () => {
     if (!profile) {
@@ -131,10 +160,69 @@ function ApplyModal({ product, onClose }: { product: CoachingProduct; onClose: (
       } else {
         throw new Error('No checkout URL received.');
       }
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong. Please try again.');
+    } catch (err) {
+      setError((err as Error).message || 'Something went wrong. Please try again.');
       setProcessing(false);
     }
+  };
+
+  const handleEnroll = async () => {
+    if (!profile || !product.professional_id) return;
+    setProcessing(true);
+    setError(null);
+    const { error: enrollError } = await supabase.from('service_enrollments').insert({
+      athlete_id: profile.id,
+      service_id: product.id,
+      professional_id: product.professional_id,
+      status: 'pending_payment',
+      payment_status: 'none',
+      payment_method: product.payment_method || 'manual_link',
+      payment_link: product.payment_link,
+      payment_instructions: product.payment_instructions,
+    });
+    if (enrollError) {
+      if (enrollError.code === '23505') {
+        setError('You are already enrolled in this service.');
+      } else {
+        setError(enrollError.message);
+      }
+      setProcessing(false);
+      return;
+    }
+    await supabase.from('notifications').insert({
+      user_id: product.professional_id,
+      title: 'New enrollment',
+      body: `${profile.full_name || 'An athlete'} enrolled in "${product.name}"`,
+      type: 'enrollment',
+    });
+    setEnrolled(true);
+    setProcessing(false);
+    if (onEnrolled) onEnrolled();
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!profile) return;
+    setProcessing(true);
+    const { data: enrollment } = await supabase
+      .from('service_enrollments')
+      .select('id')
+      .eq('athlete_id', profile.id)
+      .eq('service_id', product.id)
+      .single();
+    if (enrollment) {
+      await supabase.from('service_enrollments').update({
+        athlete_payment_confirmed: true,
+        payment_status: 'pending_confirmation',
+      }).eq('id', enrollment.id);
+      await supabase.from('notifications').insert({
+        user_id: product.professional_id,
+        title: 'Payment confirmation submitted',
+        body: `${profile.full_name || 'An athlete'} confirmed payment for "${product.name}". Please verify.`,
+        type: 'payment_confirmation',
+      });
+    }
+    setPaymentConfirmed(true);
+    setProcessing(false);
   };
 
   const handleMailFallback = () => {
@@ -186,7 +274,7 @@ function ApplyModal({ product, onClose }: { product: CoachingProduct; onClose: (
           <div className="flex items-center justify-between mb-5 pb-5 border-b border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white font-extrabold text-base shadow">
-                A
+                {(product.trainer_name || 'A')[0].toUpperCase()}
               </div>
               <div>
                 <p className="font-semibold text-gray-900 dark:text-white text-sm">{product.trainer_name}</p>
@@ -229,36 +317,81 @@ function ApplyModal({ product, onClose }: { product: CoachingProduct; onClose: (
             </div>
           )}
 
-          {/* CTA */}
-          <button
-            onClick={handleCheckout}
-            disabled={processing}
-            className="w-full flex items-center justify-center gap-2.5 px-6 py-4 bg-[#fdda36] text-gray-900 font-bold text-base rounded-xl hover:bg-yellow-300 transition-colors group disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {processing ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            )}
-            {processing
-              ? 'Redirecting to Stripe...'
-              : product.billing_cycle === 'monthly'
-                ? `Subscribe — €${product.price}/mo`
-                : `Buy Now — €${product.price}`}
-          </button>
+          {/* Enrolled success state */}
+          {enrolled ? (
+            <div className="space-y-4">
+              <div className="px-4 py-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-sm text-green-700 dark:text-green-400 flex items-center gap-2">
+                <CheckCircle className="w-5 h-5" /> You are enrolled! Complete your payment to activate the service.
+              </div>
+              {/* Manual payment instructions */}
+              {isManualLink && product.payment_link && (
+                <div className="px-4 py-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Link2 className="w-4 h-4 text-amber-600" />
+                    <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Pay directly to your professional</p>
+                  </div>
+                  <a href={product.payment_link} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors">
+                    <CreditCard className="w-4 h-4" /> Open Payment Link
+                  </a>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 text-center">Payment is processed externally — Asciende does not handle this payment.</p>
+                </div>
+              )}
+              {isManualInstructions && product.payment_instructions && (
+                <div className="px-4 py-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText className="w-4 h-4 text-amber-600" />
+                    <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Payment instructions</p>
+                  </div>
+                  <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-sans">{product.payment_instructions}</pre>
+                </div>
+              )}
+              {/* Confirm payment button */}
+              {!paymentConfirmed ? (
+                <button onClick={handleConfirmPayment} disabled={processing}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-[#514163] text-white font-bold rounded-xl hover:bg-[#3d2f4d] disabled:opacity-60">
+                  {processing ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                  I've made the payment
+                </button>
+              ) : (
+                <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                  <Clock className="w-5 h-5" /> Payment submitted! Waiting for professional confirmation.
+                </div>
+              )}
+            </div>
+          ) : isStripe ? (
+            <>
+              <button onClick={handleCheckout} disabled={processing}
+                className="w-full flex items-center justify-center gap-2.5 px-6 py-4 bg-[#fdda36] text-gray-900 font-bold text-base rounded-xl hover:bg-yellow-300 transition-colors group disabled:opacity-60 disabled:cursor-not-allowed">
+                {processing ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
+                {processing ? 'Redirecting to Stripe...' : product.billing_cycle === 'monthly' ? `Subscribe — €${product.price}/mo` : `Buy Now — €${product.price}`}
+              </button>
+              <p className="text-center text-xs text-gray-400 mt-1">
+                {product.billing_cycle === 'monthly' ? 'Secure payment via Stripe · Cancel anytime' : 'Secure payment via Stripe · One-time payment'}
+              </p>
+            </>
+          ) : (
+            <>
+              {/* Manual payment preview before enrollment */}
+              {(isManualLink || isManualInstructions) && (
+                <div className="mb-4 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+                  <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+                    Payment is made directly to {product.trainer_name}. Asciende does not process this payment — it only tracks your enrollment status.
+                  </p>
+                </div>
+              )}
+              <button onClick={handleEnroll} disabled={processing}
+                className="w-full flex items-center justify-center gap-2.5 px-6 py-4 bg-[#fdda36] text-gray-900 font-bold text-base rounded-xl hover:bg-yellow-300 transition-colors group disabled:opacity-60 disabled:cursor-not-allowed">
+                {processing ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
+                {processing ? 'Enrolling...' : `Enroll — €${product.price}`}
+              </button>
+            </>
+          )}
 
-          <button
-            onClick={handleMailFallback}
-            className="w-full mt-2 text-center text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors py-1"
-          >
-            Prefer to contact directly? Email Agu
+          <button onClick={handleMailFallback}
+            className="w-full mt-2 text-center text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors py-1">
+            Prefer to contact directly? Email {product.trainer_name}
           </button>
-
-          <p className="text-center text-xs text-gray-400 mt-1">
-            {product.billing_cycle === 'monthly'
-              ? 'Secure payment via Stripe · Cancel anytime'
-              : 'Secure payment via Stripe · One-time payment'}
-          </p>
         </div>
       </div>
     </div>
@@ -361,6 +494,8 @@ export default function ServicesPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedProduct, setSelectedProduct] = useState<CoachingProduct | null>(null);
+  const [enrollments, setEnrollments] = useState<AthleteEnrollment[]>([]);
+  const { profile } = useAuth();
 
   useEffect(() => {
     loadData();
@@ -370,18 +505,55 @@ export default function ServicesPage() {
     setLoading(true);
     if (activeTab === 'book') await loadCoachingProducts();
     else if (activeTab === 'events') await loadEvents();
+    else if (activeTab === 'my-services') await loadEnrollments();
     else await loadBookings();
     setLoading(false);
   };
 
   const loadCoachingProducts = async () => {
+    if (!profile) return;
+    const profIds: string[] = [];
+    if (profile.assigned_trainer_id) profIds.push(profile.assigned_trainer_id);
+    if (profile.assigned_nutritionist_id) profIds.push(profile.assigned_nutritionist_id);
+    if (profIds.length === 0) {
+      setCoachingProducts([]);
+      return;
+    }
     const { data } = await supabase
       .from('stripe_products')
-      .select('id, name, description, price, billing_cycle, category, features, trainer_name, trainer_email, checkout_url, stripe_product_id, image_url')
+      .select('id, name, description, price, billing_cycle, category, features, trainer_name, trainer_email, checkout_url, stripe_product_id, image_url, payment_link, payment_instructions, payment_method, professional_id')
       .eq('type', 'coaching')
       .eq('is_active', true)
+      .in('professional_id', profIds)
       .order('price', { ascending: true });
     setCoachingProducts(data || []);
+  };
+
+  const loadEnrollments = async () => {
+    if (!profile) return;
+    const { data } = await supabase
+      .from('service_enrollments')
+      .select(`
+        id, service_id, status, payment_status, athlete_payment_confirmed, professional_payment_confirmed, created_at,
+        service:stripe_products!service_enrollments_service_id_fkey(name, price, category),
+        professional:profiles!service_enrollments_professional_id_fkey(full_name)
+      `)
+      .eq('athlete_id', profile.id)
+      .order('created_at', { ascending: false });
+    const mapped: AthleteEnrollment[] = (data || []).map((e: Record<string, unknown>) => ({
+      id: e.id as string,
+      service_id: e.service_id as string,
+      status: e.status as string,
+      payment_status: e.payment_status as string,
+      athlete_payment_confirmed: e.athlete_payment_confirmed as boolean,
+      professional_payment_confirmed: e.professional_payment_confirmed as boolean,
+      service_name: (e.service as Record<string, unknown> | null)?.name as string | null,
+      professional_name: (e.professional as Record<string, string> | null)?.full_name || null,
+      price: (e.service as Record<string, number> | null)?.price || null,
+      category: (e.service as Record<string, string> | null)?.category || null,
+      created_at: e.created_at as string,
+    }));
+    setEnrollments(mapped);
   };
 
   const loadEvents = async () => {
@@ -399,6 +571,7 @@ export default function ServicesPage() {
 
   const tabs: { id: TabType; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { id: 'book', label: '1:1 Coaching', icon: Award },
+    { id: 'my-services', label: 'My Services', icon: CheckCircle },
     { id: 'events', label: 'Events', icon: Video },
     { id: 'history', label: 'History', icon: Clock },
   ];
@@ -460,6 +633,69 @@ export default function ServicesPage() {
             ))}
           </div>
         </div>
+
+        {/* My Services Tab */}
+        {activeTab === 'my-services' && (
+          <div>
+            {loading ? (
+              <div className="text-center py-20">
+                <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900 dark:border-white" />
+              </div>
+            ) : enrollments.length === 0 ? (
+              <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-16 text-center">
+                <div className="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">No active services</h3>
+                <p className="text-gray-500 dark:text-gray-400">Enroll in a coaching service from your connected professionals to see it here.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {enrollments.map(enr => {
+                  const cfg = enr.category ? CATEGORY_CONFIG[enr.category] : null;
+                  const statusColors: Record<string, string> = {
+                    active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+                    pending_payment: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+                    restricted: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+                    blocked: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+                    cancelled: 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400',
+                  };
+                  return (
+                    <div key={enr.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+                      <div className="flex items-start gap-4">
+                        {cfg && (
+                          <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${cfg.badge}`}>
+                            <cfg.icon className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <h3 className="text-base font-bold text-gray-900 dark:text-white">{enr.service_name}</h3>
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[enr.status] || 'bg-gray-100 text-gray-500'}`}>
+                              {enr.status.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 dark:text-gray-400">{enr.professional_name}</p>
+                          {enr.price != null && <p className="text-lg font-bold text-gray-900 dark:text-white mt-1">€{enr.price}</p>}
+                          {enr.athlete_payment_confirmed && !enr.professional_payment_confirmed && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-2">
+                              <Clock className="w-3 h-3" /> Payment submitted — waiting for professional confirmation
+                            </p>
+                          )}
+                          {enr.status === 'active' && enr.professional_payment_confirmed && (
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 mt-2">
+                              <CheckCircle className="w-3 h-3" /> Payment confirmed — service active
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* 1:1 Coaching Tab */}
         {activeTab === 'book' && (
@@ -608,7 +844,7 @@ export default function ServicesPage() {
 
       {/* Apply Modal */}
       {selectedProduct && (
-        <ApplyModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />
+        <ApplyModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onEnrolled={() => { if (activeTab === 'my-services') loadEnrollments(); }} />
       )}
     </div>
   );
