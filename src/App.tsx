@@ -61,12 +61,13 @@ const ActivityHistoryPage = lazy(() => import('./pages/ActivityHistoryPage'));
 const BiologicalPassportPage = lazy(() => import('./pages/BiologicalPassportPage'));
 const TrainerAthleteNutritionPage = lazy(() => import('./pages/TrainerAthleteNutritionPage'));
 const LiveRacePage = lazy(() => import('./pages/LiveRacePage'));
+const ProfessionalServicesPage = lazy(() => import('./pages/ProfessionalServicesPage'));
 import AdaptiveNavigation from './components/AdaptiveNavigation';
 
 import AppUpdateBanner from './components/AppUpdateBanner';
 import { removePushListeners, deletePushToken } from './services/pushNotificationService';
 
-type Page = 'dashboard' | 'training' | 'activity-history' | 'nutrition' | 'nutrition-dashboard' | 'habits' | 'bioimpedance' | 'chat' | 'membership' | 'book' | 'events' | 'brand' | 'discover' | 'brand-dashboard' | 'invoices' | 'incoming-requests' | 'settings' | 'exercises' | 'workout-builder' | 'programs' | 'about-asciende' | 'teams' | 'my-teams' | 'my-athletes' | 'athlete-profile' | 'feedback-analytics' | 'performance' | 'program-builder' | 'program-builder-detail' | 'programs-marketplace' | 'atp' | 'impact' | 'admin' | 'brand-requests' | 'marketplace' | 'services' | 'goals' | 'admin-platform-dashboard' | 'admin-communications' | 'admin-brands' | 'admin-partners' | 'admin-users' | 'admin-library' | 'admin-stripe' | 'admin-memberships' | 'admin-projects' | 'admin-foods' | 'memberships-marketplace' | 'exercise-management' | 'external-activities' | 'feedback' | 'biological-passport' | 'trainer-athlete-nutrition' | 'live-race';
+type Page = 'dashboard' | 'training' | 'activity-history' | 'nutrition' | 'nutrition-dashboard' | 'habits' | 'bioimpedance' | 'chat' | 'membership' | 'book' | 'events' | 'brand' | 'discover' | 'brand-dashboard' | 'invoices' | 'incoming-requests' | 'settings' | 'exercises' | 'workout-builder' | 'programs' | 'about-asciende' | 'teams' | 'my-teams' | 'my-athletes' | 'athlete-profile' | 'feedback-analytics' | 'performance' | 'program-builder' | 'program-builder-detail' | 'programs-marketplace' | 'atp' | 'impact' | 'admin' | 'brand-requests' | 'marketplace' | 'services' | 'goals' | 'admin-platform-dashboard' | 'admin-communications' | 'admin-brands' | 'admin-partners' | 'admin-users' | 'admin-library' | 'admin-stripe' | 'admin-memberships' | 'admin-projects' | 'admin-foods' | 'memberships-marketplace' | 'exercise-management' | 'external-activities' | 'feedback' | 'biological-passport' | 'trainer-athlete-nutrition' | 'live-race' | 'professional-services';
 
 const SATELLITE_ORIGINS = [
   'lab.asciende.pro',
@@ -555,6 +556,8 @@ function App() {
         return <MarketplacePage onNavigate={setCurrentPage} />;
       case 'services':
         return <ServicesPage />;
+      case 'professional-services':
+        return <ProfessionalServicesPage />;
       case 'goals':
         // Redirect to habits page (now includes goals)
         setCurrentPage('habits');

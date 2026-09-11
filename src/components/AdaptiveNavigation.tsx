@@ -169,6 +169,7 @@ const TRAINER_MORE_SECTIONS: MoreMenuSection[] = [
     { id: 'marketplace', icon: Crown, label: 'Memberships', path: 'marketplace' },
     { id: 'programs-marketplace', icon: Target, label: 'Programs', path: 'programs-marketplace' },
     { id: 'services', icon: Briefcase, label: 'Coaching', path: 'services' },
+    { id: 'professional-services', icon: Briefcase, label: 'My Services', path: 'professional-services' },
   ]},
   { section: 'SYSTEM', items: [
     { id: 'exercises', icon: Target, label: 'Exercise Library', path: 'exercises' },
@@ -249,6 +250,7 @@ const navTranslations: Record<string, Record<string, string>> = {
     'Menu': 'Menu',
     'Logout': 'Logout',
     'Coaching': 'Coaching',
+    'My Services': 'My Services',
     'PROFILE': 'PROFILE',
     'KNOWLEDGE': 'KNOWLEDGE',
     'COMMUNITY': 'COMMUNITY',
@@ -299,6 +301,7 @@ const navTranslations: Record<string, Record<string, string>> = {
     'Menu': 'Menú',
     'Logout': 'Cerrar sesión',
     'Coaching': 'Coaching',
+    'My Services': 'Mis Servicios',
     'PROFILE': 'PERFIL',
     'KNOWLEDGE': 'CONOCIMIENTO',
     'COMMUNITY': 'COMUNIDAD',
