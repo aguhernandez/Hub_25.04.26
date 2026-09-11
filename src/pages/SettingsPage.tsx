@@ -46,6 +46,7 @@ import MembershipSection from '../components/settings/MembershipSection';
 import InvoicesSection from '../components/settings/InvoicesSection';
 import SubscriptionSection from '../components/settings/SubscriptionSection';
 import AthleteSubscriptionSection from '../components/settings/AthleteSubscriptionSection';
+import ProfessionalPaymentSection from '../components/settings/ProfessionalPaymentSection';
 import CountrySelect from '../components/CountrySelect';
 import PhoneInput from '../components/PhoneInput';
 import SportSelect from '../components/SportSelect';
@@ -146,7 +147,7 @@ export default function SettingsPage() {
 
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [activeSection, setActiveSection] = useState<'profile' | 'security' | 'membership' | 'athlete-subscription' | 'subscription' | 'admin' | 'preferences' | 'support' | 'about-coach' | 'notifications' | 'trainingpeaks' | 'strava' | 'satellites' | 'planner-connections' | 'invoices'>(() => {
+  const [activeSection, setActiveSection] = useState<'profile' | 'security' | 'membership' | 'athlete-subscription' | 'subscription' | 'admin' | 'preferences' | 'support' | 'about-coach' | 'notifications' | 'trainingpeaks' | 'strava' | 'satellites' | 'planner-connections' | 'invoices' | 'payment-config'>(() => {
     const section = new URLSearchParams(window.location.search).get('section');
     return section === 'membership' ? 'membership' : section === 'athlete-subscription' ? 'athlete-subscription' : 'profile';
   });
@@ -572,6 +573,19 @@ export default function SettingsPage() {
           >
             <Heart className="w-4 h-4" />
             {language === 'es' ? 'Apóyame' : 'Support Me'}
+          </button>
+        )}
+        {(profile?.role === 'trainer' || profile?.role === 'nutritionist' || profile?.role === 'head_coach') && (
+          <button
+            onClick={() => setActiveSection('payment-config')}
+            className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${
+              activeSection === 'payment-config'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+            }`}
+          >
+            <CreditCard className="w-4 h-4" />
+            {language === 'es' ? 'Configurar Cobros' : 'Payment Config'}
           </button>
         )}
         {(profile?.role === 'trainer' || profile?.role === 'athlete' || profile?.role === 'admin') && (
@@ -1308,6 +1322,11 @@ export default function SettingsPage() {
 
       {/* Support Me Section */}
       {activeSection === 'support' && profile?.role === 'athlete' && <SupportMeSection />}
+
+      {/* Professional Payment Config */}
+      {activeSection === 'payment-config' && (profile?.role === 'trainer' || profile?.role === 'nutritionist' || profile?.role === 'head_coach') && (
+        <ProfessionalPaymentSection />
+      )}
 
       {/* About Coach Section */}
       {activeSection === 'about-coach' && <AboutCoachSection />}
