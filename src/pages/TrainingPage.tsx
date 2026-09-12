@@ -1347,7 +1347,7 @@ export default function TrainingPage() {
         setSelectedGPSActivity({ id: (workout as any).external_activity_id ?? null, data: workout });
         return;
       }
-      window.dispatchEvent(new CustomEvent('navigate', { detail: 'external-activities' }));
+      window.dispatchEvent(new CustomEvent('navigate', { detail: 'activity-history' }));
       return;
     }
 
@@ -2296,7 +2296,7 @@ export default function TrainingPage() {
             History
           </button>
           <button
-            onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'external-activities' }))}
+            onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'activity-history' }))}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
               activeTab === 'strava'
                 ? 'bg-orange-500 text-white'

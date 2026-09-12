@@ -1166,7 +1166,7 @@ export default function AthleteDashboard({ onNavigate }: AthleteDashboardProps) 
                   {todayWorkouts.map((workout) => (
                     <div
                       key={workout.id}
-                      onClick={() => navigate(workout.type === 'external' ? 'external-activities' : 'training')}
+                      onClick={() => navigate(workout.type === 'external' ? 'activity-history' : 'training')}
                       className="p-5 bg-gradient-to-br from-gray-50 to-white dark:from-gray-700/30 dark:to-gray-800/30 rounded-xl border-2 border-gray-200 dark:border-gray-600 hover:border-[#fdda36] dark:hover:border-[#fdda36] transition-all cursor-pointer group"
                     >
                       <div className="flex items-start justify-between">
