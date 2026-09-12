@@ -269,6 +269,8 @@ async function processActivityCreate(
     map_summary_polyline: detail.map?.summary_polyline ?? null,
     strava_upload_id: detail.upload_id ?? null,
     external_id_strava: detail.external_id ?? null,
+    splits_metric: detail.splits_metric ?? null,
+    splits_standard: detail.splits_standard ?? null,
     raw_data: detail,
     synced_at: new Date().toISOString(),
   };

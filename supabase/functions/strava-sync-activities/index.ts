@@ -334,6 +334,8 @@ Deno.serve(async (req: Request) => {
             average_grade: detail.average_grade ?? null,
             elev_high: detail.elev_high ?? null,
             elev_low: detail.elev_low ?? null,
+            splits_metric: detail.splits_metric ?? null,
+            splits_standard: detail.splits_standard ?? null,
           };
 
           // Dedup check

@@ -32,6 +32,18 @@ interface UnifiedActivity {
   fused_activity_id: string | null;
   raw_data: any;
   streams_fetched: boolean;
+  splits_metric?: any[] | null;
+  splits_standard?: any[] | null;
+  map_polyline?: string | null;
+  map_summary_polyline?: string | null;
+  average_grade?: number | null;
+  elev_high?: number | null;
+  elev_low?: number | null;
+  device_name?: string | null;
+  weighted_avg_watts?: number | null;
+  average_cadence?: number | null;
+  elapsed_time_seconds?: number | null;
+  max_speed_mps?: number | null;
 }
 
 const SPORT_FILTERS = [
@@ -136,6 +148,18 @@ export default function ActivityHistoryPage() {
         fused_activity_id: a.fused_activity_id,
         raw_data: a.raw_data,
         streams_fetched: a.streams_fetched,
+        splits_metric: a.splits_metric,
+        splits_standard: a.splits_standard,
+        map_polyline: a.map_polyline,
+        map_summary_polyline: a.map_summary_polyline,
+        average_grade: a.average_grade,
+        elev_high: a.elev_high,
+        elev_low: a.elev_low,
+        device_name: a.device_name,
+        weighted_avg_watts: a.weighted_avg_watts,
+        average_cadence: a.average_cadence,
+        elapsed_time_seconds: a.elapsed_time_seconds,
+        max_speed_mps: a.max_speed_mps,
       }));
 
       setActivities(unified);
