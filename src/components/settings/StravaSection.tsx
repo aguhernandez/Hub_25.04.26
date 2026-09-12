@@ -427,6 +427,28 @@ export function StravaSection() {
           {/* HR warning */}
           {connection.has_heartrate_permission === false && <HeartRateWarning t={t} />}
 
+          {/* Reauth warning — scope too narrow, missing activity:read_all */}
+          {connection.requires_reauth && (
+            <div className="flex items-start gap-3 p-4 rounded-xl border border-red-500/30 bg-red-500/5">
+              <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-body text-sm font-semibold text-red-300">
+                  {t('strava.limitedPermissions')}
+                </p>
+                <p className="font-body text-xs text-neutral-400 mt-1">
+                  {t('strava.reconnectFullAccess')}
+                </p>
+                <button
+                  onClick={handleConnect}
+                  className="inline-flex items-center gap-1.5 mt-2.5 px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-medium transition-colors"
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  {t('strava.reconnectWithFullPermissions')}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Sync card */}
           <div className="rounded-xl border border-[#514163]/40 p-4">
             <div className="flex items-center justify-between gap-4">

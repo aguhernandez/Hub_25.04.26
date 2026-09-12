@@ -113,6 +113,7 @@ Deno.serve(async (req: Request) => {
           athlete_profile_pic: athlete.profile || athlete.profile_medium || null,
           connected_at: new Date().toISOString(),
           is_active: true,
+          requires_reauth: !grantedScopes.includes("activity:read_all"),
         },
         { onConflict: "user_id" }
       );

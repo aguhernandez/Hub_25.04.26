@@ -15,6 +15,7 @@ export interface StravaConnection {
   athlete_lastname: string | null;
   athlete_profile_pic: string | null;
   has_heartrate_permission: boolean;
+  requires_reauth: boolean;
 }
 
 export interface ExternalActivity {
