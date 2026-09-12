@@ -88,6 +88,10 @@ export default function ProfessionalServicesPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [giftModal, setGiftModal] = useState<{ athleteId: string; athleteName: string } | null>(null);
   const [reminderSent, setReminderSent] = useState<string | null>(null);
+  const [notifyModal, setNotifyModal] = useState<{ athleteId: string; athleteName: string } | null>(null);
+  const [notifyMessage, setNotifyMessage] = useState('');
+  const [notifySending, setNotifySending] = useState(false);
+  const [notifySent, setNotifySent] = useState(false);
 
   const isNutritionist = profile?.role === 'nutritionist';
   const isTrainer = profile?.role === 'trainer' || profile?.role === 'head_coach';
@@ -392,17 +396,24 @@ export default function ProfessionalServicesPage() {
     setActionLoading(null);
   };
 
-  const handleSendNotification = async (athlete: AthleteRow) => {
-    const msg = window.prompt(
-      language === 'es' ? `Mensaje para ${athlete.full_name || athlete.email}:` : `Message to ${athlete.full_name || athlete.email}:`
-    );
-    if (!msg) return;
-    await supabase.from('notifications').insert({
-      user_id: athlete.id,
+  const handleSendNotification = async () => {
+    if (!notifyModal || !notifyMessage.trim()) return;
+    setNotifySending(true);
+    const { error } = await supabase.from('notifications').insert({
+      user_id: notifyModal.athleteId,
       title: language === 'es' ? 'Mensaje de tu entrenador' : 'Message from your coach',
-      body: msg,
+      body: notifyMessage.trim(),
       type: 'coach_message',
     });
+    setNotifySending(false);
+    if (!error) {
+      setNotifySent(true);
+      setTimeout(() => {
+        setNotifySent(false);
+        setNotifyModal(null);
+        setNotifyMessage('');
+      }, 1500);
+    }
   };
 
   const handleRequestPayment = async (athlete: AthleteRow, enrollment: Enrollment) => {
@@ -558,7 +569,7 @@ export default function ProfessionalServicesPage() {
                         <div className="flex items-center gap-1 flex-shrink-0">
                           {/* Notify */}
                           <button
-                            onClick={() => handleSendNotification(athlete)}
+                            onClick={() => { setNotifyModal({ athleteId: athlete.id, athleteName: athlete.full_name || athlete.email || '' }); setNotifyMessage(''); setNotifySent(false); }}
                             className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
                             title={t('sendNotification')}
                           >
@@ -917,6 +928,43 @@ export default function ProfessionalServicesPage() {
           </div>
         )}
       </div>
+
+      {/* Notification Modal */}
+      {notifyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setNotifyModal(null)} />
+          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 w-full max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                <Bell className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-900 dark:text-white text-base">{t('sendNotification')}</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{notifyModal.athleteName}</p>
+              </div>
+            </div>
+            <textarea
+              value={notifyMessage}
+              onChange={e => setNotifyMessage(e.target.value)}
+              rows={4}
+              autoFocus
+              placeholder={language === 'es' ? 'Escribe tu mensaje...' : 'Write your message...'}
+              className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white rounded-lg text-sm focus:ring-2 focus:ring-blue-400 resize-none"
+            />
+            <div className="flex gap-3 mt-4">
+              <button onClick={() => setNotifyModal(null)}
+                className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                {t('cancel')}
+              </button>
+              <button onClick={handleSendNotification} disabled={!notifyMessage.trim() || notifySending}
+                className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                {notifySending ? <Loader2 className="w-4 h-4 animate-spin" /> : notifySent ? <CheckCircle className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                {notifySent ? (language === 'es' ? '¡Enviado!' : 'Sent!') : notifySending ? (language === 'es' ? 'Enviando...' : 'Sending...') : (language === 'es' ? 'Enviar' : 'Send')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Gift Service Modal */}
       {giftModal && (
