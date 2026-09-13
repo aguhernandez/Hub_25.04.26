@@ -65,7 +65,7 @@ async function fetchActivityDetail(activityId: number, accessToken: string): Pro
 }
 
 async function fetchActivityStreams(activityId: number, accessToken: string): Promise<any | null> {
-  const streamKeys = ["time", "latlng", "distance", "altitude", "heartrate", "cadence", "watts", "moving", "grade_smooth"];
+  const streamKeys = ["time", "latlng", "distance", "altitude", "heartrate", "cadence", "watts", "velocity_smooth", "moving", "grade_smooth"];
   const url = `https://www.strava.com/api/v3/activities/${activityId}/streams?keys=${streamKeys.join(",")}&key_by_type=true`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (res.status === 429) {
@@ -314,12 +314,16 @@ async function processActivityCreate(
       fetched_at: new Date().toISOString(),
     };
 
-    await supabaseClient.from("activity_streams").upsert(streamRow, { onConflict: "activity_id" });
+    const { error: streamUpsertError } = await supabaseClient.from("activity_streams").upsert(streamRow, { onConflict: "activity_id" });
 
-    await supabaseClient.from("external_activities").update({
-      streams_fetched: true,
-      streams_fetched_at: new Date().toISOString(),
-    }).eq("id", activityDbId);
+    if (streamUpsertError) {
+      console.error(`[strava-webhook] Failed to upsert streams for activity ${activityStravaId}:`, streamUpsertError);
+    } else {
+      await supabaseClient.from("external_activities").update({
+        streams_fetched: true,
+        streams_fetched_at: new Date().toISOString(),
+      }).eq("id", activityDbId);
+    }
 
     // 3. Calculate time-in-zones
     const { hrZones, powerZones } = await getAthleteZones(supabaseClient, connection.user_id);

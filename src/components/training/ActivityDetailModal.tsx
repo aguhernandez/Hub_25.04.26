@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import {
   X, Clock, Mountain, Heart, Zap, Gauge,
   Activity as ActivityIcon, MapPin, Flame, TrendingUp, TrendingDown,
+  RefreshCw,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, CartesianGrid, XAxis, YAxis,
@@ -446,6 +447,8 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
   const [gpsPoints, setGpsPoints] = useState<{ latitude: number; longitude: number; altitude?: number }[]>([]);
   const [mapError, setMapError] = useState<string | null>(null);
   const [loadingStreams, setLoadingStreams] = useState(false);
+  const [refetching, setRefetching] = useState(false);
+  const [refetchMsg, setRefetchMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activity) return;
@@ -551,6 +554,25 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
   const hasHr = streams?.heartrate_stream && streams.heartrate_stream.length > 1;
   const hasPower = streams?.watts_stream && streams.watts_stream.length > 1;
   const hasPace = streams?.time_stream && streams?.distance_stream && streams.time_stream.length > 3;
+  const missingData = !hasElevation && !hasMap && activity.source === 'strava';
+
+  const handleRefetch = async () => {
+    if (!activity.external_id) return;
+    setRefetching(true);
+    setRefetchMsg(null);
+    try {
+      const { StravaClient } = await import('../../utils/stravaClient');
+      const result = await StravaClient.syncActivities({ perPage: 5 });
+      if (result.success) {
+        setRefetchMsg('Data reloaded. Close and reopen this activity to see the updated charts.');
+      } else {
+        setRefetchMsg(result.error || 'Failed to reload data. Try Force sync from the activity list.');
+      }
+    } catch (err: any) {
+      setRefetchMsg(err.message || 'Failed to reload data.');
+    }
+    setRefetching(false);
+  };
   const isRun = isRunLike(activity.sport_type);
   const startDate = new Date(activity.start_time);
   const splits = activity.splits_metric || activity.splits_standard || null;
@@ -696,8 +718,28 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
             </div>
           ) : (
             <>
-              {hasElevation && (
+              {hasElevation ? (
                 <ElevationChart distanceStream={streams!.distance_stream} altitudeStream={streams!.altitude_stream} />
+              ) : activity.source === 'strava' && (
+                <div className="bg-neutral-50 dark:bg-neutral-800 rounded-xl p-4 border border-neutral-200 dark:border-neutral-700">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Mountain className="w-4 h-4 text-neutral-400" />
+                      <span className="text-sm text-neutral-500 dark:text-neutral-400">Elevation profile not available yet</span>
+                    </div>
+                    <button
+                      onClick={handleRefetch}
+                      disabled={refetching}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${refetching ? 'animate-spin' : ''}`} />
+                      {refetching ? 'Loading...' : 'Load data'}
+                    </button>
+                  </div>
+                  {refetchMsg && (
+                    <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">{refetchMsg}</p>
+                  )}
+                </div>
               )}
               {hasHr && (
                 <MiniChart data={streams!.heartrate_stream} color="#f43f5e" label="Heart Rate" unit="bpm" />

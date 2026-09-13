@@ -336,6 +336,8 @@ Deno.serve(async (req: Request) => {
             elev_low: detail.elev_low ?? null,
             splits_metric: detail.splits_metric ?? null,
             splits_standard: detail.splits_standard ?? null,
+            map_polyline: detail.map?.polyline ?? null,
+            map_summary_polyline: detail.map?.summary_polyline ?? null,
           };
 
           // Dedup check
@@ -371,7 +373,7 @@ Deno.serve(async (req: Request) => {
           await sleep(STREAM_FETCH_DELAY_MS);
           const streams = await fetchActivityStreams(parseInt(activity.external_id), accessToken);
           if (!streams) {
-            await supabaseClient.from("external_activities").update({ streams_fetched: true, streams_fetched_at: new Date().toISOString() }).eq("id", activity.id);
+            console.warn(`[strava-sync] No streams returned for activity ${activity.external_id} — NOT marking as fetched`);
             continue;
           }
 
@@ -398,7 +400,12 @@ Deno.serve(async (req: Request) => {
             fetched_at: new Date().toISOString(),
           };
 
-          await supabaseClient.from("activity_streams").upsert(streamRow, { onConflict: "activity_id" });
+          const { error: streamUpsertError } = await supabaseClient.from("activity_streams").upsert(streamRow, { onConflict: "activity_id" });
+
+          if (streamUpsertError) {
+            console.error(`[strava-sync] Failed to upsert streams for activity ${activity.external_id}:`, streamUpsertError);
+            continue;
+          }
           streamsFetched++;
 
           await supabaseClient.from("external_activities").update({
