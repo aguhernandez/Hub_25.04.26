@@ -3,6 +3,10 @@ import {
   X, Clock, Mountain, Heart, Zap, Gauge,
   Activity as ActivityIcon, MapPin, Flame, TrendingUp, TrendingDown,
 } from 'lucide-react';
+import {
+  AreaChart, Area, BarChart, Bar, CartesianGrid, XAxis, YAxis,
+  Tooltip, ReferenceLine, ResponsiveContainer, Cell,
+} from 'recharts';
 import { supabase } from '../../lib/supabase';
 import ActivityMapViewer from './ActivityMapViewer';
 
@@ -118,6 +122,97 @@ function SportBadge({ sport, source }: { sport: string; source: string }) {
       {source === 'asciende_gps' && (
         <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-500 text-white">GPS</span>
       )}
+    </div>
+  );
+}
+
+function decodePolyline(encoded: string): { latitude: number; longitude: number }[] {
+  const points: { latitude: number; longitude: number }[] = [];
+  let index = 0;
+  let latitude = 0;
+  let longitude = 0;
+
+  while (index < encoded.length) {
+    let shift = 0;
+    let result = 0;
+    let byte: number;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20 && index < encoded.length);
+    latitude += (result & 1) ? ~(result >> 1) : result >> 1;
+
+    shift = 0;
+    result = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20 && index < encoded.length);
+    longitude += (result & 1) ? ~(result >> 1) : result >> 1;
+
+    points.push({ latitude: latitude / 1e5, longitude: longitude / 1e5 });
+  }
+
+  return points;
+}
+
+function ElevationChart({ distanceStream, altitudeStream }: { distanceStream: number[] | null; altitudeStream: number[] | null }) {
+  const data = useMemo(() => {
+    if (!distanceStream || !altitudeStream || distanceStream.length < 2 || altitudeStream.length < 2) return [];
+    const length = Math.min(distanceStream.length, altitudeStream.length);
+    const step = Math.max(1, Math.floor(length / 240));
+    return Array.from({ length: Math.ceil(length / step) }, (_, i) => {
+      const index = Math.min(i * step, length - 1);
+      return {
+        distance: Number((distanceStream[index] / 1000).toFixed(2)),
+        elevation: Math.round(altitudeStream[index]),
+      };
+    });
+  }, [distanceStream, altitudeStream]);
+
+  if (data.length < 2) return null;
+  const startElevation = data[0].elevation;
+
+  return (
+    <div className="bg-white dark:bg-neutral-800 rounded-xl p-3 border border-neutral-200 dark:border-neutral-700">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">Elevation profile</span>
+        <span className="text-xs text-neutral-500 dark:text-neutral-500">{Math.min(...data.map((p) => p.elevation))}–{Math.max(...data.map((p) => p.elevation))} m</span>
+      </div>
+      <div className="h-56 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="elevationFill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10b981" stopOpacity={0.55} />
+                <stop offset="100%" stopColor="#10b981" stopOpacity={0.06} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.2} />
+            <XAxis dataKey="distance" tick={{ fontSize: 10 }} tickFormatter={(value: number) => `${value} km`} />
+            <YAxis tick={{ fontSize: 10 }} width={42} tickFormatter={(value: number) => `${value}m`} />
+            <Tooltip
+              cursor={{ stroke: '#f8fafc', strokeWidth: 2 }}
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
+                const elevation = Number(payload[0].value);
+                return (
+                  <div className="rounded-lg bg-neutral-900 px-3 py-2 text-xs text-white shadow-xl">
+                    <p className="font-semibold">{Number(label).toFixed(2)} km</p>
+                    <p>{elevation} m</p>
+                    <p className={elevation - startElevation >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                      {elevation - startElevation >= 0 ? '+' : ''}{elevation - startElevation} m from start
+                    </p>
+                  </div>
+                );
+              }}
+            />
+            <Area type="monotone" dataKey="elevation" stroke="#10b981" strokeWidth={2} fill="url(#elevationFill)" activeDot={{ r: 5, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
@@ -298,56 +393,50 @@ function SplitsTable({ splits, isMetric }: { splits: any[] | null; isMetric: boo
 function PaceAnalysis({ splits, isMetric }: { splits: any[] | null; isMetric: boolean }) {
   if (!splits || splits.length < 2) return null;
   const distFactor = isMetric ? 1000 : 1609.344;
-  const paces = splits.map((s: any) => {
-    const dist = s.distance / distFactor;
-    const time = s.moving_time ?? s.elapsed_time ?? 0;
-    return dist > 0 && time > 0 ? time / dist : 0;
-  }).filter((p: number) => p > 0);
+  const data = splits.map((split: any, index: number) => {
+    const distance = Number(split.distance || 0) / distFactor;
+    const time = Number(split.moving_time ?? split.elapsed_time ?? 0);
+    return {
+      split: index + 1,
+      pace: distance > 0 && time > 0 ? time / distance : 0,
+      elevation: Number(split.elevation_difference ?? 0),
+    };
+  }).filter((split) => split.pace > 0);
 
-  if (paces.length < 2) return null;
-
-  const avg = paces.reduce((a: number, b: number) => a + b, 0) / paces.length;
-  const fastest = Math.min(...paces);
-  const slowest = Math.max(...paces);
-  const gap = slowest - fastest;
+  if (data.length < 2) return null;
+  const average = data.reduce((sum, split) => sum + split.pace, 0) / data.length;
+  const fastest = data.reduce((best, split) => split.pace < best.pace ? split : best, data[0]);
+  const slowest = data.reduce((worst, split) => split.pace > worst.pace ? split : worst, data[0]);
+  const paceColor = (pace: number) => pace <= average * 0.95 ? '#10b981' : pace <= average * 1.05 ? '#f59e0b' : '#ef4444';
+  const chartData = data.map((split) => ({ ...split, paceLabel: fmtPaceFromSecPerKm(split.pace) }));
 
   return (
-    <div className="bg-white dark:bg-neutral-800 rounded-xl p-4 border border-neutral-200 dark:border-neutral-700">
-      <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Pace Analysis</h4>
-      <div className="grid grid-cols-3 gap-3">
-        <div className="text-center">
-          <div className="flex items-center justify-center gap-1 mb-1">
-            <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-            <span className="text-xs text-neutral-500 dark:text-neutral-400">Fastest</span>
-          </div>
-          <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">{fmtPaceFromSecPerKm(fastest)}</p>
+    <div className="bg-white dark:bg-neutral-800 rounded-xl p-4 border border-neutral-200 dark:border-neutral-700 transition-all duration-300">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h4 className="text-base font-semibold text-neutral-900 dark:text-white">Pace Analysis</h4>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">{isMetric ? 'Per-kilometer pace' : 'Per-mile pace'}</p>
         </div>
-        <div className="text-center">
-          <div className="flex items-center justify-center gap-1 mb-1">
-            <Gauge className="w-3.5 h-3.5 text-blue-500" />
-            <span className="text-xs text-neutral-500 dark:text-neutral-400">Average</span>
-          </div>
-          <p className="text-base font-bold text-neutral-900 dark:text-white">{fmtPaceFromSecPerKm(avg)}</p>
-        </div>
-        <div className="text-center">
-          <div className="flex items-center justify-center gap-1 mb-1">
-            <TrendingDown className="w-3.5 h-3.5 text-red-500" />
-            <span className="text-xs text-neutral-500 dark:text-neutral-400">Slowest</span>
-          </div>
-          <p className="text-base font-bold text-red-500 dark:text-red-400">{fmtPaceFromSecPerKm(slowest)}</p>
+        <div className="grid grid-cols-3 gap-3 text-right">
+          <div><p className="text-[10px] text-neutral-500">Average</p><p className="text-sm font-bold text-neutral-900 dark:text-white">{fmtPaceFromSecPerKm(average)}</p></div>
+          <div><p className="text-[10px] text-neutral-500">Best</p><p className="text-sm font-bold text-emerald-500">#{fastest.split} · {fmtPaceFromSecPerKm(fastest.pace)}</p></div>
+          <div><p className="text-[10px] text-neutral-500">Worst</p><p className="text-sm font-bold text-rose-500">#{slowest.split} · {fmtPaceFromSecPerKm(slowest.pace)}</p></div>
         </div>
       </div>
-      {gap > 0 && (
-        <div className="mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-700/50">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-neutral-500 dark:text-neutral-400">Pace range</span>
-            <span className="font-medium text-neutral-700 dark:text-neutral-300">{fmtPaceFromSecPerKm(gap)} /km</span>
-          </div>
-          <div className="mt-2 h-2 rounded-full bg-neutral-100 dark:bg-neutral-700 overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-emerald-400 via-yellow-400 to-red-400 rounded-full" style={{ width: '100%' }} />
-          </div>
-        </div>
-      )}
+      <div className="h-56 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.2} />
+            <XAxis dataKey="split" tick={{ fontSize: 10 }} tickFormatter={(value: number) => `${value}`} />
+            <YAxis reversed tick={{ fontSize: 10 }} width={42} tickFormatter={(value: number) => fmtPaceFromSecPerKm(value)} domain={['dataMin - 10', 'dataMax + 10']} />
+            <Tooltip formatter={(value: number) => [`${fmtPaceFromSecPerKm(value)} /km`, 'Pace']} labelFormatter={(value) => `Split ${value}`} />
+            <ReferenceLine y={average} stroke="#64748b" strokeDasharray="5 5" label={{ value: 'avg', position: 'insideTopRight', fontSize: 10 }} />
+            <Bar dataKey="pace" radius={[3, 3, 0, 0]} animationDuration={700}>
+              {chartData.map((split) => <Cell key={split.split} fill={paceColor(split.pace)} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
@@ -355,6 +444,7 @@ function PaceAnalysis({ splits, isMetric }: { splits: any[] | null; isMetric: bo
 export function ActivityDetailModal({ activity, onClose }: Props) {
   const [streams, setStreams] = useState<ActivityStream | null>(null);
   const [gpsPoints, setGpsPoints] = useState<{ latitude: number; longitude: number; altitude?: number }[]>([]);
+  const [mapError, setMapError] = useState<string | null>(null);
   const [loadingStreams, setLoadingStreams] = useState(false);
 
   useEffect(() => {
@@ -362,6 +452,7 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
     setLoadingStreams(true);
     setStreams(null);
     setGpsPoints([]);
+    setMapError(null);
 
     const loadAll = async () => {
       if (activity.source !== 'asciende_gps') {
@@ -373,12 +464,46 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
 
         if (streamData) {
           setStreams(streamData as ActivityStream);
-          if (streamData.latlng_stream && Array.isArray(streamData.latlng_stream)) {
-            setGpsPoints(
-              streamData.latlng_stream
-                .filter((p: any) => Array.isArray(p) && p.length === 2)
-                .map((p: number[]) => ({ latitude: p[0], longitude: p[1] }))
-            );
+          const streamGpsPoints = Array.isArray(streamData.latlng_stream)
+            ? streamData.latlng_stream
+              .filter((p: any) => Array.isArray(p) && p.length === 2)
+              .map((p: number[]) => ({ latitude: p[0], longitude: p[1] }))
+            : [];
+          if (streamGpsPoints.length >= 2) {
+            setGpsPoints(streamGpsPoints);
+          } else {
+            const encodedPolyline = activity.map_polyline || activity.map_summary_polyline;
+            console.info('[ActivityDetailModal] Strava polylines', {
+              activityId: activity.external_id,
+              hasFullPolyline: Boolean(activity.map_polyline),
+              hasSummaryPolyline: Boolean(activity.map_summary_polyline),
+            });
+            if (encodedPolyline) {
+              try {
+                const decodedPoints = decodePolyline(encodedPolyline);
+                if (decodedPoints.length >= 2) setGpsPoints(decodedPoints);
+                else setMapError('The Strava route could not be decoded.');
+              } catch (error) {
+                console.error('[ActivityDetailModal] Failed to decode Strava polyline', error);
+                setMapError('The Strava route could not be decoded.');
+              }
+            } else {
+              setMapError('Strava did not provide a GPS route for this activity.');
+            }
+          }
+        } else {
+          const encodedPolyline = activity.map_polyline || activity.map_summary_polyline;
+          console.info('[ActivityDetailModal] Strava polylines', {
+            activityId: activity.external_id,
+            hasFullPolyline: Boolean(activity.map_polyline),
+            hasSummaryPolyline: Boolean(activity.map_summary_polyline),
+          });
+          if (encodedPolyline) {
+            try {
+              setGpsPoints(decodePolyline(encodedPolyline));
+            } catch (error) {
+              console.error('[ActivityDetailModal] Failed to decode Strava polyline', error);
+            }
           }
         }
       }
@@ -560,7 +685,7 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
           ) : (
             <div className="bg-neutral-50 dark:bg-neutral-800 rounded-xl p-6 border border-neutral-200 dark:border-neutral-700 text-center">
               <MapPin className="w-8 h-8 text-neutral-300 dark:text-neutral-600 mx-auto mb-2" />
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">No GPS track available for this activity</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">{mapError || 'No GPS track available for this activity'}</p>
             </div>
           )}
 
@@ -572,7 +697,7 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
           ) : (
             <>
               {hasElevation && (
-                <MiniChart data={streams!.altitude_stream} color="#10b981" label="Elevation" unit="m" />
+                <ElevationChart distanceStream={streams!.distance_stream} altitudeStream={streams!.altitude_stream} />
               )}
               {hasHr && (
                 <MiniChart data={streams!.heartrate_stream} color="#f43f5e" label="Heart Rate" unit="bpm" />
