@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+// verify_jwt=false: GET endpoint must be public (no auth header) to return Strava client_id
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
