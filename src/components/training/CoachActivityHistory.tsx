@@ -9,9 +9,11 @@ import { useLanguage } from '../../contexts/LanguageContext';
 interface AthleteInfo {
   id: string;
   full_name: string;
+  email: string | null;
   avatar_url: string | null;
   sport: string | null;
   country: string | null;
+  activity_count: number;
 }
 
 interface AthleteGroup {
@@ -73,7 +75,7 @@ export function CoachAthleteSelector({ coachId, selectedAthleteId, onSelectAthle
       const [directRes, teamRes] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, full_name, avatar_url, sport, country')
+          .select('id, full_name, email, avatar_url, sport, country')
           .eq('role', 'athlete')
           .eq('assigned_trainer_id', coachId)
           .order('full_name'),
@@ -91,7 +93,7 @@ export function CoachAthleteSelector({ coachId, selectedAthleteId, onSelectAthle
       if (teamAthleteIds.length > 0) {
         const { data: teamProfiles } = await supabase
           .from('profiles')
-          .select('id, full_name, avatar_url, sport, country')
+          .select('id, full_name, email, avatar_url, sport, country')
           .in('id', teamAthleteIds.filter((id: string) => !uniqueIds.has(id)))
           .order('full_name');
         teamAthletes = (teamProfiles || []) as AthleteInfo[];
@@ -106,6 +108,22 @@ export function CoachAthleteSelector({ coachId, selectedAthleteId, onSelectAthle
         return true;
       });
 
+      if (deduped.length > 0) {
+        const { data: activityRows } = await supabase
+          .from('external_activities')
+          .select('user_id')
+          .in('user_id', deduped.map((a) => a.id))
+          .is('deleted_at', null);
+        const counts = new Map<string, number>();
+        (activityRows || []).forEach((row: any) => {
+          counts.set(row.user_id, (counts.get(row.user_id) || 0) + 1);
+        });
+        deduped.forEach((athlete) => {
+          athlete.activity_count = counts.get(athlete.id) || 0;
+        });
+      }
+
+      deduped.sort((a, b) => b.activity_count - a.activity_count || a.full_name.localeCompare(b.full_name));
       setAthletes(deduped);
     } catch (err) {
       console.error('[CoachAthleteSelector] Error loading athletes:', err);
@@ -187,8 +205,8 @@ export function CoachAthleteSelector({ coachId, selectedAthleteId, onSelectAthle
           )}
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-blue-900 dark:text-blue-100 text-sm truncate">{selectedAthlete.full_name}</p>
-            <p className="text-xs text-blue-600 dark:text-blue-400">
-              {selectedAthlete.sport || '—'} {selectedAthlete.country ? `· ${selectedAthlete.country}` : ''}
+            <p className="text-xs text-blue-600 dark:text-blue-400 truncate">
+              {selectedAthlete.email || '—'} · {selectedAthlete.activity_count} {t.athletes === 'atletas' ? 'actividades' : 'activities'}
             </p>
           </div>
           <button
@@ -285,8 +303,8 @@ export function CoachAthleteSelector({ coachId, selectedAthleteId, onSelectAthle
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-neutral-900 dark:text-white text-sm truncate">{athlete.full_name}</p>
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                      {athlete.sport || '—'} {athlete.country ? `· ${athlete.country}` : ''}
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate">
+                      {athlete.email || '—'} · {athlete.activity_count} {t.athletes === 'atletas' ? 'actividades' : 'activities'}
                     </p>
                   </div>
                   <UserCheck className="w-4 h-4 text-neutral-300 dark:text-neutral-600" />
