@@ -22,7 +22,7 @@ import { useProfessionalServiceAccess } from '../hooks/useProfessionalServiceAcc
 import ServiceAccessGate from '../components/ServiceAccessGate';
 import LogWorkoutModal from '../components/training/LogWorkoutModal';
 import WorkoutReassignModal from '../components/training/WorkoutReassignModal';
-import GPSActivityDetailModal from '../components/training/GPSActivityDetailModal';
+import { ActivityDetailModal } from '../components/training/ActivityDetailModal';
 import TrainerAthleteSelector from '../components/training/TrainerAthleteSelector';
 import { getExerciseName } from '../utils/exerciseI18n';
 import Toast from '../components/Toast';
@@ -152,7 +152,7 @@ export default function TrainingPage() {
   const [logWorkoutTarget, setLogWorkoutTarget] = useState<EnduranceWorkout | null>(null);
   const [reassignSourceWorkout, setReassignSourceWorkout] = useState<EnduranceWorkout | null>(null);
   const [logReassignTarget, setLogReassignTarget] = useState<{ workout: EnduranceWorkout; executedOnDate: string; originalPlannedDay: string } | null>(null);
-  const [selectedGPSActivity, setSelectedGPSActivity] = useState<{ id: string | null; data: any } | null>(null);
+  const [selectedGPSActivity, setSelectedGPSActivity] = useState<any | null>(null);
   const [syncStatus, setSyncStatus] = useState<{ last_push_at: string | null; planner_source: string | null; status: string | null } | null>(null);
   const [deletingPlanIds, setDeletingPlanIds] = useState<Set<string>>(new Set());
   const [staledPlanIds, setStaledPlanIds] = useState<Set<string>>(new Set());
@@ -1344,7 +1344,7 @@ export default function TrainingPage() {
     if (workout.type === 'external') {
       const raw = (workout as any).raw_data;
       if ((workout as any).source === 'asciende_gps' || raw?.source === 'asciende_gps') {
-        setSelectedGPSActivity({ id: (workout as any).external_activity_id ?? null, data: workout });
+        setSelectedGPSActivity((workout as any).raw_data || workout);
         return;
       }
       window.dispatchEvent(new CustomEvent('navigate', { detail: 'activity-history' }));
@@ -2703,9 +2703,8 @@ export default function TrainingPage() {
       )}
 
       {selectedGPSActivity && (
-        <GPSActivityDetailModal
-          activityId={selectedGPSActivity.id}
-          activityData={selectedGPSActivity.data}
+        <ActivityDetailModal
+          activity={selectedGPSActivity}
           onClose={() => setSelectedGPSActivity(null)}
         />
       )}
