@@ -458,60 +458,67 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
     setMapError(null);
 
     const loadAll = async () => {
-      if (activity.source !== 'asciende_gps') {
+      // Load streams for both Strava and asciende_gps activities
+      const streamActivityId = activity.source === 'asciende_gps'
+        ? activity.raw_data?.activity_id
+        : activity.id;
+
+      if (streamActivityId) {
         const { data: streamData } = await supabase
           .from('activity_streams')
           .select('*')
-          .eq('activity_id', activity.id)
+          .eq('activity_id', streamActivityId)
           .maybeSingle();
 
         if (streamData) {
           setStreams(streamData as ActivityStream);
-          const streamGpsPoints = Array.isArray(streamData.latlng_stream)
-            ? streamData.latlng_stream
+        }
+      }
+
+      // Load GPS points for map
+      if (activity.source === 'asciende_gps' && activity.raw_data?.activity_id) {
+        const { data: gpsData } = await supabase
+          .from('activity_gps_points')
+          .select('latitude, longitude, altitude_m, sequence_order')
+          .eq('activity_id', activity.raw_data.activity_id)
+          .order('sequence_order');
+        if (gpsData && gpsData.length >= 2) {
+          setGpsPoints(gpsData.map((p: any) => ({ latitude: p.latitude, longitude: p.longitude, altitude: p.altitude_m })));
+        } else if (activity.map_polyline) {
+          try {
+            const decoded = decodePolyline(activity.map_polyline);
+            if (decoded.length >= 2) setGpsPoints(decoded);
+          } catch (e) {
+            console.error('[ActivityDetailModal] Failed to decode GPS polyline fallback', e);
+          }
+        }
+      } else if (activity.source !== 'asciende_gps') {
+        // Strava or other sources: use streams latlng or decode polyline
+        if (streams) {
+          const streamGpsPoints = Array.isArray(streams.latlng_stream)
+            ? streams.latlng_stream
               .filter((p: any) => Array.isArray(p) && p.length === 2)
               .map((p: number[]) => ({ latitude: p[0], longitude: p[1] }))
             : [];
           if (streamGpsPoints.length >= 2) {
             setGpsPoints(streamGpsPoints);
-          } else {
-            const encodedPolyline = activity.map_polyline || activity.map_summary_polyline;
-            console.info('[ActivityDetailModal] Strava polylines', {
-              activityId: activity.external_id,
-              hasFullPolyline: Boolean(activity.map_polyline),
-              hasSummaryPolyline: Boolean(activity.map_summary_polyline),
-            });
-            if (encodedPolyline) {
-              try {
-                const decodedPoints = decodePolyline(encodedPolyline);
-                if (decodedPoints.length >= 2) setGpsPoints(decodedPoints);
-                else setMapError('The Strava route could not be decoded.');
-              } catch (error) {
-                console.error('[ActivityDetailModal] Failed to decode Strava polyline', error);
-                setMapError('The Strava route could not be decoded.');
-              }
-            } else {
-              setMapError('Strava did not provide a GPS route for this activity.');
-            }
           }
-        } else {
+        }
+        if (gpsPoints.length < 2) {
           const encodedPolyline = activity.map_polyline || activity.map_summary_polyline;
-          console.info('[ActivityDetailModal] Strava polylines', {
-            activityId: activity.external_id,
-            hasFullPolyline: Boolean(activity.map_polyline),
-            hasSummaryPolyline: Boolean(activity.map_summary_polyline),
-          });
           if (encodedPolyline) {
             try {
-              setGpsPoints(decodePolyline(encodedPolyline));
+              const decodedPoints = decodePolyline(encodedPolyline);
+              if (decodedPoints.length >= 2) setGpsPoints(decodedPoints);
             } catch (error) {
-              console.error('[ActivityDetailModal] Failed to decode Strava polyline', error);
+              console.error('[ActivityDetailModal] Failed to decode polyline', error);
             }
           }
         }
       }
 
-      if (activity.fused_activity_id) {
+      // Fused activity GPS points (if still no points)
+      if (gpsPoints.length < 2 && activity.fused_activity_id) {
         const { data: fusedActivity } = await supabase
           .from('external_activities')
           .select('id, raw_data')
@@ -530,24 +537,6 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
         }
       }
 
-      if (activity.source === 'asciende_gps' && activity.raw_data?.activity_id) {
-        const { data: gpsData } = await supabase
-          .from('activity_gps_points')
-          .select('latitude, longitude, altitude_m, sequence_order')
-          .eq('activity_id', activity.raw_data.activity_id)
-          .order('sequence_order');
-        if (gpsData && gpsData.length >= 2) {
-          setGpsPoints(gpsData.map((p: any) => ({ latitude: p.latitude, longitude: p.longitude, altitude: p.altitude_m })));
-        } else if (activity.map_polyline) {
-          try {
-            const decoded = decodePolyline(activity.map_polyline);
-            if (decoded.length >= 2) setGpsPoints(decoded);
-          } catch (e) {
-            console.error('[ActivityDetailModal] Failed to decode GPS polyline fallback', e);
-          }
-        }
-      }
-
       setLoadingStreams(false);
     };
 
@@ -562,6 +551,9 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
   const hasPower = streams?.watts_stream && streams.watts_stream.length > 1;
   const hasPace = streams?.time_stream && streams?.distance_stream && streams.time_stream.length > 3;
   const missingData = !hasElevation && !hasMap && activity.source === 'strava';
+  const avgSpeed = activity.average_speed_mps > 0
+    ? activity.average_speed_mps
+    : (activity.duration_seconds > 0 ? activity.distance_meters / activity.duration_seconds : 0);
 
   const handleRefetch = async () => {
     if (!activity.external_id) return;
@@ -632,7 +624,7 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
                 <span className="text-xs text-neutral-500 dark:text-neutral-400">{isRun ? 'Pace' : 'Speed'}</span>
               </div>
               <p className="text-lg font-bold text-neutral-900 dark:text-white">
-                {isRun ? fmtPace(activity.average_speed_mps) : fmtSpeed(activity.average_speed_mps)}
+                {isRun ? fmtPace(avgSpeed) : fmtSpeed(avgSpeed)}
               </p>
             </div>
             <div className="bg-neutral-50 dark:bg-neutral-800 rounded-xl p-3 border border-neutral-200 dark:border-neutral-700">

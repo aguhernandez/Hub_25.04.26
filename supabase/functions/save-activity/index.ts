@@ -177,6 +177,62 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ── 2b. Compute and store stream data (time, distance, altitude, latlng, velocity) ──
+    // This mirrors what Strava stores so the detail modal can show elevation/pace charts.
+    const startTimeMs = new Date(firstTimestamp).getTime();
+    const timeStream: number[] = [];
+    const distanceStream: number[] = [];
+    const altitudeStream: number[] = [];
+    const latlngStream: number[][] = [];
+    const velocityStream: number[] = [];
+    let cumDistance = 0;
+    for (let i = 0; i < data.gpsPoints.length; i++) {
+      const pt = data.gpsPoints[i];
+      const t = Math.round((new Date(pt.timestamp).getTime() - startTimeMs) / 1000);
+      timeStream.push(t);
+      altitudeStream.push(pt.altitude != null ? Math.round(pt.altitude) : 0);
+      latlngStream.push([pt.latitude, pt.longitude]);
+      if (i > 0) {
+        const prev = data.gpsPoints[i - 1];
+        const dLat = (pt.latitude - prev.latitude) * Math.PI / 180;
+        const dLng = (pt.longitude - prev.longitude) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 + Math.cos(prev.latitude * Math.PI / 180) * Math.cos(pt.latitude * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const segDist = 6371000 * c;
+        cumDistance += segDist;
+        const dt = t - timeStream[i - 1];
+        velocityStream.push(dt > 0 ? Math.round((segDist / dt) * 10) / 10 : 0);
+      } else {
+        velocityStream.push(0);
+      }
+      distanceStream.push(Math.round(cumDistance));
+    }
+
+    const streamResult = await restPost(supabaseUrl, supabaseServiceRoleKey, "activity_streams", {
+      activity_id: activityId,
+      user_id: userId,
+      time_stream: timeStream,
+      altitude_stream: altitudeStream,
+      distance_stream: distanceStream,
+      latlng_stream: latlngStream,
+      velocity_smooth_stream: velocityStream,
+      heartrate_stream: null,
+      watts_stream: null,
+      cadence_stream: null,
+      grade_smooth_stream: null,
+      moving_stream: null,
+      stream_keys: ["time", "altitude", "distance", "latlng", "velocity_smooth"],
+      missing_heartrate: true,
+      missing_power: true,
+      missing_gps: false,
+      resolution: "high",
+      series_type: "time",
+      fetched_at: new Date().toISOString(),
+    });
+    if (!streamResult.ok) {
+      console.error("Stream insert error (non-fatal):", streamResult.text);
+    }
+
     // ── 3. Insert feedback record if provided ──────────────────────────────────
     if (data.feedback) {
       const feedbackRecord: Record<string, unknown> = {
@@ -255,6 +311,8 @@ Deno.serve(async (req: Request) => {
       duration_seconds: data.durationSeconds,
       distance_meters: data.distanceKm * 1000,
       elevation_gain_meters: data.elevationGainM,
+      average_speed_mps: data.durationSeconds > 0 ? (data.distanceKm * 1000) / data.durationSeconds : 0,
+      max_speed_mps: velocityStream.length > 0 ? Math.max(...velocityStream) : null,
       device_name: "Asciende GPS",
       user_notes: data.notes || null,
       map_polyline: encodedPolyline,
