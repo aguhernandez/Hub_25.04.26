@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { StravaSyncButton } from './StravaSyncButton';
 
 interface AthleteInfo {
   id: string;
@@ -28,6 +29,7 @@ interface Props {
   coachId: string;
   selectedAthleteId: string | null;
   onSelectAthlete: (id: string | null) => void;
+  onSyncComplete: () => void;
 }
 
 const GROUP_COLORS = [
@@ -39,7 +41,7 @@ const GROUP_COLORS = [
   { key: 'cyan', class: 'bg-cyan-500' },
 ];
 
-export function CoachAthleteSelector({ coachId, selectedAthleteId, onSelectAthlete }: Props) {
+export function CoachAthleteSelector({ coachId, selectedAthleteId, onSelectAthlete, onSyncComplete }: Props) {
   const { language } = useLanguage();
   const [athletes, setAthletes] = useState<AthleteInfo[]>([]);
   const [groups, setGroups] = useState<AthleteGroup[]>([]);
@@ -77,7 +79,7 @@ export function CoachAthleteSelector({ coachId, selectedAthleteId, onSelectAthle
           .from('profiles')
           .select('id, full_name, email, avatar_url, sport, country')
           .eq('role', 'athlete')
-          .eq('assigned_trainer_id', coachId)
+          .or(`assigned_trainer_id.eq.${coachId},assigned_nutritionist_id.eq.${coachId}`)
           .order('full_name'),
         supabase
           .from('team_members')
@@ -209,6 +211,7 @@ export function CoachAthleteSelector({ coachId, selectedAthleteId, onSelectAthle
               {selectedAthlete.email || '—'} · {selectedAthlete.activity_count} {t.athletes === 'atletas' ? 'actividades' : 'activities'}
             </p>
           </div>
+          <StravaSyncButton athleteId={selectedAthlete.id} onSyncComplete={onSyncComplete} />
           <button
             onClick={() => onSelectAthlete(null)}
             className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-800/40 rounded-lg transition-colors"

@@ -101,6 +101,7 @@ export interface ActivityStream {
 
 export interface SyncResult {
   success: boolean;
+  connected?: boolean;
   synced?: number;
   total_fetched?: number;
   streams_fetched?: number;
@@ -207,10 +208,36 @@ export class StravaClient {
     }
   }
 
+  static async checkAthleteConnection(athleteId: string): Promise<boolean> {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return false;
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/strava-sync-activities`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ athlete_id: athleteId, check_only: true }),
+        }
+      );
+      if (!response.ok) return false;
+      const result = await response.json();
+      return result.connected === true;
+    } catch (error) {
+      console.error('[StravaClient] checkAthleteConnection error:', error);
+      return false;
+    }
+  }
+
   static async syncActivities(params?: {
     perPage?: number;
     page?: number;
     after?: number;
+    athleteId?: string;
+    fullSync?: boolean;
   }): Promise<SyncResult> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -231,6 +258,10 @@ export class StravaClient {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
+        body: JSON.stringify({
+          athlete_id: params?.athleteId,
+          full_sync: params?.fullSync,
+        }),
       });
 
       const result = await response.json();
@@ -247,6 +278,7 @@ export class StravaClient {
 
       return {
         success: true,
+        connected: result.connected,
         synced: result.synced,
         total_fetched: result.total_fetched,
         streams_fetched: result.streams_fetched,

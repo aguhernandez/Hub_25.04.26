@@ -189,28 +189,79 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const supabaseClient = createClient(
+    const authClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       { global: { headers: { Authorization: req.headers.get("Authorization")! } } }
     );
 
-    const { data: { user } } = await supabaseClient.auth.getUser();
+    const { data: { user } } = await authClient.auth.getUser();
     if (!user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    const urlParams = new URL(req.url);
+    let requestBody: { athlete_id?: string; check_only?: boolean; full_sync?: boolean } = {};
+    if (req.method === "POST") {
+      try { requestBody = await req.json(); } catch { requestBody = {}; }
+    }
+
+    const requestedAthleteId = requestBody.athlete_id || urlParams.searchParams.get("athlete_id") || undefined;
+    const targetUserId = requestedAthleteId || user.id;
+    const isCoachSync = targetUserId !== user.id;
+    let supabaseClient = authClient;
+
+    if (isCoachSync) {
+      const serviceClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      );
+      const { data: callerProfile } = await serviceClient
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+      const allowedRoles = ["trainer", "head_coach", "nutritionist"];
+      const { data: athleteProfile } = await serviceClient
+        .from("profiles")
+        .select("id, role, assigned_trainer_id, assigned_nutritionist_id")
+        .eq("id", targetUserId)
+        .maybeSingle();
+      const { data: teamMembership } = await serviceClient
+        .from("team_members")
+        .select("team_id, teams!inner(coach_id)")
+        .eq("athlete_id", targetUserId)
+        .eq("teams.coach_id", user.id)
+        .limit(1)
+        .maybeSingle();
+      const supervised = athleteProfile && (
+        athleteProfile.assigned_trainer_id === user.id ||
+        athleteProfile.assigned_nutritionist_id === user.id ||
+        !!teamMembership
+      );
+      if (!callerProfile || !allowedRoles.includes(callerProfile.role) || !supervised) {
+        return new Response(JSON.stringify({ error: "You are not authorized to sync this athlete" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      supabaseClient = serviceClient;
+    }
+
     const { data: connection, error: connError } = await supabaseClient
       .from("strava_connections")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .eq("is_active", true)
       .maybeSingle();
 
     if (connError || !connection) {
-      return new Response(JSON.stringify({ error: "No active Strava connection found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ connected: false, error: "No active Strava connection found" }),
+        { status: requestBody.check_only ? 200 : 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    if (requestBody.check_only) {
+      return new Response(JSON.stringify({ connected: true, athlete_id: connection.athlete_id }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     let accessToken: string;
@@ -221,13 +272,12 @@ Deno.serve(async (req: Request) => {
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const urlParams = new URL(req.url);
     const perPage = Math.min(parseInt(urlParams.searchParams.get("per_page") || "100"), 200);
     const page = parseInt(urlParams.searchParams.get("page") || "1");
     let after = urlParams.searchParams.get("after");
 
     const isFirstSync = !connection.last_sync_at;
-    if (isFirstSync && !after) {
+    if (isFirstSync && !after && !requestBody.full_sync) {
       after = Math.floor(Date.now() / 1000 - 90 * 24 * 60 * 60).toString();
     }
 
@@ -258,7 +308,7 @@ Deno.serve(async (req: Request) => {
 
     // Build activity rows from summary
     const externalActivities = activities.map((a: any) => ({
-      user_id: user.id,
+      user_id: targetUserId,
       source: "strava",
       external_id: a.id.toString(),
       sport_type: normalizeActivityType(a.sport_type || a.type),
@@ -312,7 +362,7 @@ Deno.serve(async (req: Request) => {
     const { data: activitiesNeedingDetail } = await supabaseClient
       .from("external_activities")
       .select("id, external_id, start_time, distance_meters")
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .eq("source", "strava")
       .is("deleted_at", null)
       .is("suffer_score", null)
@@ -320,7 +370,7 @@ Deno.serve(async (req: Request) => {
       .limit(MAX_DETAIL_FETCHES);
 
     if (activitiesNeedingDetail && !rateLimitHit) {
-      const { hrZones, powerZones } = await getAthleteZones(supabaseClient, user.id);
+      const { hrZones, powerZones } = await getAthleteZones(supabaseClient, targetUserId);
       for (const act of activitiesNeedingDetail) {
         if (rateLimitHit) break;
         try {
@@ -341,7 +391,7 @@ Deno.serve(async (req: Request) => {
           };
 
           // Dedup check
-          const fusedId = await findDuplicateAsciendeActivity(supabaseClient, user.id, act.start_time, act.distance_meters);
+          const fusedId = await findDuplicateAsciendeActivity(supabaseClient, targetUserId, act.start_time, act.distance_meters);
           if (fusedId) updates.fused_activity_id = fusedId;
 
           await supabaseClient.from("external_activities").update(updates).eq("id", act.id);
@@ -355,7 +405,7 @@ Deno.serve(async (req: Request) => {
     const { data: activitiesNeedingStreams } = await supabaseClient
       .from("external_activities")
       .select("id, external_id, has_heartrate, has_power")
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .eq("source", "strava")
       .eq("streams_fetched", false)
       .is("deleted_at", null)
@@ -365,7 +415,7 @@ Deno.serve(async (req: Request) => {
     let streamsSkipped = 0;
 
     if (activitiesNeedingStreams && activitiesNeedingStreams.length > 0 && !rateLimitHit) {
-      const { hrZones, powerZones } = await getAthleteZones(supabaseClient, user.id);
+      const { hrZones, powerZones } = await getAthleteZones(supabaseClient, targetUserId);
 
       for (const activity of activitiesNeedingStreams) {
         if (rateLimitHit) { streamsSkipped++; continue; }
@@ -380,7 +430,7 @@ Deno.serve(async (req: Request) => {
           const availableKeys = Object.keys(streams);
           const streamRow = {
             activity_id: activity.id,
-            user_id: user.id,
+            user_id: targetUserId,
             time_stream: extractStreamData(streams, "time"),
             heartrate_stream: extractStreamData(streams, "heartrate"),
             watts_stream: extractStreamData(streams, "watts"),
@@ -443,7 +493,7 @@ Deno.serve(async (req: Request) => {
     let deleted = 0;
     if (page === 1 && !after) {
       const fetchedIds = new Set(activities.map((a: any) => a.id.toString()));
-      deleted = await detectDeletedActivities(supabaseClient, user.id, fetchedIds);
+      deleted = await detectDeletedActivities(supabaseClient, targetUserId, fetchedIds);
     }
 
     await supabaseClient.from("strava_connections").update({ last_sync_at: new Date().toISOString() }).eq("id", connection.id);

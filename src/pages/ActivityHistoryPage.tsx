@@ -105,7 +105,7 @@ export default function ActivityHistoryPage() {
   const { user } = useAuth();
   const { t, language } = useLanguage();
   const { role } = useUserRole();
-  const isCoach = role === 'trainer' || role === 'head_coach';
+  const isCoach = role === 'trainer' || role === 'head_coach' || role === 'nutritionist';
   const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
   const [activities, setActivities] = useState<UnifiedActivity[]>([]);
   const [filtered, setFiltered] = useState<UnifiedActivity[]>([]);
@@ -258,6 +258,7 @@ export default function ActivityHistoryPage() {
             coachId={user.id}
             selectedAthleteId={selectedAthleteId}
             onSelectAthlete={setSelectedAthleteId}
+            onSyncComplete={loadActivities}
           />
         </div>
       )}
