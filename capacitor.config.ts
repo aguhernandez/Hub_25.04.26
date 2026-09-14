@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'Asciende',
   webDir: 'dist',
   server: {
-    androidScheme: 'https',
+    androidScheme: 'capacitor',
     iosScheme: 'capacitor',
     allowNavigation: ['*'],
   },

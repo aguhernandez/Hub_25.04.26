@@ -74,6 +74,14 @@
                 <data android:scheme="pro.asciende.app" android:host="login-callback" />
             </intent-filter>
 
+            <!-- Intercept capacitor:// redirects from OAuth providers (Strava) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="capacitor" android:host="localhost" />
+            </intent-filter>
+
             <!-- HTTPS deep link for Supabase OAuth redirect -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
