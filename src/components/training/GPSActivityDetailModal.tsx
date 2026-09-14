@@ -60,7 +60,7 @@ export default function GPSActivityDetailModal({
   const elevationGain = raw.elevation_gain_meters ?? raw.elevation_gain_m ?? 0;
   const date = raw.local_date || (raw.start_time ? String(raw.start_time).substring(0, 10) : '');
   const notes = raw.user_notes || activityData?.description || '';
-  const internalActivityId = raw.raw_data?.activity_id ?? null;
+  const internalActivityId = activityData?.raw_data?.activity_id ?? raw.activity_id ?? null;
 
   useEffect(() => {
     if (!internalActivityId) return;

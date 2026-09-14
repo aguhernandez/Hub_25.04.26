@@ -536,8 +536,15 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
           .select('latitude, longitude, altitude_m, sequence_order')
           .eq('activity_id', activity.raw_data.activity_id)
           .order('sequence_order');
-        if (gpsData) {
+        if (gpsData && gpsData.length >= 2) {
           setGpsPoints(gpsData.map((p: any) => ({ latitude: p.latitude, longitude: p.longitude, altitude: p.altitude_m })));
+        } else if (activity.map_polyline) {
+          try {
+            const decoded = decodePolyline(activity.map_polyline);
+            if (decoded.length >= 2) setGpsPoints(decoded);
+          } catch (e) {
+            console.error('[ActivityDetailModal] Failed to decode GPS polyline fallback', e);
+          }
         }
       }
 

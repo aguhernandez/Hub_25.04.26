@@ -27,3 +27,6 @@ verify_jwt = true
 
 [functions.strava-oauth-callback]
 verify_jwt = true
+
+[functions.save-activity]
+verify_jwt = true

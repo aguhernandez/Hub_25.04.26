@@ -199,6 +199,51 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── 4. Insert external_activities entry for unified view ───────────────────
+    // Encode a simplified polyline so the map has a fallback route even if
+    // the client can't load individual GPS points (e.g. RLS restrictions).
+    const polylinePoints = data.gpsPoints;
+    const step = Math.max(1, Math.floor(polylinePoints.length / 500));
+    const simplified: Array<[number, number]> = [];
+    for (let i = 0; i < polylinePoints.length; i += step) {
+      simplified.push([
+        Math.round(polylinePoints[i].latitude * 1e5),
+        Math.round(polylinePoints[i].longitude * 1e5),
+      ]);
+    }
+    if (polylinePoints.length > 0) {
+      const lastIdx = (polylinePoints.length - 1) - ((polylinePoints.length - 1) % step);
+      const last = [Math.round(polylinePoints[lastIdx].latitude * 1e5), Math.round(polylinePoints[lastIdx].longitude * 1e5)];
+      if (simplified.length === 0 || simplified[simplified.length - 1][0] !== last[0] || simplified[simplified.length - 1][1] !== last[1]) {
+        simplified.push(last);
+      }
+    }
+    let encodedPolyline = "";
+    {
+      let prevLat = 0;
+      let prevLng = 0;
+      for (const [latE5, lngE5] of simplified) {
+        const dLat = latE5 - prevLat;
+        const dLng = lngE5 - prevLng;
+        const encodeNum = (num: number): string => {
+          let n = num << 1;
+          if (n < 0) n = ~n;
+          let s = "";
+          do {
+            let chunk = n & 0x1f;
+            n >>= 5;
+            if (n > 0) chunk |= 0x20;
+            s += String.fromCharCode(chunk + 63);
+          } while (n > 0);
+          return s;
+        };
+        encodedPolyline += encodeNum(dLat) + encodeNum(dLng);
+        prevLat = latE5;
+        prevLng = lngE5;
+      }
+    }
+    const firstPoint = data.gpsPoints[0];
+    const lastPoint = data.gpsPoints[data.gpsPoints.length - 1];
+
     const extResult = await restPost(supabaseUrl, supabaseServiceRoleKey, "external_activities", {
       user_id: userId,
       source: "asciende_gps",
@@ -212,6 +257,9 @@ Deno.serve(async (req: Request) => {
       elevation_gain_meters: data.elevationGainM,
       device_name: "Asciende GPS",
       user_notes: data.notes || null,
+      map_polyline: encodedPolyline,
+      start_latlng: [firstPoint.latitude, firstPoint.longitude],
+      end_latlng: [lastPoint.latitude, lastPoint.longitude],
       raw_data: {
         activity_id: activityId,
         gps_points_count: data.gpsPoints.length,
