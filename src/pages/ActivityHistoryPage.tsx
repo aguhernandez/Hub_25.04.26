@@ -6,8 +6,10 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useUserRole } from '../hooks/useUserRole';
 import { StravaClient } from '../utils/stravaClient';
 import { ActivityDetailModal } from '../components/training/ActivityDetailModal';
+import { CoachAthleteSelector } from '../components/training/CoachActivityHistory';
 
 interface UnifiedActivity {
   id: string;
@@ -102,6 +104,9 @@ function sportIcon(sport: string): string {
 export default function ActivityHistoryPage() {
   const { user } = useAuth();
   const { t, language } = useLanguage();
+  const { role } = useUserRole();
+  const isCoach = role === 'trainer' || role === 'head_coach';
+  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null);
   const [activities, setActivities] = useState<UnifiedActivity[]>([]);
   const [filtered, setFiltered] = useState<UnifiedActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,14 +116,23 @@ export default function ActivityHistoryPage() {
   const [selectedActivity, setSelectedActivity] = useState<UnifiedActivity | null>(null);
   const [syncMsg, setSyncMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const targetUserId = isCoach ? selectedAthleteId : user?.id;
+
   const loadActivities = useCallback(async () => {
     if (!user) return;
+    if (isCoach && !selectedAthleteId) {
+      setActivities([]);
+      setFiltered([]);
+      setLoading(false);
+      return;
+    }
+    const queryUserId = isCoach ? selectedAthleteId : user.id;
     setLoading(true);
     try {
       const { data: external, error: extError } = await supabase
         .from('external_activities')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', queryUserId)
         .is('deleted_at', null)
         .order('start_time', { ascending: false })
         .limit(200);
@@ -172,7 +186,7 @@ export default function ActivityHistoryPage() {
 
   useEffect(() => {
     loadActivities();
-  }, [loadActivities]);
+  }, [loadActivities, selectedAthleteId]);
 
   useEffect(() => {
     let result = [...activities];
@@ -190,6 +204,7 @@ export default function ActivityHistoryPage() {
   }, [activities, selectedSport, dateRange]);
 
   const handleSync = async () => {
+    if (isCoach) return;
     setSyncing(true);
     setSyncMsg(null);
     const result = await StravaClient.syncActivities({ perPage: 100 });
@@ -216,21 +231,38 @@ export default function ActivityHistoryPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
-            {language === 'es' ? 'Historial de Actividad' : 'Activity History'}
+            {isCoach
+              ? (language === 'es' ? 'Actividades de Atletas' : 'Athlete Activities')
+              : (language === 'es' ? 'Historial de Actividad' : 'Activity History')}
           </h1>
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
-            {language === 'es' ? 'Todas tus actividades en un solo lugar' : 'All your activities in one place'}
+            {isCoach
+              ? (language === 'es' ? 'Revisa las actividades de tus atletas' : 'Review your athletes\' activities')
+              : (language === 'es' ? 'Todas tus actividades en un solo lugar' : 'All your activities in one place')}
           </p>
         </div>
-        <button
-          onClick={handleSync}
-          disabled={syncing}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-sm font-medium text-neutral-600 dark:text-neutral-300 transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
-          {syncing ? (language === 'es' ? 'Sincronizando...' : 'Syncing...') : (language === 'es' ? 'Forzar sync' : 'Force sync')}
-        </button>
+        {!isCoach && (
+          <button
+            onClick={handleSync}
+            disabled={syncing}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-sm font-medium text-neutral-600 dark:text-neutral-300 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? (language === 'es' ? 'Sincronizando...' : 'Syncing...') : (language === 'es' ? 'Forzar sync' : 'Force sync')}
+          </button>
+        )}
       </div>
+
+      {/* Coach athlete selector */}
+      {isCoach && user && (
+        <div className="mb-6">
+          <CoachAthleteSelector
+            coachId={user.id}
+            selectedAthleteId={selectedAthleteId}
+            onSelectAthlete={setSelectedAthleteId}
+          />
+        </div>
+      )}
 
       {/* Sync message */}
       {syncMsg && (
@@ -317,7 +349,14 @@ export default function ActivityHistoryPage() {
       </div>
 
       {/* Activity list */}
-      {loading ? (
+      {isCoach && !selectedAthleteId ? (
+        <div className="text-center py-16">
+          <ActivityIcon className="w-12 h-12 text-neutral-300 dark:text-neutral-600 mx-auto mb-3" />
+          <p className="text-neutral-600 dark:text-neutral-400 mb-1">
+            {language === 'es' ? 'Selecciona un atleta para ver sus actividades' : 'Select an athlete to view their activities'}
+          </p>
+        </div>
+      ) : loading ? (
         <div className="flex items-center justify-center py-16">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
         </div>
