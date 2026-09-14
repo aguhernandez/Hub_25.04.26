@@ -208,30 +208,7 @@ Deno.serve(async (req: Request) => {
       distanceStream.push(Math.round(cumDistance));
     }
 
-    const streamResult = await restPost(supabaseUrl, supabaseServiceRoleKey, "activity_streams", {
-      activity_id: activityId,
-      user_id: userId,
-      time_stream: timeStream,
-      altitude_stream: altitudeStream,
-      distance_stream: distanceStream,
-      latlng_stream: latlngStream,
-      velocity_smooth_stream: velocityStream,
-      heartrate_stream: null,
-      watts_stream: null,
-      cadence_stream: null,
-      grade_smooth_stream: null,
-      moving_stream: null,
-      stream_keys: ["time", "altitude", "distance", "latlng", "velocity_smooth"],
-      missing_heartrate: true,
-      missing_power: true,
-      missing_gps: false,
-      resolution: "high",
-      series_type: "time",
-      fetched_at: new Date().toISOString(),
-    });
-    if (!streamResult.ok) {
-      console.error("Stream insert error (non-fatal):", streamResult.text);
-    }
+    // Stream insert moved after external_activities insert (see section 4b below)
 
     // ── 3. Insert feedback record if provided ──────────────────────────────────
     if (data.feedback) {
@@ -327,6 +304,40 @@ Deno.serve(async (req: Request) => {
 
     if (!extResult.ok) {
       console.error("External activity insert error (non-fatal):", extResult.text);
+    }
+
+    // ── 4b. Insert stream data using external_activities.id ──────────────────────
+    // activity_streams.activity_id FK references external_activities.id
+    let extActivityId: string | null = null;
+    if (extResult.ok) {
+      const [extRow] = extResult.json as Array<{ id: string }>;
+      extActivityId = extRow?.id ?? null;
+    }
+    if (extActivityId) {
+      const streamResult = await restPost(supabaseUrl, supabaseServiceRoleKey, "activity_streams", {
+        activity_id: extActivityId,
+        user_id: userId,
+        time_stream: timeStream,
+        altitude_stream: altitudeStream,
+        distance_stream: distanceStream,
+        latlng_stream: latlngStream,
+        velocity_smooth_stream: velocityStream,
+        heartrate_stream: null,
+        watts_stream: null,
+        cadence_stream: null,
+        grade_smooth_stream: null,
+        moving_stream: null,
+        stream_keys: ["time", "altitude", "distance", "latlng", "velocity_smooth"],
+        missing_heartrate: true,
+        missing_power: true,
+        missing_gps: false,
+        resolution: "high",
+        series_type: "time",
+        fetched_at: new Date().toISOString(),
+      });
+      if (!streamResult.ok) {
+        console.error("Stream insert error (non-fatal):", streamResult.text);
+      }
     }
 
     // ── 5. Mark planned workout as completed ───────────────────────────────────

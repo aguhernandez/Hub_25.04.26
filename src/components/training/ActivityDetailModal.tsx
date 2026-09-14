@@ -295,6 +295,53 @@ function PaceChart({
   );
 }
 
+function buildGpsSplits(streams: ActivityStream | null, isRun: boolean): any[] | null {
+  if (!streams?.time_stream || !streams.distance_stream || streams.time_stream.length < 3 || streams.distance_stream.length < 3) return null;
+
+  const time = streams.time_stream;
+  const distance = streams.distance_stream;
+  const altitude = streams.altitude_stream;
+  const totalDistance = distance[distance.length - 1];
+  if (!Number.isFinite(totalDistance) || totalDistance < 1000) return null;
+
+  const splits: any[] = [];
+  let previousIndex = 0;
+  let targetDistance = 1000;
+  while (targetDistance <= totalDistance + 1) {
+    let index = previousIndex;
+    while (index < distance.length - 1 && distance[index] < targetDistance) index += 1;
+    const segmentDistance = Math.max(0, distance[index] - distance[previousIndex]);
+    const segmentTime = Math.max(0, time[index] - time[previousIndex]);
+    const elevationDifference = altitude && altitude[index] != null && altitude[previousIndex] != null
+      ? altitude[index] - altitude[previousIndex]
+      : 0;
+    if (segmentDistance > 0 && segmentTime > 0) {
+      splits.push({
+        distance: segmentDistance,
+        moving_time: segmentTime,
+        elapsed_time: segmentTime,
+        elevation_difference: elevationDifference,
+      });
+    }
+    previousIndex = index;
+    targetDistance += 1000;
+  }
+
+  const lastIndex = distance.length - 1;
+  if (previousIndex < lastIndex && distance[lastIndex] > distance[previousIndex]) {
+    splits.push({
+      distance: distance[lastIndex] - distance[previousIndex],
+      moving_time: Math.max(0, time[lastIndex] - time[previousIndex]),
+      elapsed_time: Math.max(0, time[lastIndex] - time[previousIndex]),
+      elevation_difference: altitude && altitude[lastIndex] != null && altitude[previousIndex] != null
+        ? altitude[lastIndex] - altitude[previousIndex]
+        : 0,
+    });
+  }
+
+  return splits.length >= 2 ? splits : null;
+}
+
 function ZoneBar({ timeInZones }: { timeInZones: Record<string, number> | null }) {
   if (!timeInZones) return null;
   const zones = [1, 2, 3, 4, 5, 6, 7].map((z) => timeInZones[`zone_${z}_seconds`] || 0);
@@ -459,20 +506,14 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
 
     const loadAll = async () => {
       // Load streams for both Strava and asciende_gps activities
-      const streamActivityId = activity.source === 'asciende_gps'
-        ? activity.raw_data?.activity_id
-        : activity.id;
+      const { data: streamData } = await supabase
+        .from('activity_streams')
+        .select('*')
+        .eq('activity_id', activity.id)
+        .maybeSingle();
 
-      if (streamActivityId) {
-        const { data: streamData } = await supabase
-          .from('activity_streams')
-          .select('*')
-          .eq('activity_id', streamActivityId)
-          .maybeSingle();
-
-        if (streamData) {
-          setStreams(streamData as ActivityStream);
-        }
+      if (streamData) {
+        setStreams(streamData as ActivityStream);
       }
 
       // Load GPS points for map
@@ -494,17 +535,14 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
         }
       } else if (activity.source !== 'asciende_gps') {
         // Strava or other sources: use streams latlng or decode polyline
-        if (streams) {
-          const streamGpsPoints = Array.isArray(streams.latlng_stream)
-            ? streams.latlng_stream
-              .filter((p: any) => Array.isArray(p) && p.length === 2)
-              .map((p: number[]) => ({ latitude: p[0], longitude: p[1] }))
-            : [];
-          if (streamGpsPoints.length >= 2) {
-            setGpsPoints(streamGpsPoints);
-          }
-        }
-        if (gpsPoints.length < 2) {
+        const streamGpsPoints = Array.isArray(streamData?.latlng_stream)
+          ? streamData.latlng_stream
+            .filter((p: any) => Array.isArray(p) && p.length === 2)
+            .map((p: number[]) => ({ latitude: p[0], longitude: p[1] }))
+          : [];
+        if (streamGpsPoints.length >= 2) {
+          setGpsPoints(streamGpsPoints);
+        } else {
           const encodedPolyline = activity.map_polyline || activity.map_summary_polyline;
           if (encodedPolyline) {
             try {
@@ -518,7 +556,7 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
       }
 
       // Fused activity GPS points (if still no points)
-      if (gpsPoints.length < 2 && activity.fused_activity_id) {
+      if (activity.source !== 'asciende_gps' && activity.fused_activity_id) {
         const { data: fusedActivity } = await supabase
           .from('external_activities')
           .select('id, raw_data')
@@ -546,10 +584,10 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
   if (!activity) return null;
 
   const hasMap = gpsPoints.length >= 2;
-  const hasElevation = streams?.altitude_stream && streams.altitude_stream.length > 1;
+  const hasElevation = streams?.altitude_stream && streams.altitude_stream.length > 1 && streams.distance_stream && streams.distance_stream.length > 1;
   const hasHr = streams?.heartrate_stream && streams.heartrate_stream.length > 1;
   const hasPower = streams?.watts_stream && streams.watts_stream.length > 1;
-  const hasPace = streams?.time_stream && streams?.distance_stream && streams.time_stream.length > 3;
+  const hasPace = streams?.time_stream && streams?.distance_stream && streams.time_stream.length > 3 && streams.distance_stream.length > 3;
   const missingData = !hasElevation && !hasMap && activity.source === 'strava';
   const avgSpeed = activity.average_speed_mps > 0
     ? activity.average_speed_mps
@@ -574,8 +612,8 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
   };
   const isRun = isRunLike(activity.sport_type);
   const startDate = new Date(activity.start_time);
-  const splits = activity.splits_metric || activity.splits_standard || null;
-  const isMetric = !!activity.splits_metric;
+  const splits = activity.splits_metric || activity.splits_standard || buildGpsSplits(streams, isRun);
+  const isMetric = true;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
