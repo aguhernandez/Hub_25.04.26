@@ -116,8 +116,6 @@ export default function ActivityHistoryPage() {
   const [selectedActivity, setSelectedActivity] = useState<UnifiedActivity | null>(null);
   const [syncMsg, setSyncMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const targetUserId = isCoach ? selectedAthleteId : user?.id;
-
   const loadActivities = useCallback(async () => {
     if (!user) return;
     if (isCoach && !selectedAthleteId) {
@@ -182,11 +180,11 @@ export default function ActivityHistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, isCoach, selectedAthleteId]);
 
   useEffect(() => {
     loadActivities();
-  }, [loadActivities, selectedAthleteId]);
+  }, [loadActivities]);
 
   useEffect(() => {
     let result = [...activities];
