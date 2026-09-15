@@ -108,7 +108,7 @@ Deno.serve(async (req: Request) => {
           .eq("id", userId)
           .maybeSingle();
 
-        if (!pusherProfile || !["trainer", "admin"].includes(pusherProfile.role)) {
+        if (!pusherProfile || !["trainer", "head_coach", "admin"].includes(pusherProfile.role)) {
           return new Response(JSON.stringify({ error: "Only trainers and admins can push nutrition plans" }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
