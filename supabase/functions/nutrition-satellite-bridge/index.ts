@@ -520,7 +520,7 @@ Deno.serve(async (req: Request) => {
           map_polyline, map_summary_polyline,
           start_latlng, end_latlng,
           trainer, timezone, device_name, streams_fetched,
-          splits_data, pace_data
+          splits_metric, splits_standard
         `)
         .eq("user_id", athleteId)
         .gte("local_date", df)
@@ -562,8 +562,8 @@ Deno.serve(async (req: Request) => {
         timezone: a.timezone,
         device_name: a.device_name,
         streams_available: a.streams_fetched === true,
-        splits: a.splits_data || null,
-        pace_data: a.pace_data || null,
+        splits: a.splits_metric || a.splits_standard || null,
+        pace_data: null,
       }));
 
       const totalDistance = enriched.reduce((s: number, a: any) => s + (a.distance_meters || 0), 0);
