@@ -266,7 +266,7 @@ Deno.serve(async (req: Request) => {
         .select(`
           id, athlete_id, athlete_workout_id, logged_at, max_heart_rate, max_power_watts,
           normalized_power_watts, if_value, elevation_gain_m, avg_cadence, avg_speed_kmh,
-          calories, external_source, external_activity_id, notes, rpe, bar_speed
+          calories, external_source, external_activity_id, notes, bar_speed
         `)
         .eq("athlete_id", athleteId)
         .gte("logged_at", df)
@@ -328,7 +328,7 @@ Deno.serve(async (req: Request) => {
             actual_calories: matchingLog.calories,
             actual_tss: null,
             actual_impulse: null,
-            rpe: matchingLog.rpe || aw.rpe,
+            rpe: aw.rpe || null,
             compliance_percent: null,
             athlete_notes: matchingLog.notes || aw.notes,
             athlete_feedback: aw.feedback_notes,
@@ -539,7 +539,7 @@ Deno.serve(async (req: Request) => {
         .select(`
           id, athlete_id, athlete_workout_id, logged_at, max_heart_rate, max_power_watts,
           normalized_power_watts, if_value, elevation_gain_m, avg_cadence, avg_speed_kmh,
-          calories, external_source, external_activity_id, notes, rpe, bar_speed,
+          calories, external_source, external_activity_id, notes, bar_speed,
           set_number, reps_completed, weight_used, rir
         `)
         .eq("athlete_id", athleteId)
@@ -608,7 +608,7 @@ Deno.serve(async (req: Request) => {
           avg_power_watts: l.normalized_power_watts || extAct?.average_power || extAct?.average_watts || null,
           max_power_watts: l.max_power_watts || extAct?.max_watts || null,
           tss: null,
-          rpe: l.rpe || null,
+          rpe: null,
           workout_type: extAct?.sport_type || (workout?.difficulty) || "training",
           notes: l.notes || null,
           session_impulse: null,
@@ -681,7 +681,7 @@ Deno.serve(async (req: Request) => {
           .from("athlete_workouts")
           .select(`
             id, scheduled_date, status, external_title, raw_description,
-            rpe, energy_level, pain_level, mood, feedback_notes,
+            energy_level, pain_level, mood, feedback_notes,
             workouts (id, name, description, duration_minutes)
           `)
           .eq("id", log.athlete_workout_id)
@@ -700,7 +700,7 @@ Deno.serve(async (req: Request) => {
         avg_power_watts: log.normalized_power_watts || extAct?.average_power || extAct?.average_watts || null,
         max_power_watts: log.max_power_watts || extAct?.max_watts || null,
         tss: null,
-        rpe: log.rpe || aw?.rpe || null,
+        rpe: aw?.rpe || null,
         workout_type: extAct?.sport_type || workout?.difficulty || "training",
         notes: log.notes || null,
         session_impulse: null,
@@ -879,7 +879,6 @@ Deno.serve(async (req: Request) => {
           external_source: external_source || "endurance_satellite",
           external_activity_id: external_activity_id || null,
           notes: notes || athlete_notes || null,
-          rpe: rpe || null,
         })
         .select("id")
         .single();
