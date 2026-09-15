@@ -500,7 +500,94 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    return new Response(JSON.stringify({ error: "Unknown endpoint. Use: push-nutrition-plan, active-plan, training-load, athlete-profile, scheduled-workouts, nutrition-summary, biological-passport, anamnesis, food-diary" }), {
+    // GET /nutrition-satellite-bridge/activities
+    // Returns GPS/Strava activities (external_activities) for the athlete
+    if (endpoint === "activities") {
+      const df = dateFrom || new Date(Date.now() - 30 * 86400000).toISOString().split("T")[0];
+      const dt = dateTo || new Date().toISOString().split("T")[0];
+      const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 200);
+
+      const { data: activities, error: actError } = await serviceSupabase
+        .from("external_activities")
+        .select(`
+          id, source, external_id, sport_type, name,
+          local_date, start_time, duration_seconds, elapsed_time_seconds,
+          distance_meters, elevation_gain_meters,
+          average_speed_mps, max_speed_mps,
+          average_heartrate, max_heartrate, has_heartrate,
+          average_power, average_watts, weighted_avg_watts, max_watts,
+          average_cadence, calories, kilojoules,
+          map_polyline, map_summary_polyline,
+          start_latlng, end_latlng,
+          trainer, timezone, device_name, streams_fetched,
+          splits_data, pace_data
+        `)
+        .eq("user_id", athleteId)
+        .gte("local_date", df)
+        .lte("local_date", dt)
+        .is("deleted_at", null)
+        .order("start_time", { ascending: false })
+        .limit(limit);
+
+      if (actError) throw actError;
+
+      const enriched = (activities || []).map((a: any) => ({
+        id: a.id,
+        source: a.source,
+        external_id: a.external_id,
+        sport_type: a.sport_type,
+        name: a.name,
+        local_date: a.local_date,
+        start_time: a.start_time,
+        duration_seconds: a.duration_seconds,
+        elapsed_time_seconds: a.elapsed_time_seconds,
+        distance_meters: a.distance_meters,
+        elevation_gain_meters: a.elevation_gain_meters,
+        average_speed_mps: a.average_speed_mps,
+        max_speed_mps: a.max_speed_mps,
+        average_heartrate: a.average_heartrate,
+        max_heartrate: a.max_heartrate,
+        has_heartrate: a.has_heartrate,
+        average_power: a.average_power ?? a.average_watts,
+        weighted_avg_power: a.weighted_avg_watts,
+        max_power: a.max_watts,
+        average_cadence: a.average_cadence,
+        calories: a.calories,
+        kilojoules: a.kilojoules,
+        map_polyline: a.map_polyline || null,
+        map_summary_polyline: a.map_summary_polyline || null,
+        start_latlng: a.start_latlng || null,
+        end_latlng: a.end_latlng || null,
+        trainer: a.trainer,
+        timezone: a.timezone,
+        device_name: a.device_name,
+        streams_available: a.streams_fetched === true,
+        splits: a.splits_data || null,
+        pace_data: a.pace_data || null,
+      }));
+
+      const totalDistance = enriched.reduce((s: number, a: any) => s + (a.distance_meters || 0), 0);
+      const totalDuration = enriched.reduce((s: number, a: any) => s + (a.duration_seconds || 0), 0);
+
+      return new Response(JSON.stringify({
+        athlete_id: athleteId,
+        date_from: df,
+        date_to: dt,
+        activities: enriched,
+        summary: {
+          count: enriched.length,
+          total_distance_meters: totalDistance,
+          total_duration_seconds: totalDuration,
+          with_map: enriched.filter((a: any) => a.map_polyline).length,
+          with_heartrate: enriched.filter((a: any) => a.has_heartrate).length,
+          sources: [...new Set(enriched.map((a: any) => a.source))],
+        },
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ error: "Unknown endpoint. Use: push-nutrition-plan, active-plan, training-load, athlete-profile, scheduled-workouts, nutrition-summary, biological-passport, anamnesis, food-diary, activities" }), {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -30,3 +30,6 @@ verify_jwt = false
 
 [functions.save-activity]
 verify_jwt = true
+
+[functions.nutrition-satellite-bridge]
+verify_jwt = false
