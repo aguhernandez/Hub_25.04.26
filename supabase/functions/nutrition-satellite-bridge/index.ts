@@ -17,22 +17,40 @@ async function hashToken(token: string): Promise<string> {
 }
 
 async function validatePlannerToken(token: string, serviceSupabase: any): Promise<{ id: string; planner_type: string; planner_name: string } | null> {
-  const tokenHash = await hashToken(token);
-  const { data } = await serviceSupabase
+  // Try hash-based lookup first (most secure)
+  const tokenHash = await hashToken(token.trim());
+  const { data: hashedData } = await serviceSupabase
     .from("external_planner_tokens")
     .select("id, planner_type, planner_name")
     .eq("token_hash", tokenHash)
     .eq("is_active", true)
     .maybeSingle();
 
-  if (data) {
+  if (hashedData) {
     await serviceSupabase
       .from("external_planner_tokens")
       .update({ last_used_at: new Date().toISOString() })
-      .eq("id", data.id);
+      .eq("id", hashedData.id);
+    return hashedData;
   }
 
-  return data;
+  // Fallback: try raw token lookup (for planners that store the token as-is)
+  const { data: rawData } = await serviceSupabase
+    .from("external_planner_tokens")
+    .select("id, planner_type, planner_name")
+    .eq("token_raw", token.trim())
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (rawData) {
+    await serviceSupabase
+      .from("external_planner_tokens")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", rawData.id);
+    return rawData;
+  }
+
+  return null;
 }
 
 Deno.serve(async (req: Request) => {
