@@ -33,3 +33,6 @@ verify_jwt = true
 
 [functions.nutrition-satellite-bridge]
 verify_jwt = false
+
+[functions.endurance-satellite-bridge]
+verify_jwt = false
