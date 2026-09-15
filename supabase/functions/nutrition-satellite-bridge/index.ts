@@ -83,8 +83,18 @@ Deno.serve(async (req: Request) => {
 
     const url = new URL(req.url);
     const endpoint = url.pathname.split("/").pop();
-    const athleteId = url.searchParams.get("athlete_id") || userId || "";
+    let athleteId = url.searchParams.get("athlete_id") || userId || "";
     const athleteEmail = url.searchParams.get("athlete_email");
+
+    // Resolve email to UUID early so all endpoints can use athleteId
+    if (athleteEmail && !url.searchParams.get("athlete_id") && !userId) {
+      const { data: athleteByEmail } = await serviceSupabase
+        .from("profiles")
+        .select("id")
+        .ilike("email", athleteEmail.trim())
+        .maybeSingle();
+      if (athleteByEmail) athleteId = athleteByEmail.id;
+    }
     const dateFrom = url.searchParams.get("date_from");
     const dateTo = url.searchParams.get("date_to");
 
@@ -125,7 +135,7 @@ Deno.serve(async (req: Request) => {
         const { data: athleteByEmail } = await serviceSupabase
           .from("profiles")
           .select("id")
-          .eq("email", athleteEmail)
+          .ilike("email", athleteEmail.trim())
           .maybeSingle();
 
         if (!athleteByEmail) {
@@ -226,10 +236,12 @@ Deno.serve(async (req: Request) => {
           email,
           role,
           sport,
-          weight_kg,
-          height_cm,
-          birth_date,
-          gender
+          date_of_birth,
+          gender,
+          age,
+          current_level,
+          years_of_experience,
+          secondary_sport
         `)
         .eq("id", athleteId)
         .maybeSingle();
@@ -245,7 +257,12 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       return new Response(JSON.stringify({
-        profile,
+        profile: profile ? {
+          ...profile,
+          birth_date: profile.date_of_birth,
+          weight_kg: null,
+          height_cm: null,
+        } : null,
         body_composition: bioimpedance ? {
           weight_kg: bioimpedance.weight,
           height_cm: bioimpedance.height,
