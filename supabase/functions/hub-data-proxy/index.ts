@@ -184,6 +184,74 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ success: true, id: inserted.id });
     }
 
+    // ── Route: push-nutrition-plan ───────────────────────────────────────
+    if (endpoint === "push-nutrition-plan" && req.method === "POST") {
+      const athleteEmail = url.searchParams.get("athlete_email");
+      const athleteIdParam = url.searchParams.get("athlete_id");
+      let athleteId: string | null = athleteIdParam || null;
+
+      if (!athleteId && athleteEmail) {
+        const { data: profileRow } = await supabase
+          .from("profiles")
+          .select("id")
+          .ilike("email", athleteEmail.trim())
+          .maybeSingle();
+        if (profileRow) athleteId = profileRow.id;
+      }
+
+      if (!athleteId) {
+        return errorResponse(
+          "ATHLETE_NOT_FOUND",
+          "No athlete found for the provided email.",
+          404,
+        );
+      }
+
+      const body = await req.json().catch(() => null);
+      if (!body) {
+        return errorResponse("INVALID_BODY", "Request body must be valid JSON.", 400);
+      }
+
+      const { plan_date, plan_name, plan_duration_days, summary, plan_data, notes } = body;
+
+      if (!plan_date || !summary || !plan_data) {
+        return errorResponse(
+          "MISSING_FIELDS",
+          "Missing required fields: plan_date, summary, plan_data",
+          400,
+        );
+      }
+
+      await supabase
+        .from("nutrition_pushed_plans")
+        .update({ status: "superseded" })
+        .eq("athlete_id", athleteId)
+        .eq("status", "active");
+
+      const { data: newPlan, error: insertError } = await supabase
+        .from("nutrition_pushed_plans")
+        .insert({
+          athlete_id: athleteId,
+          pushed_by: null,
+          plan_date,
+          plan_name: plan_name || "Plan Nutricional",
+          plan_duration_days: plan_duration_days || 7,
+          status: "active",
+          summary,
+          plan_data,
+          notes: notes || null,
+        })
+        .select("id")
+        .single();
+
+      if (insertError) {
+        console.error("Insert error:", insertError);
+        return errorResponse("INSERT_FAILED", insertError.message, 500);
+      }
+
+      return jsonResponse({ success: true, id: newPlan.id });
+    }
+
     // ── Unknown endpoint ───────────────────────────────────────────────────
     return errorResponse("NOT_FOUND", `Unknown endpoint: ${endpoint}`, 404);
   } catch (err) {
