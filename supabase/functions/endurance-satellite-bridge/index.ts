@@ -841,7 +841,6 @@ Deno.serve(async (req: Request) => {
           week_start_date,
           plan_data,
           planner_source: planner_source || "endurance_satellite",
-          pushed_by: userId || plannerInfo?.id || null,
         }, { onConflict: "athlete_id,week_start_date,planner_source" })
         .select("id")
         .single();
@@ -941,7 +940,6 @@ Deno.serve(async (req: Request) => {
           scheduled_date,
           workout_data,
           external_id: external_id || null,
-          pushed_by: userId || plannerInfo?.id || null,
         }, { onConflict: "athlete_id,scheduled_date,external_id" })
         .select("id")
         .single();
@@ -968,7 +966,6 @@ Deno.serve(async (req: Request) => {
         scheduled_date: w.scheduled_date,
         workout_data: w.workout_data,
         external_id: w.external_id || null,
-        pushed_by: userId || plannerInfo?.id || null,
       }));
       const { data, error } = await serviceSupabase
         .from("external_endurance_workouts")
