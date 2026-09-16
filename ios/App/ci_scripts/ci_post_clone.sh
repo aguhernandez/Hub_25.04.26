@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env bash
 set -e
 echo "=== Installing Homebrew dependencies ==="
 brew install node cocoapods
