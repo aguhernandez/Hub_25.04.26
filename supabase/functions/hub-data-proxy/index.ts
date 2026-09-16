@@ -40,24 +40,15 @@ Deno.serve(async (req: Request) => {
 
     // ── Route: push-race-plan ──────────────────────────────────────────────
     if (endpoint === "push-race-plan" && req.method === "POST") {
-      // Resolve athlete from token or email query param
       const athleteEmail = url.searchParams.get("athlete_email");
-      let athleteId: string | null = null;
-
-      if (plannerToken) {
-        const { data: tokenRow } = await supabase
-          .from("external_planner_tokens")
-          .select("athlete_id")
-          .eq("token", plannerToken)
-          .maybeSingle();
-        if (tokenRow) athleteId = tokenRow.athlete_id;
-      }
+      const athleteIdParam = url.searchParams.get("athlete_id");
+      let athleteId: string | null = athleteIdParam || null;
 
       if (!athleteId && athleteEmail) {
         const { data: profileRow } = await supabase
           .from("profiles")
           .select("id")
-          .eq("email", athleteEmail)
+          .ilike("email", athleteEmail.trim())
           .maybeSingle();
         if (profileRow) athleteId = profileRow.id;
       }
@@ -65,7 +56,7 @@ Deno.serve(async (req: Request) => {
       if (!athleteId) {
         return errorResponse(
           "ATHLETE_NOT_FOUND",
-          "No athlete found for the provided token or email.",
+          "No athlete found for the provided email.",
           404,
         );
       }
