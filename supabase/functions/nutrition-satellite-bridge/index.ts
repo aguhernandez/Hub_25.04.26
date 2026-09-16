@@ -159,7 +159,7 @@ Deno.serve(async (req: Request) => {
         .from("nutrition_pushed_plans")
         .insert({
           athlete_id: resolvedAthleteId,
-          pushed_by: userId || plannerInfo?.id || null,
+          pushed_by: userId || null,
           plan_date,
           plan_name: plan_name || "Plan Nutricional",
           plan_duration_days: plan_duration_days || 7,
