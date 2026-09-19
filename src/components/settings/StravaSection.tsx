@@ -184,12 +184,16 @@ export function StravaSection() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
-  const [connecting, setConnecting] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     loadConnection();
+
+    // Pre-fetch and cache the auth URL before the user clicks connect
+    StravaClient.prefetchAuthUrl().then(() => setAuthReady(true));
+
     let removeListener: (() => void) | null = null;
 
     // When the user returns to the app after the Strava browser flow,
@@ -208,17 +212,10 @@ export function StravaSection() {
     setLoading(false);
   };
 
-  const handleConnect = async () => {
-    try {
-      setConnecting(true);
-      await StravaClient.openAuthorizationPage();
-    } catch (error) {
-      setConnecting(false);
-      setMessage({
-        type: 'error',
-        text: error instanceof Error ? error.message : 'Failed to connect to Strava',
-      });
-    }
+  const handleConnect = () => {
+    if (!authReady) return;
+    // Synchronous — no await before Browser.open() so the user gesture is not broken
+    StravaClient.openAuthorizationPageSync();
   };
 
   const handleDisconnect = async () => {
@@ -322,19 +319,19 @@ export function StravaSection() {
           <div className="pt-2">
             <button
               onClick={handleConnect}
-              disabled={connecting}
+              disabled={!authReady}
               className="group w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-xl font-heading text-sm text-[#0C0D0F] transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
               style={{
-                background: connecting ? '#b89e27' : '#fdda36',
-                boxShadow: connecting ? 'none' : '0 0 24px rgba(253,218,54,0.35)',
+                background: !authReady ? '#b89e27' : '#fdda36',
+                boxShadow: !authReady ? 'none' : '0 0 24px rgba(253,218,54,0.35)',
               }}
             >
-              {connecting ? (
+              {!authReady ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
               ) : (
                 <Link2 className="w-4 h-4" />
               )}
-              {connecting ? t('strava.redirectingToStrava') : t('strava.connectButton')}
+              {!authReady ? t('strava.redirectingToStrava') : t('strava.connectButton')}
             </button>
             <p className="font-body text-xs text-[#514163]/70 mt-2.5">
               {t('strava.noPasswordShared')}

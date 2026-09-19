@@ -120,6 +120,7 @@ const STRAVA_SCOPES = 'read,profile:read_all,activity:read,activity:read_all';
 export class StravaClient {
   private static STRAVA_AUTH_URL = 'https://www.strava.com/oauth/authorize';
   private static REDIRECT_URI = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/strava-oauth-callback`;
+  private static cachedAuthUrl: string | null = null;
 
   private static async fetchClientId(): Promise<string> {
     const response = await fetch(
@@ -147,9 +148,23 @@ export class StravaClient {
     return `${this.STRAVA_AUTH_URL}?${params.toString()}`;
   }
 
-  static async openAuthorizationPage(scope: string = STRAVA_SCOPES): Promise<void> {
-    const authUrl = await this.getAuthorizationUrl(scope);
-    await Browser.open({ url: authUrl });
+  // Call this at component mount to pre-fetch the auth URL
+  static async prefetchAuthUrl(scope: string = STRAVA_SCOPES): Promise<void> {
+    try {
+      this.cachedAuthUrl = await this.getAuthorizationUrl(scope);
+    } catch {
+      this.cachedAuthUrl = null;
+    }
+  }
+
+  // Must be called synchronously inside a user gesture handler
+  static openAuthorizationPageSync(): void {
+    const url = this.cachedAuthUrl;
+    if (!url) {
+      console.error('[StravaClient] Auth URL not cached yet');
+      return;
+    }
+    Browser.open({ url });
   }
 
   static async checkConnectionOnResume(callback: () => void): Promise<() => void> {
