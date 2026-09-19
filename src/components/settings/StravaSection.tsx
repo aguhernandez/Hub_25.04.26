@@ -190,7 +190,15 @@ export function StravaSection() {
 
   useEffect(() => {
     loadConnection();
-    handleOAuthCallback();
+    let removeListener: (() => void) | null = null;
+
+    // When the user returns to the app after the Strava browser flow,
+    // re-check the connection status
+    StravaClient.checkConnectionOnResume(() => {
+      loadConnection();
+    }).then((remove) => { removeListener = remove; });
+
+    return () => { if (removeListener) removeListener(); };
   }, []);
 
   const loadConnection = async () => {
@@ -200,32 +208,10 @@ export function StravaSection() {
     setLoading(false);
   };
 
-  const handleOAuthCallback = async () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
-    const scope = urlParams.get('scope');
-    const stravaParam = urlParams.get('strava');
-
-    if (code && scope && stravaParam === 'callback') {
-      setLoading(true);
-      const result = await StravaClient.exchangeToken(code, scope);
-      if (result.success) {
-        setMessage({ type: 'success', text: t('strava.connectedSuccessfully') });
-        await loadConnection();
-        window.history.replaceState({}, '', '/settings');
-        setTimeout(() => handleSync(), 800);
-      } else {
-        setMessage({ type: 'error', text: result.error || 'Failed to connect to Strava' });
-      }
-      setLoading(false);
-    }
-  };
-
   const handleConnect = async () => {
     try {
       setConnecting(true);
-      const authUrl = await StravaClient.getAuthorizationUrl();
-      window.location.href = authUrl;
+      await StravaClient.openAuthorizationPage();
     } catch (error) {
       setConnecting(false);
       setMessage({

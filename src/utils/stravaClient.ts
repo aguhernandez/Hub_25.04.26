@@ -1,4 +1,6 @@
 import { supabase } from '../lib/supabase';
+import { Browser } from '../stubs/capacitor-browser';
+import { App } from '../stubs/capacitor-app';
 
 export interface StravaConnection {
   id: string;
@@ -117,7 +119,7 @@ const STRAVA_SCOPES = 'read,profile:read_all,activity:read,activity:read_all';
 
 export class StravaClient {
   private static STRAVA_AUTH_URL = 'https://www.strava.com/oauth/authorize';
-  private static REDIRECT_URI = `${window.location.origin}/settings?strava=callback`;
+  private static REDIRECT_URI = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/strava-oauth-callback`;
 
   private static async fetchClientId(): Promise<string> {
     const response = await fetch(
@@ -132,14 +134,31 @@ export class StravaClient {
 
   static async getAuthorizationUrl(scope: string = STRAVA_SCOPES): Promise<string> {
     const clientId = await this.fetchClientId();
+    const { data: { session } } = await supabase.auth.getSession();
+    const state = session?.user?.id || '';
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: this.REDIRECT_URI,
       response_type: 'code',
       scope,
       approval_prompt: 'auto',
+      state,
     });
     return `${this.STRAVA_AUTH_URL}?${params.toString()}`;
+  }
+
+  static async openAuthorizationPage(scope: string = STRAVA_SCOPES): Promise<void> {
+    const authUrl = await this.getAuthorizationUrl(scope);
+    await Browser.open({ url: authUrl });
+  }
+
+  static async checkConnectionOnResume(callback: () => void): Promise<() => void> {
+    const listenerHandle = await App.addListener('appStateChange', async (state: any) => {
+      if (state.isActive) {
+        callback();
+      }
+    });
+    return () => listenerHandle.remove();
   }
 
   static async exchangeToken(
