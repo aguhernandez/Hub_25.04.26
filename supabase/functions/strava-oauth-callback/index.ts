@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 // verify_jwt=false: GET must be public — Strava redirects here without auth headers
+// htmlResponse must return Content-Type: text/html so browsers render the page
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
