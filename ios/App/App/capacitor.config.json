@@ -3,7 +3,7 @@
 	"appName": "Asciende",
 	"webDir": "dist",
 	"server": {
-		"androidScheme": "https",
+		"androidScheme": "capacitor",
 		"iosScheme": "capacitor",
 		"allowNavigation": [
 			"*"
@@ -14,7 +14,8 @@
 		"contentInset": "automatic"
 	},
 	"android": {
-		"allowMixedContent": true
+		"allowMixedContent": true,
+		"useLegacyBridge": true
 	},
 	"plugins": {
 		"SplashScreen": {
@@ -27,13 +28,20 @@
 				"sound",
 				"alert"
 			]
+		},
+		"YoutubePlayer": {
+			"patchRefererHeader": true,
+			"refererHeader": "https://www.youtube.com"
 		}
 	},
 	"packageClassList": [
 		"AppPlugin",
 		"CAPBrowserPlugin",
 		"CAPCameraPlugin",
+		"FilesystemPlugin",
 		"GeolocationPlugin",
-		"PushNotificationsPlugin"
+		"PushNotificationsPlugin",
+		"BackgroundGeolocation",
+		"YoutubePlayerPlugin"
 	]
 }

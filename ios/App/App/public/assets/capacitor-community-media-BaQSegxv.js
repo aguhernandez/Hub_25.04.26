@@ -1,0 +1,1 @@
+const a={getAlbums:async()=>({albums:[]}),createAlbum:async s=>({identifier:"",id:""}),savePhoto:async s=>{},saveVideo:async s=>{},saveGif:async s=>{},getMedias:async s=>({medias:[]})};export{a as Media};
