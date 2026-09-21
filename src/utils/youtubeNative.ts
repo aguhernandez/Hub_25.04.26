@@ -32,9 +32,13 @@ export function getYouTubeWatchUrl(url: string): string | null {
 
 // Returns true when running inside a Capacitor native app (iOS/Android)
 export function isNativePlatform(): boolean {
-  return typeof window !== 'undefined'
-    && !!(window as any).capacitor
-    && (window as any).capacitor.isNativePlatform?.() === true;
+  if (typeof window === 'undefined') return false;
+  // Capacitor sets window.Capacitor (capital C) on native platforms
+  const cap = (window as any).Capacitor;
+  if (!cap) return false;
+  if (typeof cap.isNativePlatform === 'function') return cap.isNativePlatform();
+  // Fallback: check platform string
+  return cap.getPlatform?.() === 'ios' || cap.getPlatform?.() === 'android';
 }
 
 // Opens the YouTube video in the system browser / Chrome Custom Tab / SFSafariViewController
