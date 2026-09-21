@@ -12,8 +12,7 @@ import StrengthEstimator from './StrengthEstimator';
 import WorkingMaxModal from './WorkingMaxModal';
 import BarVelocityTracker from './barvelocity/BarVelocityTracker';
 import CMJAssessment from './cmj/CMJAssessment';
-import { isNativePlatform } from '../../utils/youtubeNative';
-import NativeYouTubePlayer from './NativeYouTubePlayer';
+
 
 interface SetLine {
   id: string;
@@ -576,8 +575,8 @@ export default function WorkoutSessionScreen({
   const [videoModal, setVideoModal] = useState<{ url: string; name: string; description?: string } | null>(null);
 
   const getYouTubeEmbedUrl = (url: string) => {
-    const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?]+)/);
-    return videoId ? `https://www.youtube.com/embed/${videoId[1]}` : null;
+    const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?]+)/);
+    return videoId ? `https://www.youtube-nocookie.com/embed/${videoId[1]}?origin=https://hub.asciende.pro&enablejsapi=1` : null;
   };
 
   const sections = groupIntoSections(exercises);
@@ -977,7 +976,7 @@ export default function WorkoutSessionScreen({
 
             {(() => {
               const embedUrl = getYouTubeEmbedUrl(videoModal.url);
-              if (embedUrl && !isNativePlatform()) {
+              if (embedUrl) {
                 return (
                   <div className="aspect-video w-full shrink-0">
                     <iframe
@@ -985,18 +984,6 @@ export default function WorkoutSessionScreen({
                       className="w-full h-full"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowFullScreen
-                    />
-                  </div>
-                );
-              }
-              if (embedUrl && isNativePlatform()) {
-                return (
-                  <div className="aspect-video w-full shrink-0">
-                    <NativeYouTubePlayer
-                      videoUrl={videoModal.url}
-                      playerId="workout-session-player"
-                      language={language}
-                      autoplay
                     />
                   </div>
                 );

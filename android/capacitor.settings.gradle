@@ -22,6 +22,3 @@ project(':capacitor-push-notifications').projectDir = new File('../node_modules/
 
 include ':capgo-background-geolocation'
 project(':capgo-background-geolocation').projectDir = new File('../node_modules/@capgo/background-geolocation/android')
-
-include ':capgo-capacitor-youtube-player'
-project(':capgo-capacitor-youtube-player').projectDir = new File('../node_modules/@capgo/capacitor-youtube-player/android')

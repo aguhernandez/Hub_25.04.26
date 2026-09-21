@@ -28,7 +28,6 @@
     "@capacitor/ios": "^7.6.5",
     "@capacitor/push-notifications": "^7.0.0",
     "@capgo/background-geolocation": "^7.0.0",
-    "@capgo/capacitor-youtube-player": "^7.1.2",
     "@supabase/supabase-js": "^2.57.4",
     "dotenv": "^16.4.5",
     "lucide-react": "^0.344.0",

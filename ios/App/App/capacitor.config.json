@@ -3,7 +3,8 @@
 	"appName": "Asciende",
 	"webDir": "dist",
 	"server": {
-		"androidScheme": "capacitor",
+		"androidScheme": "https",
+		"hostname": "hub.asciende.pro",
 		"iosScheme": "capacitor",
 		"allowNavigation": [
 			"*"
@@ -28,10 +29,6 @@
 				"sound",
 				"alert"
 			]
-		},
-		"YoutubePlayer": {
-			"patchRefererHeader": true,
-			"refererHeader": "https://www.youtube.com"
 		}
 	},
 	"packageClassList": [
@@ -41,7 +38,6 @@
 		"FilesystemPlugin",
 		"GeolocationPlugin",
 		"PushNotificationsPlugin",
-		"BackgroundGeolocation",
-		"YoutubePlayerPlugin"
+		"BackgroundGeolocation"
 	]
 }

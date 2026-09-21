@@ -18,8 +18,7 @@ let package = Package(
         .package(name: "CapacitorFilesystem", path: "../../../node_modules/@capacitor/filesystem"),
         .package(name: "CapacitorGeolocation", path: "../../../node_modules/@capacitor/geolocation"),
         .package(name: "CapacitorPushNotifications", path: "../../../node_modules/@capacitor/push-notifications"),
-        .package(name: "CapgoBackgroundGeolocation", path: "../../../node_modules/@capgo/background-geolocation"),
-        .package(name: "CapgoCapacitorYoutubePlayer", path: "../../../node_modules/@capgo/capacitor-youtube-player")
+        .package(name: "CapgoBackgroundGeolocation", path: "../../../node_modules/@capgo/background-geolocation")
     ],
     targets: [
         .target(
@@ -33,8 +32,7 @@ let package = Package(
                 .product(name: "CapacitorFilesystem", package: "CapacitorFilesystem"),
                 .product(name: "CapacitorGeolocation", package: "CapacitorGeolocation"),
                 .product(name: "CapacitorPushNotifications", package: "CapacitorPushNotifications"),
-                .product(name: "CapgoBackgroundGeolocation", package: "CapgoBackgroundGeolocation"),
-                .product(name: "CapgoCapacitorYoutubePlayer", package: "CapgoCapacitorYoutubePlayer")
+                .product(name: "CapgoBackgroundGeolocation", package: "CapgoBackgroundGeolocation")
             ]
         )
     ]

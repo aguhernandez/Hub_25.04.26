@@ -3,8 +3,7 @@ import { Plus, Trash2, Search, Play, RotateCcw, Timer, MoveUp, MoveDown, Save, L
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { getExerciseName } from '../../utils/exerciseI18n';
-import { isNativePlatform } from '../../utils/youtubeNative';
-import NativeYouTubePlayer from './NativeYouTubePlayer';
+
 
 interface Exercise {
   id: string;
@@ -104,7 +103,7 @@ export default function CircuitPanelInline({
 
   const getYouTubeEmbedUrl = (url: string) => {
     const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
-    return match ? `https://www.youtube-nocookie.com/embed/${match[1]}?autoplay=1&rel=0` : null;
+    return match ? `https://www.youtube-nocookie.com/embed/${match[1]}?autoplay=1&rel=0&origin=https://hub.asciende.pro&enablejsapi=1` : null;
   };
 
   const addExerciseToCircuit = () => {
@@ -461,21 +460,12 @@ export default function CircuitPanelInline({
                   <div className="rounded-xl overflow-hidden border-2 border-[#fdda36]">
                     <div className="relative aspect-video bg-gray-900">
                       {showVideoFor === selectedExercise && embedUrl ? (
-                        isNativePlatform() ? (
-                          <NativeYouTubePlayer
-                            videoUrl={selectedEx?.link || ''}
-                            playerId="circuit-panel-player"
-                            onClose={() => setShowVideoFor(null)}
-                            language={language}
-                          />
-                        ) : (
-                          <div className="relative w-full h-full">
-                            <iframe src={embedUrl} className="w-full h-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-                            <button onClick={() => setShowVideoFor(null)} className="absolute top-2 right-2 p-1 bg-black/70 text-white rounded-full">
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        )
+                        <div className="relative w-full h-full">
+                          <iframe src={embedUrl} className="w-full h-full" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                          <button onClick={() => setShowVideoFor(null)} className="absolute top-2 right-2 p-1 bg-black/70 text-white rounded-full">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
                       ) : (
                         <div
                           onClick={() => setShowVideoFor(selectedExercise)}

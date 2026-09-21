@@ -17,8 +17,7 @@ import { getExerciseName, getExerciseNameForLanguage, bilingualExerciseMatch } f
 import TagSelector from '../components/tags/TagSelector';
 import MyDraftsPanel from '../components/training/MyDraftsPanel';
 import { createDraft, deleteDraft, updateDraft, type DraftPayload, type WorkoutDraft } from '../utils/workoutDrafts';
-import { getYouTubeEmbedUrl as ytEmbedUrl, isNativePlatform } from '../utils/youtubeNative';
-import NativeYouTubePlayer from '../components/training/NativeYouTubePlayer';
+
 
 interface Exercise {
   id: string;
@@ -557,7 +556,11 @@ export default function WorkoutBuilderPage() {
     setExerciseHistory(historyMap);
   };
 
-  const getYouTubeEmbedUrl = (url: string) => ytEmbedUrl(url);
+  const getYouTubeEmbedUrl = (url: string) => {
+    if (!url) return null;
+    const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?]+)/);
+    return videoId ? `https://www.youtube-nocookie.com/embed/${videoId[1]}?origin=https://hub.asciende.pro&enablejsapi=1` : null;
+  };
 
   const addExerciseToWorkout = () => {
     if (!selectedExercise) return;
@@ -1287,7 +1290,7 @@ export default function WorkoutBuilderPage() {
                       </label>
                       <div className="rounded-lg overflow-hidden border-2 border-[#fdda36]">
                         <div className="relative aspect-video bg-gray-900">
-                          {showVideoPreview && embedUrl && !isNativePlatform() ? (
+                          {showVideoPreview && embedUrl ? (
                             <div className="relative w-full h-full">
                               <iframe
                                 src={embedUrl}
@@ -1303,13 +1306,6 @@ export default function WorkoutBuilderPage() {
                                 <X className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                          ) : showVideoPreview && embedUrl && isNativePlatform() ? (
-                            <NativeYouTubePlayer
-                              videoUrl={exercise?.link || ''}
-                              playerId="workout-builder-player"
-                              onClose={() => setShowVideoPreview(false)}
-                              language={language}
-                            />
                           ) : (
                             <div
                               onClick={() => setShowVideoPreview(true)}

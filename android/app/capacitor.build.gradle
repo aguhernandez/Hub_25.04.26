@@ -16,7 +16,6 @@ dependencies {
     implementation project(':capacitor-geolocation')
     implementation project(':capacitor-push-notifications')
     implementation project(':capgo-background-geolocation')
-    implementation project(':capgo-capacitor-youtube-player')
 
 }
 

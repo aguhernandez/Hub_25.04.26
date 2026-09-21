@@ -5,7 +5,8 @@ const config: CapacitorConfig = {
   appName: 'Asciende',
   webDir: 'dist',
   server: {
-    androidScheme: 'capacitor',
+    androidScheme: 'https',
+    hostname: 'hub.asciende.pro',
     iosScheme: 'capacitor',
     allowNavigation: ['*'],
   },
@@ -24,10 +25,6 @@ const config: CapacitorConfig = {
     },
     PushNotifications: {
       presentationOptions: ['badge', 'sound', 'alert'],
-    },
-    YoutubePlayer: {
-      patchRefererHeader: true,
-      refererHeader: 'https://www.youtube.com',
     },
   },
 };
