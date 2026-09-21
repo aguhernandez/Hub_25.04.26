@@ -1,0 +1,2 @@
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/web--pAsvj0Z.js","assets/index-Cn9IQ1BO.js"])))=>i.map(i=>d[i]);
+import{_ as r}from"./index-DCbhPtwm.js";import{registerPlugin as t}from"./index-Cn9IQ1BO.js";import"./icons-Ci0ywSEc.js";import"./react-vendor-BI927VU-.js";const _=t("BackgroundGeolocation",{web:()=>r(()=>import("./web--pAsvj0Z.js"),__vite__mapDeps([0,1])).then(o=>new o.BackgroundGeolocationWeb)});export{_ as BackgroundGeolocation};

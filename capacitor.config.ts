@@ -5,10 +5,9 @@ const config: CapacitorConfig = {
   appName: 'Asciende',
   webDir: 'dist',
   server: {
-    androidScheme: 'https',
-    hostname: 'hub.asciende.pro',
+    androidScheme: 'capacitor',
     iosScheme: 'capacitor',
-    allowNavigation: ['*'],
+    allowNavigation: ['*.youtube.com', '*.youtube-nocookie.com', '*.ytimg.com', '*.googlevideo.com', 'hub.asciende.pro', 'ngkcbygyoobqhlmlnuvl.supabase.co'],
   },
   ios: {
     scheme: 'Asciende',

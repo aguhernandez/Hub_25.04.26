@@ -78,7 +78,7 @@ export default function CircuitBuilderModal({ onClose, onCircuitAdded, language,
     ];
     for (const pattern of patterns) {
       const match = url.match(pattern);
-      if (match) return `https://www.youtube-nocookie.com/embed/${match[1]}?autoplay=1&rel=0&origin=https://hub.asciende.pro&enablejsapi=1`;
+      if (match) return `https://www.youtube-nocookie.com/embed/${match[1]}?playsinline=1&rel=0&modestbranding=1&autoplay=1`;
     }
     return null;
   };

@@ -103,7 +103,7 @@ export default function CircuitPanelInline({
 
   const getYouTubeEmbedUrl = (url: string) => {
     const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/);
-    return match ? `https://www.youtube-nocookie.com/embed/${match[1]}?autoplay=1&rel=0&origin=https://hub.asciende.pro&enablejsapi=1` : null;
+    return match ? `https://www.youtube-nocookie.com/embed/${match[1]}?playsinline=1&rel=0&modestbranding=1&autoplay=1` : null;
   };
 
   const addExerciseToCircuit = () => {

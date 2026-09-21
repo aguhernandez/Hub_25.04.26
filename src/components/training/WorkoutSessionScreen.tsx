@@ -576,7 +576,7 @@ export default function WorkoutSessionScreen({
 
   const getYouTubeEmbedUrl = (url: string) => {
     const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?]+)/);
-    return videoId ? `https://www.youtube-nocookie.com/embed/${videoId[1]}?origin=https://hub.asciende.pro&enablejsapi=1` : null;
+    return videoId ? `https://www.youtube-nocookie.com/embed/${videoId[1]}?playsinline=1&rel=0&modestbranding=1` : null;
   };
 
   const sections = groupIntoSections(exercises);

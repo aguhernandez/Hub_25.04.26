@@ -3,11 +3,15 @@
 	"appName": "Asciende",
 	"webDir": "dist",
 	"server": {
-		"androidScheme": "https",
-		"hostname": "hub.asciende.pro",
+		"androidScheme": "capacitor",
 		"iosScheme": "capacitor",
 		"allowNavigation": [
-			"*"
+			"*.youtube.com",
+			"*.youtube-nocookie.com",
+			"*.ytimg.com",
+			"*.googlevideo.com",
+			"hub.asciende.pro",
+			"ngkcbygyoobqhlmlnuvl.supabase.co"
 		]
 	},
 	"ios": {
