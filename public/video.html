@@ -13,12 +13,14 @@
 <body>
   <div id="player"></div>
   <script>
+    // Obtiene dinámicamente el ID del video pasándole ?v=ID_DE_TU_EJERCICIO
     const urlParams = new URLSearchParams(window.location.search);
     const videoId = urlParams.get('v');
+
     if (videoId) {
       document.getElementById('player').innerHTML = `
         <iframe 
-          src="https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0&modestbranding=1"
+          src="https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&playsinline=1&enablejsapi=1&rel=0&modestbranding=1&start=0"
           allow="autoplay; encrypted-media; picture-in-picture"
           allowfullscreen>
         </iframe>
