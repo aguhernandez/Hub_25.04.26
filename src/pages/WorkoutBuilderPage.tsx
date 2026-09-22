@@ -557,10 +557,16 @@ export default function WorkoutBuilderPage() {
   };
 
   const getYouTubeEmbedUrl = (url: string) => {
-    if (!url) return null;
-    const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?]+)/);
-    return videoId ? `https://www.youtube-nocookie.com/embed/${videoId[1]}?playsinline=1&rel=0&modestbranding=1` : null;
-  };
+  if (!url) return null;
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?]+)/);
+  if (!match || !match[1]) return null;
+  
+  const videoId = match[1];
+  const appOrigin = encodeURIComponent(window.location.origin);
+  
+  // Retorna la URL con youtube-nocookie, origin y enablejsapi
+  return `https://www.youtube-nocookie.com/embed/${videoId}?playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=${appOrigin}`;
+};
 
   const addExerciseToWorkout = () => {
     if (!selectedExercise) return;
