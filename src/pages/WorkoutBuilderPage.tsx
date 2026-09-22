@@ -557,16 +557,10 @@ export default function WorkoutBuilderPage() {
   };
 
   const getYouTubeEmbedUrl = (url: string) => {
-  if (!url) return null;
-  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?]+)/);
-  if (!match || !match[1]) return null;
-  
-  const videoId = match[1];
-  const appOrigin = encodeURIComponent(window.location.origin);
-  
-  // Retorna la URL con youtube-nocookie, origin y enablejsapi
-  return `https://www.youtube-nocookie.com/embed/${videoId}?playsinline=1&rel=0&modestbranding=1&enablejsapi=1&origin=${appOrigin}`;
-};
+    if (!url) return null;
+    const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?]+)/);
+    return videoId ? `https://www.youtube-nocookie.com/embed/${videoId[1]}?playsinline=1&rel=0&modestbranding=1` : null;
+  };
 
   const addExerciseToWorkout = () => {
     if (!selectedExercise) return;
@@ -1298,13 +1292,12 @@ export default function WorkoutBuilderPage() {
                         <div className="relative aspect-video bg-gray-900">
                           {showVideoPreview && embedUrl ? (
                             <div className="relative w-full h-full">
-                             <iframe
-  src={embedUrl}
-  className="w-full h-full border-0"
-  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-  referrerPolicy="strict-origin-when-cross-origin"
-  allowFullScreen
-/>
+                              <iframe
+                                src={embedUrl}
+                                className="w-full h-full"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                              />
                               <button
                                 onClick={() => setShowVideoPreview(false)}
                                 className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 text-white rounded-full transition-colors z-10"
