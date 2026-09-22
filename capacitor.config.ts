@@ -5,9 +5,18 @@ const config: CapacitorConfig = {
   appName: 'Asciende',
   webDir: 'dist',
   server: {
-    androidScheme: 'capacitor',
-    iosScheme: 'capacitor',
-    allowNavigation: ['*.youtube.com', '*.youtube-nocookie.com', '*.ytimg.com', '*.googlevideo.com', 'hub.asciende.pro', 'ngkcbygyoobqhlmlnuvl.supabase.co'],
+    // Cambiamos 'capacitor' por 'https' y agregamos el hostname para solucionar el Error 153 de YouTube
+    hostname: 'localhost',
+    androidScheme: 'https',
+    iosScheme: 'https',
+    allowNavigation: [
+      '*.youtube.com', 
+      '*.youtube-nocookie.com', 
+      '*.ytimg.com', 
+      '*.googlevideo.com', 
+      'hub.asciende.pro', 
+      'ngkcbygyoobqhlmlnuvl.supabase.co'
+    ],
   },
   ios: {
     scheme: 'Asciende',
