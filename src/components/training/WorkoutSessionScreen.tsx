@@ -12,7 +12,7 @@ import StrengthEstimator from './StrengthEstimator';
 import WorkingMaxModal from './WorkingMaxModal';
 import BarVelocityTracker from './barvelocity/BarVelocityTracker';
 import CMJAssessment from './cmj/CMJAssessment';
-
+import { isNativePlatform, openYouTubeExternally } from '../../utils/youtubeNative';
 
 interface SetLine {
   id: string;
@@ -575,8 +575,8 @@ export default function WorkoutSessionScreen({
   const [videoModal, setVideoModal] = useState<{ url: string; name: string; description?: string } | null>(null);
 
   const getYouTubeEmbedUrl = (url: string) => {
-    const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/)([^&?]+)/);
-    return videoId ? `https://www.youtube-nocookie.com/embed/${videoId[1]}?playsinline=1&rel=0&modestbranding=1` : null;
+    const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?]+)/);
+    return videoId ? `https://www.youtube.com/embed/${videoId[1]}` : null;
   };
 
   const sections = groupIntoSections(exercises);
@@ -976,7 +976,7 @@ export default function WorkoutSessionScreen({
 
             {(() => {
               const embedUrl = getYouTubeEmbedUrl(videoModal.url);
-              if (embedUrl) {
+              if (embedUrl && !isNativePlatform()) {
                 return (
                   <div className="aspect-video w-full shrink-0">
                     <iframe
@@ -985,6 +985,20 @@ export default function WorkoutSessionScreen({
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowFullScreen
                     />
+                  </div>
+                );
+              }
+              if (embedUrl && isNativePlatform()) {
+                const thumb = getYouTubeThumbnail(videoModal.url);
+                return (
+                  <div
+                    onClick={() => openYouTubeExternally(videoModal.url)}
+                    className="relative aspect-video w-full shrink-0 cursor-pointer group"
+                  >
+                    {thumb && <img src={thumb} className="w-full h-full object-cover" alt="YouTube" />}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/20 transition-colors">
+                      <Play className="w-12 h-12 text-white opacity-90 group-hover:scale-110 transition-transform" />
+                    </div>
                   </div>
                 );
               }

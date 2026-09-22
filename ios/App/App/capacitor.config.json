@@ -3,15 +3,10 @@
 	"appName": "Asciende",
 	"webDir": "dist",
 	"server": {
-		"androidScheme": "capacitor",
+		"androidScheme": "https",
 		"iosScheme": "capacitor",
 		"allowNavigation": [
-			"*.youtube.com",
-			"*.youtube-nocookie.com",
-			"*.ytimg.com",
-			"*.googlevideo.com",
-			"hub.asciende.pro",
-			"ngkcbygyoobqhlmlnuvl.supabase.co"
+			"*"
 		]
 	},
 	"ios": {
@@ -19,8 +14,7 @@
 		"contentInset": "automatic"
 	},
 	"android": {
-		"allowMixedContent": true,
-		"useLegacyBridge": true
+		"allowMixedContent": true
 	},
 	"plugins": {
 		"SplashScreen": {
@@ -39,9 +33,7 @@
 		"AppPlugin",
 		"CAPBrowserPlugin",
 		"CAPCameraPlugin",
-		"FilesystemPlugin",
 		"GeolocationPlugin",
-		"PushNotificationsPlugin",
-		"BackgroundGeolocation"
+		"PushNotificationsPlugin"
 	]
 }
