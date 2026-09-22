@@ -1298,12 +1298,13 @@ export default function WorkoutBuilderPage() {
                         <div className="relative aspect-video bg-gray-900">
                           {showVideoPreview && embedUrl ? (
                             <div className="relative w-full h-full">
-                              <iframe
-                                src={embedUrl}
-                                className="w-full h-full"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                              />
+                             <iframe
+  src={embedUrl}
+  className="w-full h-full border-0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  referrerPolicy="strict-origin-when-cross-origin"
+  allowFullScreen
+/>
                               <button
                                 onClick={() => setShowVideoPreview(false)}
                                 className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 text-white rounded-full transition-colors z-10"
