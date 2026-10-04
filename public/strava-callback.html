@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0c0d0f" />
+    <title>Conexión con Strava · Asciende</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        padding: 24px;
+        display: grid;
+        place-items: center;
+        color: #e5e7eb;
+        background: #0c0d0f;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main { width: 100%; max-width: 440px; text-align: center; }
+      .icon {
+        display: grid;
+        place-items: center;
+        width: 68px;
+        height: 68px;
+        margin: 0 auto 22px;
+        border-radius: 20px;
+        color: #fdda36;
+        background: rgb(253 218 54 / 12%);
+        font-size: 34px;
+      }
+      h1 { margin: 0 0 12px; color: #fdda36; font-size: 24px; }
+      p { margin: 0; color: #a1a1aa; font-size: 16px; line-height: 1.6; }
+      a {
+        display: inline-block;
+        margin-top: 28px;
+        padding: 13px 22px;
+        border-radius: 12px;
+        color: #0c0d0f;
+        background: #fdda36;
+        font-weight: 700;
+        text-decoration: none;
+      }
+      a:focus-visible { outline: 3px solid white; outline-offset: 3px; }
+    </style>
+  </head>
+  <body>
+    <main aria-live="polite">
+      <div class="icon" id="icon" aria-hidden="true">✓</div>
+      <h1 id="title">Strava conectado</h1>
+      <p id="message">Tu cuenta de Strava se conectó correctamente. Ya puedes volver a Asciende.</p>
+      <a id="return-link" href="/settings?section=strava">Volver a Asciende</a>
+    </main>
+    <script>
+      const status = new URLSearchParams(window.location.search).get('status');
+      if (status === 'cancelled') {
+        document.title = 'Conexión cancelada · Asciende';
+        document.getElementById('icon').textContent = '×';
+        document.getElementById('title').textContent = 'Conexión cancelada';
+        document.getElementById('message').textContent = 'No se autorizó el acceso a Strava. Puedes volver a Asciende e intentarlo cuando quieras.';
+      } else if (status === 'error') {
+        document.title = 'No se pudo conectar · Asciende';
+        document.getElementById('icon').textContent = '!';
+        document.getElementById('title').textContent = 'No se pudo completar la conexión';
+        document.getElementById('message').textContent = 'Vuelve a Asciende y prueba conectar Strava nuevamente.';
+      }
+    </script>
+  </body>
+</html>

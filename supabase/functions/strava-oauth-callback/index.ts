@@ -1,7 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 // verify_jwt=false: GET must be public — Strava redirects here without auth headers
-// htmlResponse must return Content-Type: text/html so browsers render the page
+// Supabase rewrites HTML responses from GET Edge Function requests to text/plain.
+// Redirect the browser to a static page served by the Asciende frontend instead.
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,79 +10,16 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
 };
 
-function htmlResponse(title: string, message: string, isError = false): Response {
-  const htmlEscapes: Record<string, string> = {
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  };
-  const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => htmlEscapes[char]);
-  title = escapeHtml(title);
-  message = escapeHtml(message);
-  const bgColor = isError ? "#1a1a2e" : "#0C0D0F";
-  const accentColor = isError ? "#ef4444" : "#fdda36";
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Asciende — ${title}</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: ${bgColor};
-    color: #e5e7eb;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    padding: 24px;
-  }
-  .card {
-    max-width: 400px;
-    text-align: center;
-    width: 100%;
-  }
-  .icon {
-    width: 64px;
-    height: 64px;
-    margin: 0 auto 20px;
-    border-radius: 16px;
-    background: rgba(253,218,54,0.1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 32px;
-  }
-  h1 {
-    font-size: 20px;
-    font-weight: 700;
-    color: ${accentColor};
-    margin-bottom: 12px;
-  }
-  p {
-    font-size: 15px;
-    line-height: 1.6;
-    color: #9ca3af;
-  }
-</style>
-</head>
-<body>
-  <div class="card">
-    <div class="icon">${isError ? "\u26a0" : "\u2713"}</div>
-    <h1>${title}</h1>
-    <p>${message}</p>
-  </div>
-</body>
-</html>`;
-  const headers = new Headers();
-  headers.set("Access-Control-Allow-Origin", "*");
-  headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Client-Info, Apikey");
-  headers.set("Content-Type", "text/html; charset=utf-8");
-  headers.set("X-Content-Type-Options", "nosniff");
-  return new Response(html, {
-    status: isError ? 400 : 200,
-    headers,
+function redirectToCallbackPage(status: "connected" | "cancelled" | "error"): Response {
+  const destination = new URL("https://hub.asciende.pro/strava-callback.html");
+  destination.searchParams.set("status", status);
+  return new Response(null, {
+    status: 303,
+    headers: {
+      ...corsHeaders,
+      "Location": destination.toString(),
+      "Cache-Control": "no-store",
+    },
   });
 }
 
@@ -109,11 +47,7 @@ Deno.serve(async (req: Request) => {
 
   // GET with code+state: Strava redirect callback — handle server-side token exchange
   if (req.method === "GET" && url.searchParams.has("error")) {
-    return htmlResponse(
-      "Conexion cancelada",
-      "No se autorizo el acceso a Strava. Puedes volver a la app e intentarlo cuando quieras.",
-      true,
-    );
+    return redirectToCallbackPage("cancelled");
   }
 
   if (req.method === "GET" && url.searchParams.has("code")) {
@@ -122,14 +56,14 @@ Deno.serve(async (req: Request) => {
     const state = url.searchParams.get("state") || "";
 
     if (!state) {
-      return htmlResponse("Error de conexion", "No se pudo identificar al usuario. Cerra esta ventana y volvi a intentar desde la app.", true);
+      return redirectToCallbackPage("error");
     }
 
     const clientId = Deno.env.get("STRAVA_CLIENT_ID");
     const clientSecret = Deno.env.get("STRAVA_CLIENT_SECRET");
     if (!clientId || !clientSecret) {
       console.error("[strava-oauth-callback] STRAVA_CLIENT_ID or STRAVA_CLIENT_SECRET not set");
-      return htmlResponse("Error de configuracion", "Strava no esta configurado en el servidor.", true);
+      return redirectToCallbackPage("error");
     }
 
     try {
@@ -148,7 +82,7 @@ Deno.serve(async (req: Request) => {
       if (!tokenResponse.ok) {
         const errorText = await tokenResponse.text();
         console.error("[strava-oauth-callback] Token exchange failed:", errorText);
-        return htmlResponse("Error de conexion", "Strava rechazo el codigo de autorizacion. Volvi a intentar desde la app.", true);
+        return redirectToCallbackPage("error");
       }
 
       const tokenData = await tokenResponse.json();
@@ -193,13 +127,13 @@ Deno.serve(async (req: Request) => {
 
       if (upsertError) {
         console.error("[strava-oauth-callback] Failed to save connection:", upsertError);
-        return htmlResponse("Error", "No se pudo guardar la conexion. Volvi a intentar desde la app.", true);
+        return redirectToCallbackPage("error");
       }
 
-      return htmlResponse("Strava conectado", "Tu cuenta de Strava se conecto correctamente. Ya podes volver a la app de Asciende.");
+      return redirectToCallbackPage("connected");
     } catch (error) {
       console.error("[strava-oauth-callback] Unexpected error:", error);
-      return htmlResponse("Error inesperado", error.message || "Ocurrio un error. Volvi a intentar desde la app.", true);
+      return redirectToCallbackPage("error");
     }
   }
 
