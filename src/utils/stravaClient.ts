@@ -136,7 +136,8 @@ export class StravaClient {
   static async getAuthorizationUrl(scope: string = STRAVA_SCOPES): Promise<string> {
     const clientId = await this.fetchClientId();
     const { data: { session } } = await supabase.auth.getSession();
-    const state = session?.user?.id || '';
+    const state = session?.user?.id;
+    if (!state) throw new Error('Inicia sesión antes de conectar Strava.');
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: this.REDIRECT_URI,
@@ -149,11 +150,13 @@ export class StravaClient {
   }
 
   // Call this at component mount to pre-fetch the auth URL
-  static async prefetchAuthUrl(scope: string = STRAVA_SCOPES): Promise<void> {
+  static async prefetchAuthUrl(scope: string = STRAVA_SCOPES): Promise<boolean> {
     try {
       this.cachedAuthUrl = await this.getAuthorizationUrl(scope);
+      return true;
     } catch {
       this.cachedAuthUrl = null;
+      return false;
     }
   }
 
@@ -165,6 +168,24 @@ export class StravaClient {
       return;
     }
     Browser.open({ url });
+  }
+
+  static async refreshConnectionAfterAuthorization(
+    callback: (connection: StravaConnection | null) => void,
+    attempts = 8,
+    delayMs = 1000,
+  ): Promise<void> {
+    // The Strava callback saves the connection on the server. On mobile, the
+    // app can become active a moment before that database write is visible.
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+      const connection = await this.getConnection();
+      if (connection) {
+        callback(connection);
+        return;
+      }
+    }
+    callback(null);
   }
 
   static async checkConnectionOnResume(callback: () => void): Promise<() => void> {

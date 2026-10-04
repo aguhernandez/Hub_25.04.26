@@ -10,6 +10,12 @@ const corsHeaders = {
 };
 
 function htmlResponse(title: string, message: string, isError = false): Response {
+  const htmlEscapes: Record<string, string> = {
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  };
+  const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => htmlEscapes[char]);
+  title = escapeHtml(title);
+  message = escapeHtml(message);
   const bgColor = isError ? "#1a1a2e" : "#0C0D0F";
   const accentColor = isError ? "#ef4444" : "#fdda36";
   const html = `<!DOCTYPE html>
@@ -102,6 +108,14 @@ Deno.serve(async (req: Request) => {
   }
 
   // GET with code+state: Strava redirect callback — handle server-side token exchange
+  if (req.method === "GET" && url.searchParams.has("error")) {
+    return htmlResponse(
+      "Conexion cancelada",
+      "No se autorizo el acceso a Strava. Puedes volver a la app e intentarlo cuando quieras.",
+      true,
+    );
+  }
+
   if (req.method === "GET" && url.searchParams.has("code")) {
     const code = url.searchParams.get("code");
     const scope = url.searchParams.get("scope") || "";

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { StravaClient, StravaConnection, SyncResult } from '../../utils/stravaClient';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { supabase } from '../../lib/supabase';
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -185,24 +186,43 @@ export function StravaSection() {
   const [syncing, setSyncing] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [authReady, setAuthReady] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     loadConnection();
 
-    // Pre-fetch and cache the auth URL before the user clicks connect
-    StravaClient.prefetchAuthUrl().then(() => setAuthReady(true));
+    // Cache an OAuth URL only after confirming there is an authenticated user.
+    StravaClient.prefetchAuthUrl().then((ready) => { setAuthReady(ready); setAuthLoading(false); });
+    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
+      window.setTimeout(() => {
+        setAuthLoading(true);
+        StravaClient.prefetchAuthUrl().then((ready) => { setAuthReady(ready); setAuthLoading(false); });
+      }, 0);
+    });
 
     let removeListener: (() => void) | null = null;
 
     // When the user returns to the app after the Strava browser flow,
     // re-check the connection status
-    StravaClient.checkConnectionOnResume(() => {
-      loadConnection();
-    }).then((remove) => { removeListener = remove; });
+    const refreshAfterReturn = () => {
+      if (document.visibilityState === 'hidden') return;
+      void StravaClient.refreshConnectionAfterAuthorization((conn) => {
+        if (conn) setConnection(conn);
+      });
+    };
+    StravaClient.checkConnectionOnResume(refreshAfterReturn).then((remove) => { removeListener = remove; });
+    // Also cover web browsers, where Capacitor's appStateChange event may not fire.
+    window.addEventListener('focus', refreshAfterReturn);
+    document.addEventListener('visibilitychange', refreshAfterReturn);
 
-    return () => { if (removeListener) removeListener(); };
+    return () => {
+      if (removeListener) removeListener();
+      authListener.subscription.unsubscribe();
+      window.removeEventListener('focus', refreshAfterReturn);
+      document.removeEventListener('visibilitychange', refreshAfterReturn);
+    };
   }, []);
 
   const loadConnection = async () => {
@@ -213,7 +233,12 @@ export function StravaSection() {
   };
 
   const handleConnect = () => {
-    if (!authReady) return;
+    if (!authReady) {
+      setAuthLoading(true);
+      setMessage({ type: 'error', text: 'Preparando la conexión. Pulsa de nuevo cuando termine.' });
+      void StravaClient.prefetchAuthUrl().then((ready) => { setAuthReady(ready); setAuthLoading(false); });
+      return;
+    }
     // Synchronous — no await before Browser.open() so the user gesture is not broken
     StravaClient.openAuthorizationPageSync();
   };
@@ -319,19 +344,19 @@ export function StravaSection() {
           <div className="pt-2">
             <button
               onClick={handleConnect}
-              disabled={!authReady}
+              disabled={authLoading}
               className="group w-full sm:w-auto flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-xl font-heading text-sm text-[#0C0D0F] transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
               style={{
-                background: !authReady ? '#b89e27' : '#fdda36',
-                boxShadow: !authReady ? 'none' : '0 0 24px rgba(253,218,54,0.35)',
+                background: authLoading ? '#b89e27' : '#fdda36',
+                boxShadow: authLoading ? 'none' : '0 0 24px rgba(253,218,54,0.35)',
               }}
             >
-              {!authReady ? (
+              {authLoading ? (
                 <RefreshCw className="w-4 h-4 animate-spin" />
               ) : (
                 <Link2 className="w-4 h-4" />
               )}
-              {!authReady ? t('strava.redirectingToStrava') : t('strava.connectButton')}
+              {authLoading ? t('strava.redirectingToStrava') : t('strava.connectButton')}
             </button>
             <p className="font-body text-xs text-[#514163]/70 mt-2.5">
               {t('strava.noPasswordShared')}
