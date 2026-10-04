@@ -42,6 +42,7 @@
         text-decoration: none;
       }
       a:focus-visible { outline: 3px solid white; outline-offset: 3px; }
+      #fallback { display: none; margin-top: 18px; color: #a1a1aa; font-size: 14px; }
     </style>
   </head>
   <body>
@@ -49,7 +50,8 @@
       <div class="icon" id="icon" aria-hidden="true">✓</div>
       <h1 id="title">Strava conectado</h1>
       <p id="message">Tu cuenta de Strava se conectó correctamente. Ya puedes volver a Asciende.</p>
-      <a id="return-link" href="/settings?section=strava">Volver a Asciende</a>
+      <a id="return-link" href="/settings?section=strava">Abrir Asciende</a>
+      <p id="fallback">Puedes cerrar esta ventana y volver a Asciende.</p>
     </main>
     <script>
       const status = new URLSearchParams(window.location.search).get('status');
@@ -64,6 +66,21 @@
         document.getElementById('title').textContent = 'No se pudo completar la conexión';
         document.getElementById('message').textContent = 'Vuelve a Asciende y prueba conectar Strava nuevamente.';
       }
+
+      const validStatus = ['connected', 'cancelled', 'error'].includes(status) ? status : 'error';
+      const returnUrl = `pro.asciende.app://login-callback?strava=${encodeURIComponent(validStatus)}`;
+      const fallback = document.getElementById('fallback');
+      if (window.opener && !window.opener.closed) {
+        try {
+          window.opener.postMessage({ type: 'asciende-strava-oauth', status: validStatus }, window.location.origin);
+        } catch { /* The focus/resume listener in Asciende will refresh the connection. */ }
+        window.close();
+      } else {
+        // Native Capacitor builds register this app URL scheme and close their
+        // in-app browser when the app receives the link.
+        window.location.replace(returnUrl);
+      }
+      window.setTimeout(() => { fallback.style.display = 'block'; }, 1200);
     </script>
   </body>
 </html>

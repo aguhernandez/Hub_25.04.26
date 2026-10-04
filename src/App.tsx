@@ -251,7 +251,7 @@ function App() {
     };
   }, [currentPage]);
 
-  // Handle deep-link callback from system browser after Google OAuth on native apps
+  // Handle OAuth returns from the system browser on native apps
   useEffect(() => {
     let cleanup: (() => void) | undefined;
 
@@ -264,6 +264,19 @@ function App() {
         const { supabase } = await import('./lib/supabase');
 
         const listener = await CapApp.addListener('appUrlOpen', async ({ url }) => {
+          // Strava finishes on the hosted callback page, which returns to the
+          // app through this registered URL scheme. Close the in-app browser;
+          // StravaSection refreshes the saved connection when the app resumes.
+          if (url.includes('strava=')) {
+            const status = new URL(url).searchParams.get('strava');
+            window.dispatchEvent(new CustomEvent('strava-oauth-return', { detail: status }));
+            try {
+              const { Browser } = await import('@capacitor/browser');
+              await Browser.close();
+            } catch { /* ignore */ }
+            return;
+          }
+
           // Supabase sends back tokens in the URL fragment (#access_token=...)
           // or as query params (?code=...) depending on flow type.
           if (url.includes('access_token') || url.includes('refresh_token') || url.includes('code=')) {

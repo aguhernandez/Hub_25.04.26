@@ -212,16 +212,37 @@ export function StravaSection() {
         if (conn) setConnection(conn);
       });
     };
+    const handleOAuthReturn = (status: string | null) => {
+      if (status === 'connected') {
+        setMessage({ type: 'success', text: 'Strava se conectó correctamente.' });
+        refreshAfterReturn();
+      } else if (status === 'cancelled') {
+        setMessage({ type: 'error', text: 'Se canceló la conexión con Strava.' });
+      } else {
+        setMessage({ type: 'error', text: 'No se pudo completar la conexión con Strava. Inténtalo de nuevo.' });
+      }
+    };
+    const handlePopupMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.data?.type !== 'asciende-strava-oauth') return;
+      handleOAuthReturn(event.data.status);
+    };
+    const handleNativeReturn = (event: Event) => {
+      handleOAuthReturn((event as CustomEvent<string | null>).detail);
+    };
     StravaClient.checkConnectionOnResume(refreshAfterReturn).then((remove) => { removeListener = remove; });
     // Also cover web browsers, where Capacitor's appStateChange event may not fire.
     window.addEventListener('focus', refreshAfterReturn);
     document.addEventListener('visibilitychange', refreshAfterReturn);
+    window.addEventListener('message', handlePopupMessage);
+    window.addEventListener('strava-oauth-return', handleNativeReturn);
 
     return () => {
       if (removeListener) removeListener();
       authListener.subscription.unsubscribe();
       window.removeEventListener('focus', refreshAfterReturn);
       document.removeEventListener('visibilitychange', refreshAfterReturn);
+      window.removeEventListener('message', handlePopupMessage);
+      window.removeEventListener('strava-oauth-return', handleNativeReturn);
     };
   }, []);
 
