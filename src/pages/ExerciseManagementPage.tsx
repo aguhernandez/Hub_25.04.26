@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import AdminLayout from '../components/AdminLayout';
 import { Dumbbell, Plus, CreditCard as Edit2, Trash2, Search, Save, X, Filter, Play, Globe } from 'lucide-react';
 import { getExerciseName } from '../utils/exerciseI18n';
+import { getYouTubeEmbedUrl } from '../utils/youtubeNative';
 
 interface Exercise {
   id: string;
@@ -215,12 +216,6 @@ export default function ExerciseManagementPage() {
   };
 
   const totalPages = Math.ceil(totalCount / itemsPerPage);
-
-  const getYouTubeEmbedUrl = (url: string) => {
-    if (!url) return null;
-    const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?]+)/);
-    return videoId ? `https://www.youtube.com/embed/${videoId[1]}` : null;
-  };
 
   // Remove admin-only restriction - everyone can view exercises
   // if (profile?.role !== 'admin') {
