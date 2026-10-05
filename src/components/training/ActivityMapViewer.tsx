@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { MapPin } from 'lucide-react';
+import { addOpenFreeMapLayer, loadMapLibraries } from '../../lib/map';
 
 interface GPSPoint {
   latitude: number;
@@ -38,6 +39,7 @@ export default function ActivityMapViewer({ gpsPoints, title }: ActivityMapViewe
       }
 
       const L = window.L;
+      if (!L) return;
 
       if (mapRef.current) {
         mapRef.current.remove();
@@ -48,10 +50,7 @@ export default function ActivityMapViewer({ gpsPoints, title }: ActivityMapViewe
         const map = L.map(container, { preferCanvas: true });
         mapRef.current = map;
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors',
-          maxZoom: 19,
-        }).addTo(map);
+        addOpenFreeMapLayer(map);
 
         const latLngs = gpsPoints
           .filter(p => p.latitude != null && p.longitude != null)
@@ -98,24 +97,7 @@ export default function ActivityMapViewer({ gpsPoints, title }: ActivityMapViewe
       }
     };
 
-    const loadLeaflet = () => {
-      if (window.L) {
-        setTimeout(initializeMap, 50);
-        return;
-      }
-
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
-
-      const script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = () => setTimeout(initializeMap, 50);
-      document.head.appendChild(script);
-    };
-
-    loadLeaflet();
+    loadMapLibraries().then(() => setTimeout(initializeMap, 50));
 
     return () => {
       cancelled = true;

@@ -29,6 +29,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import ActivityShareCard from './ActivityShareCard';
 import ActivitySummaryScreen from './ActivitySummaryScreen';
 import { type EnduranceWorkout, type WorkoutStep } from './EnduranceWorkoutCard';
+import { addOpenFreeMapLayer, loadMapLibraries } from '../../lib/map';
 
 interface ActivityRecorderProps {
   isOpen: boolean;
@@ -291,37 +292,25 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
 
   const loadLeafletAndInitMap = async () => {
     if (typeof window === 'undefined') return;
-    if (!(window as any).L) {
-      await new Promise<void>((resolve) => {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-        document.head.appendChild(link);
-        const script = document.createElement('script');
-        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-        script.onload = () => resolve();
-        document.head.appendChild(script);
-      });
-    }
+    await loadMapLibraries();
     setTimeout(() => initMap(), 100);
   };
 
   const initMap = () => {
-    const L = (window as any).L;
-    if (!L || !mapContainerRef.current || mapInstanceRef.current) return;
+    if (!mapContainerRef.current || mapInstanceRef.current) return;
+    const L = window.L;
+    if (!L) return;
     const map = L.map(mapContainerRef.current, {
       zoomControl: false,
-      attributionControl: false,
+      attributionControl: true,
     }).setView([40.4168, -3.7038], 16);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-    }).addTo(map);
+    addOpenFreeMapLayer(map);
     L.control.zoom({ position: 'topright' }).addTo(map);
     mapInstanceRef.current = map;
   };
 
   const updateMapRoute = () => {
-    const L = (window as any).L;
+    const L = window.L;
     if (!L || !mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
     const latlngs = gpsPoints.map(p => [p.latitude, p.longitude]);

@@ -2,6 +2,8 @@ import { StrictMode, lazy, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import './index.css';
+import 'leaflet/dist/leaflet.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
 
 // Initialize Capacitor for iOS/Android native context
 let capacitorReady: Promise<boolean> = (async () => {
