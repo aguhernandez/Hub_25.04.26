@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Search, TrendingUp, TrendingDown, Dumbbell, Calendar, Minus, ArrowRight } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -44,8 +44,11 @@ export default function ExerciseStatsPanel({
   const [sessions, setSessions] = useState<SessionLog[]>([]);
   const [loading, setLoading] = useState(false);
   const [relatedExercise, setRelatedExercise] = useState<{ name: string; maxWeight: number; date: string } | null>(null);
+  const historyRequestRef = useRef(0);
 
   const fetchExerciseHistory = useCallback(async (exId: string, exName: string, athId?: string) => {
+    const requestId = ++historyRequestRef.current;
+
     if (!athId) {
       setSessions([]);
       setRelatedExercise(null);
@@ -54,7 +57,7 @@ export default function ExerciseStatsPanel({
 
     setLoading(true);
     try {
-      const { data: logs } = await supabase
+      const { data: logs, error } = await supabase
         .from('training_logs')
         .select(`
           weight_used,
@@ -70,27 +73,33 @@ export default function ExerciseStatsPanel({
             custom_exercise_name,
             exercises (
               id,
-              exercise
+              exercise,
+              exercise_en,
+              exercise_es
             )
           )
         `)
         .eq('athlete_id', athId)
+        .eq('workout_exercises.exercise_id', exId)
         .not('weight_used', 'is', null)
-        .order('logged_at', { ascending: false })
-        .limit(1000);
+        .order('logged_at', { ascending: false });
 
-      if (!logs) {
-        setSessions([]);
-        setRelatedExercise(null);
-        return;
-      }
+      if (error) throw error;
+      if (requestId !== historyRequestRef.current) return;
 
-      const matchLogs = logs.filter((log: any) => {
+      const matchLogs = (logs || []).filter((log: any) => {
         const we = log.workout_exercises;
         if (!we) return false;
         const logExId = we.exercise_id || we.exercises?.id;
-        const logExName = we.exercises?.exercise || we.custom_exercise_name || '';
-        return logExId === exId || logExName === exName;
+        const names = [
+          we.exercises?.exercise,
+          we.exercises?.exercise_en,
+          we.exercises?.exercise_es,
+          we.custom_exercise_name,
+        ]
+          .filter((name): name is string => Boolean(name))
+          .map((name) => name.trim().toLocaleLowerCase());
+        return String(logExId) === String(exId) || names.includes(exName.trim().toLocaleLowerCase());
       });
 
       const sessionMap = new Map<string, SessionLog>();
@@ -125,7 +134,7 @@ export default function ExerciseStatsPanel({
       if (sessionList.length === 0) {
         const baseName = exName.replace(/^(tempo|pause|paused|slow|controlled|banded|deficit)\s+/i, '').trim();
         if (baseName && baseName.toLowerCase() !== exName.toLowerCase()) {
-          const relatedLogs = logs.filter((log: any) => {
+          const relatedLogs = (logs || []).filter((log: any) => {
             const we = log.workout_exercises;
             if (!we) return false;
             const logExName = (we.exercises?.exercise || we.custom_exercise_name || '').toLowerCase();
@@ -157,10 +166,11 @@ export default function ExerciseStatsPanel({
         setRelatedExercise(null);
       }
     } catch {
+      if (requestId !== historyRequestRef.current) return;
       setSessions([]);
       setRelatedExercise(null);
     } finally {
-      setLoading(false);
+      if (requestId === historyRequestRef.current) setLoading(false);
     }
   }, []);
 
