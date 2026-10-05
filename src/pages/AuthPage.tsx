@@ -10,6 +10,7 @@ import {
   ChevronRight, Zap, FlaskConical, Salad, GraduationCap, Wind, UserPlus
 } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
+import { getYouTubeEmbedUrl } from '../utils/youtubeNative';
 
 const SATELLITES = [
   {
@@ -548,7 +549,7 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
       <div className="absolute inset-0 hidden md:block overflow-hidden pointer-events-none" aria-hidden="true">
         <iframe
           title="Asciende cinematic background"
-          src="https://www.youtube.com/embed/Xyw-1WmgmHM?autoplay=1&mute=1&loop=1&playlist=Xyw-1WmgmHM&controls=0&showinfo=0&rel=0&modestbranding=1"
+          src={getYouTubeEmbedUrl('https://www.youtube.com/watch?v=Xyw-1WmgmHM', { autoplay: 1, mute: 1, loop: 1, playlist: 'Xyw-1WmgmHM', controls: 0, rel: 0 }) || ''}
           className="absolute top-1/2 left-1/2 min-w-full min-h-full"
           style={{
             width: '177.78vh',
