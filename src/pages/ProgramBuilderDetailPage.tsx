@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { getExerciseName } from '../utils/exerciseI18n';
+import { getYouTubeEmbedUrl } from '../utils/youtubeNative';
 import { useToast } from '../hooks/useToast';
 import Toast from '../components/Toast';
 import { Play } from 'lucide-react';
@@ -750,7 +751,7 @@ export default function ProgramBuilderDetailPage({ programId }: Props) {
                             <X className="w-4 h-4 text-white" />
                           </button>
                           <iframe
-                            src={`https://www.youtube.com/embed/${selectedExerciseObj.link.split('v=')[1]?.split('&')[0]}`}
+                            src={getYouTubeEmbedUrl(selectedExerciseObj.link) || ''}
                             className="w-full h-48"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                             allowFullScreen
