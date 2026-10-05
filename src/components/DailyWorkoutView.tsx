@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { getExerciseName, getExerciseDescription } from '../utils/exerciseI18n';
+import { getYouTubeEmbedUrl } from '../utils/youtubeNative';
 import PostTrainingFeedbackModal, { FeedbackData } from './PostTrainingFeedbackModal';
 import StrengthEstimator from './training/StrengthEstimator';
 import WorkoutSessionScreen from './training/WorkoutSessionScreen';
@@ -1006,12 +1007,6 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       day: 'numeric',
     };
     return date.toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', options);
-  };
-
-  const getYouTubeEmbedUrl = (url: string) => {
-    if (!url) return null;
-    const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&?]+)/);
-    return videoId ? `https://www.youtube.com/embed/${videoId[1]}` : null;
   };
 
   const handleWorkoutChange = async (index: number) => {
