@@ -7,6 +7,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../hooks/useToast';
+import { getYouTubeEmbedUrl } from '../../utils/youtubeNative';
 
 interface PageData {
   tagline: string;
@@ -173,6 +174,7 @@ export default function AthletePageEditor() {
   };
 
   const videoId = extractYouTubeId(pageData.promo_video_url);
+  const videoEmbedUrl = getYouTubeEmbedUrl(pageData.promo_video_url);
 
   return (
     <div className="space-y-6">
@@ -312,7 +314,7 @@ export default function AthletePageEditor() {
         {videoId && (
           <div className="mt-3 rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 aspect-video">
             <iframe
-              src={`https://www.youtube.com/embed/${videoId}`}
+              src={videoEmbedUrl || ''}
               title="Video preview"
               className="w-full h-full"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
