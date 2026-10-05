@@ -26,6 +26,7 @@ export async function loadMapLibraries() {
 export function addOpenFreeMapLayer(map: L.Map) {
   return L.maplibreGL({
     style: 'https://tiles.openfreemap.org/styles/liberty',
+    updateInterval: 16,
     attributionControl: { customAttribution: OPENFREEMAP_ATTRIBUTION },
   } as any).addTo(map);
 }

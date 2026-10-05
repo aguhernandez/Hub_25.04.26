@@ -300,13 +300,18 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
     if (!mapContainerRef.current || mapInstanceRef.current) return;
     const L = window.L;
     if (!L) return;
+    const lastPoint = gpsPoints[gpsPoints.length - 1];
     const map = L.map(mapContainerRef.current, {
       zoomControl: false,
       attributionControl: true,
-    }).setView([40.4168, -3.7038], 16);
+    }).setView(
+      lastPoint ? [lastPoint.latitude, lastPoint.longitude] : [40.4168, -3.7038],
+      16,
+    );
     addOpenFreeMapLayer(map);
     L.control.zoom({ position: 'topright' }).addTo(map);
     mapInstanceRef.current = map;
+    if (gpsPoints.length > 0) updateMapRoute();
   };
 
   const updateMapRoute = () => {
@@ -314,31 +319,42 @@ export default function ActivityRecorder({ isOpen, onClose, onSave, plannedWorko
     if (!L || !mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
     const latlngs = gpsPoints.map(p => [p.latitude, p.longitude]);
+    if (latlngs.length === 0) return;
 
-    if (polylineRef.current) { map.removeLayer(polylineRef.current); }
-    polylineRef.current = L.polyline(latlngs, {
-      color: '#fdda36',
-      weight: 6,
-      opacity: 1,
-      lineJoin: 'round',
-      lineCap: 'round',
-    }).addTo(map);
-
-    if (startMarkerRef.current) { map.removeLayer(startMarkerRef.current); }
-    startMarkerRef.current = L.circleMarker([gpsPoints[0].latitude, gpsPoints[0].longitude], {
-      radius: 8, fillColor: '#22c55e', color: '#fff', weight: 3, fillOpacity: 1,
-    }).addTo(map);
-
-    if (currentMarkerRef.current) { map.removeLayer(currentMarkerRef.current); }
-    const last = gpsPoints[gpsPoints.length - 1];
-    currentMarkerRef.current = L.circleMarker([last.latitude, last.longitude], {
-      radius: 10, fillColor: '#fdda36', color: '#080c10', weight: 3, fillOpacity: 1,
-    }).addTo(map);
-
-    if (gpsPoints.length >= 2) {
-      map.fitBounds(polylineRef.current.getBounds(), { padding: [80, 80] });
+    if (polylineRef.current) {
+      polylineRef.current.setLatLngs(latlngs);
     } else {
-      map.setView([last.latitude, last.longitude], 17);
+      polylineRef.current = L.polyline(latlngs, {
+        color: '#fdda36',
+        weight: 6,
+        opacity: 1,
+        lineJoin: 'round',
+        lineCap: 'round',
+      }).addTo(map);
+    }
+
+    if (startMarkerRef.current) {
+      startMarkerRef.current.setLatLng(latlngs[0]);
+    } else {
+      startMarkerRef.current = L.circleMarker(latlngs[0], {
+        radius: 8, fillColor: '#22c55e', color: '#fff', weight: 3, fillOpacity: 1,
+      }).addTo(map);
+    }
+
+    const lastLatLng = latlngs[latlngs.length - 1];
+    if (currentMarkerRef.current) {
+      currentMarkerRef.current.setLatLng(lastLatLng);
+    } else {
+      currentMarkerRef.current = L.circleMarker(lastLatLng, {
+        radius: 10, fillColor: '#fdda36', color: '#080c10', weight: 3, fillOpacity: 1,
+      }).addTo(map);
+    }
+
+    // Keep the runner visible without changing the zoom on every GPS update.
+    if (gpsPoints.length === 1) {
+      map.setView(lastLatLng, 16, { animate: false });
+    } else {
+      map.panTo(lastLatLng, { animate: false });
     }
   };
 
