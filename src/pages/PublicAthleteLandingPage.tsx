@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { getYouTubeEmbedUrl } from '../utils/youtubeNative';
 import {
   MapPin, Activity, Heart, Calendar, TrendingUp, CheckCircle,
   Lock, AlertCircle, Instagram, Youtube, ExternalLink, Copy,
@@ -415,6 +416,7 @@ export default function PublicAthleteLandingPage() {
   const socialLinks = athlete.social_links || {};
   const totalSupporters = projects.reduce((s, p) => s + (p.visible_supports_count || 0), 0);
   const videoId = extractYouTubeId(athlete.promo_video_url || '');
+  const videoEmbedUrl = getYouTubeEmbedUrl(athlete.promo_video_url || '');
 
   return (
     <div className="min-h-screen bg-[#f7f7f9] text-[#1a1a2e] overflow-x-hidden">
@@ -938,7 +940,7 @@ export default function PublicAthleteLandingPage() {
                 <div className="rounded-2xl overflow-hidden border border-gray-200 bg-black shadow-sm">
                   <div className="relative" style={{ paddingBottom: '56.25%' }}>
                     <iframe
-                      src={`https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`}
+                      src={videoEmbedUrl || ''}
                       title="Promo video"
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowFullScreen
