@@ -63,7 +63,7 @@ const TRAINER_ROLE_OPTIONS = [
 
 interface AddTrainerRowProps {
   trainers: any[];
-  existingAssignments: Array<{ trainer_id: string; role_type: string }>;
+  existingAssignments: Array<{ trainer_id: string; role_type: string; is_primary: boolean }>;
   language: string;
   onAdd: (trainerId: string, roleType: string) => Promise<void>;
 }
@@ -71,11 +71,18 @@ interface AddTrainerRowProps {
 function AddTrainerRow({ trainers, existingAssignments, language, onAdd }: AddTrainerRowProps) {
   const [selectedRole, setSelectedRole] = useState('');
   const [selectedTrainer, setSelectedTrainer] = useState('');
+  const [trainerSearch, setTrainerSearch] = useState('');
   const [adding, setAdding] = useState(false);
+
+  const normalizedSearch = trainerSearch.trim().toLowerCase();
+  const filteredTrainers = trainers.filter((trainer) => {
+    const name = trainer.full_name || `${trainer.first_name || ''} ${trainer.last_name || ''}`.trim();
+    return !normalizedSearch || `${name} ${trainer.email}`.toLowerCase().includes(normalizedSearch);
+  });
 
   const isAlreadyAssigned =
     selectedTrainer && selectedRole
-      ? existingAssignments.some(a => a.trainer_id === selectedTrainer && a.role_type === selectedRole)
+      ? existingAssignments.some(a => a.trainer_id === selectedTrainer && a.role_type === selectedRole && a.is_primary)
       : false;
 
   const handleAdd = async () => {
@@ -105,19 +112,32 @@ function AddTrainerRow({ trainers, existingAssignments, language, onAdd }: AddTr
             </option>
           ))}
         </select>
-        <select
-          value={selectedTrainer}
-          onChange={e => setSelectedTrainer(e.target.value)}
-          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-[#fdda36]"
-        >
-          <option value="">{language === 'es' ? 'Seleccionar profesional...' : 'Select professional...'}</option>
-          {trainers.map(t => (
-            <option key={t.id} value={t.id}>
-              {t.full_name || `${t.first_name || ''} ${t.last_name || ''}`.trim() || t.email}
-              {t.trainer_role_type ? ` · ${TRAINER_ROLE_OPTIONS.find(o => o.value === t.trainer_role_type)?.[language === 'es' ? 'labelEs' : 'labelEn'] || t.trainer_role_type}` : ''}
-            </option>
-          ))}
-        </select>
+        <div className="flex-1 space-y-2">
+          <input
+            type="search"
+            value={trainerSearch}
+            onChange={e => setTrainerSearch(e.target.value)}
+            placeholder={language === 'es' ? 'Buscar por nombre o correo...' : 'Search by name or email...'}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-[#fdda36]"
+          />
+          <select
+            value={selectedTrainer}
+            onChange={e => setSelectedTrainer(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-[#fdda36]"
+          >
+            <option value="">{language === 'es' ? 'Seleccionar profesional...' : 'Select professional...'}</option>
+            {filteredTrainers.map(t => (
+              <option key={t.id} value={t.id}>
+                {t.full_name || `${t.first_name || ''} ${t.last_name || ''}`.trim() || t.email} · {t.email}
+              </option>
+            ))}
+          </select>
+          {filteredTrainers.length === 0 && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              {language === 'es' ? 'No hay profesionales que coincidan.' : 'No matching professionals.'}
+            </p>
+          )}
+        </div>
         <button
           onClick={handleAdd}
           disabled={!selectedTrainer || !selectedRole || adding || !!isAlreadyAssigned}
@@ -253,16 +273,16 @@ export default function SettingsPage() {
 
   const loadTrainers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name, full_name, email, trainer_role_type, role')
-        .in('role', ['trainer', 'nutritionist', 'head_coach'])
-        .eq('is_active', true)
-        .eq('is_accepting_clients', true)
-        .order('full_name');
-
-      if (error) throw error;
-      setTrainers(data || []);
+      const roles = ['head_coach', 'trainer', 'nutritionist'] as const;
+      const results = await Promise.all(
+        roles.map((role) => supabase.rpc('search_athlete_professionals', { p_role_type: role, p_search: '' }))
+      );
+      const firstError = results.find((result) => result.error)?.error;
+      if (firstError) throw firstError;
+      const uniqueProfessionals = Array.from(
+        new Map(results.flatMap((result) => result.data || []).map((professional) => [professional.id, professional])).values()
+      );
+      setTrainers(uniqueProfessionals);
     } catch (error) {
       console.error('Error loading trainers:', error);
     }
@@ -271,12 +291,14 @@ export default function SettingsPage() {
   const loadAthleteTrainers = async () => {
     if (!profile?.id) return;
     try {
-      const { data, error } = await supabase
-        .from('athlete_trainers')
-        .select('id, trainer_id, role_type, is_primary')
-        .eq('athlete_id', profile.id);
+      const { data, error } = await supabase.rpc('get_athlete_professional_team', { p_athlete_id: profile.id });
       if (error) throw error;
-      setAthleteTrainers(data || []);
+      setAthleteTrainers((data || []).map((assignment: any) => ({
+        id: assignment.id,
+        trainer_id: assignment.professional_id,
+        role_type: assignment.role_type,
+        is_primary: assignment.is_primary,
+      })));
     } catch (err) {
       console.error('Error loading athlete trainers:', err);
     }
@@ -290,14 +312,13 @@ export default function SettingsPage() {
 
   const handleAddTrainerAssignment = async (trainerId: string, roleType: string) => {
     if (!profile?.id) return;
-    const isPrimary = roleType === 'head_coach' && !athleteTrainers.some(at => at.is_primary);
-    const { data, error } = await supabase
-      .from('athlete_trainers')
-      .insert({ athlete_id: profile.id, trainer_id: trainerId, role_type: roleType, is_primary: isPrimary })
-      .select('id, trainer_id, role_type, is_primary')
-      .single();
+    const { error } = await supabase.rpc('assign_athlete_professional', {
+      p_athlete_id: profile.id,
+      p_professional_id: trainerId,
+      p_role_type: roleType,
+    });
     if (error) { showError(error.message); return; }
-    setAthleteTrainers(prev => [...prev, data]);
+    await loadAthleteTrainers();
     success(language === 'es' ? 'Profesional asignado' : 'Professional assigned');
   };
 
