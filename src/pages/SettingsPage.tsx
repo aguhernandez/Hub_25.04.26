@@ -77,7 +77,8 @@ function AddTrainerRow({ trainers, existingAssignments, language, onAdd }: AddTr
   const normalizedSearch = trainerSearch.trim().toLowerCase();
   const filteredTrainers = trainers.filter((trainer) => {
     const name = trainer.full_name || `${trainer.first_name || ''} ${trainer.last_name || ''}`.trim();
-    return !normalizedSearch || `${name} ${trainer.email}`.toLowerCase().includes(normalizedSearch);
+    const matchesRole = !selectedRole || trainer.eligible_role === selectedRole;
+    return matchesRole && (!normalizedSearch || `${name} ${trainer.email}`.toLowerCase().includes(normalizedSearch));
   });
 
   const isAlreadyAssigned =
@@ -102,7 +103,10 @@ function AddTrainerRow({ trainers, existingAssignments, language, onAdd }: AddTr
       <div className="flex flex-col sm:flex-row gap-2">
         <select
           value={selectedRole}
-          onChange={e => setSelectedRole(e.target.value)}
+          onChange={e => {
+            setSelectedRole(e.target.value);
+            setSelectedTrainer('');
+          }}
           className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-[#fdda36]"
         >
           <option value="">{language === 'es' ? 'Tipo de rol...' : 'Role type...'}</option>
@@ -275,14 +279,17 @@ export default function SettingsPage() {
     try {
       const roles = ['head_coach', 'trainer', 'nutritionist'] as const;
       const results = await Promise.all(
-        roles.map((role) => supabase.rpc('search_athlete_professionals', { p_role_type: role, p_search: '' }))
+        roles.map(async (role) => {
+          const result = await supabase.rpc('search_athlete_professionals', { p_role_type: role, p_search: '' });
+          return { role, ...result };
+        })
       );
       const firstError = results.find((result) => result.error)?.error;
       if (firstError) throw firstError;
-      const uniqueProfessionals = Array.from(
-        new Map(results.flatMap((result) => result.data || []).map((professional) => [professional.id, professional])).values()
+      const eligibleProfessionals = results.flatMap(({ role, data }) =>
+        (data || []).map((professional) => ({ ...professional, eligible_role: role }))
       );
-      setTrainers(uniqueProfessionals);
+      setTrainers(eligibleProfessionals);
     } catch (error) {
       console.error('Error loading trainers:', error);
     }
