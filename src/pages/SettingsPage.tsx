@@ -208,7 +208,7 @@ export default function SettingsPage() {
   const [publicProfileSlug, setPublicProfileSlug] = useState('');
 
   // Multi-trainer assignment
-  const [athleteTrainers, setAthleteTrainers] = useState<Array<{ id?: string; trainer_id: string; role_type: string; is_primary: boolean }>>([]);
+  const [athleteTrainers, setAthleteTrainers] = useState<Array<{ id?: string; trainer_id: string; role_type: string; is_primary: boolean; full_name?: string | null; email?: string }>>([]);
   const [trainers, setTrainers] = useState<any[]>([]);
   const [trainerRoleType, setTrainerRoleType] = useState('');
   const [requestedRole, setRequestedRole] = useState<UserRole>((profile?.role as UserRole) || 'athlete');
@@ -298,6 +298,8 @@ export default function SettingsPage() {
         trainer_id: assignment.professional_id,
         role_type: assignment.role_type,
         is_primary: assignment.is_primary,
+        full_name: assignment.full_name,
+        email: assignment.email,
       })));
     } catch (err) {
       console.error('Error loading athlete trainers:', err);
@@ -989,9 +991,10 @@ export default function SettingsPage() {
                 <div className="space-y-2 mb-4">
                   {athleteTrainers.map(at => {
                     const tp = trainers.find(t => t.id === at.trainer_id);
-                    const name = tp
+                    const name = at.full_name || (tp
                       ? tp.full_name || `${tp.first_name || ''} ${tp.last_name || ''}`.trim() || tp.email
-                      : at.trainer_id;
+                      : at.trainer_id);
+                    const email = at.email || tp?.email;
                     return (
                       <div key={at.id} className="flex items-center justify-between gap-3 px-4 py-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
                         <div className="flex items-center gap-3 min-w-0">
@@ -1000,6 +1003,7 @@ export default function SettingsPage() {
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{name}</p>
+                            {email && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{email}</p>}
                             <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-[#fdda36]/20 text-[#514163] dark:text-[#fdda36] font-medium mt-0.5">
                               {getRoleLabel(at.role_type)}
                             </span>
