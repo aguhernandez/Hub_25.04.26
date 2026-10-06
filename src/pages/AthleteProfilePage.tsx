@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
-import { Target, AlertCircle, Activity, Save, Plus, Trash2, CreditCard as Edit2, MoreVertical } from 'lucide-react';
+import { Target, AlertCircle, Activity, Save, Plus, Trash2, CreditCard as Edit2, MoreVertical, Search, Users, Check } from 'lucide-react';
 import Toast from '../components/Toast';
 import ProfileOptionsModal from '../components/ProfileOptionsModal';
 import { useToast } from '../hooks/useToast';
@@ -29,6 +29,20 @@ interface CoachNote {
   };
 }
 
+type ProfessionalRole = 'head_coach' | 'trainer' | 'nutritionist';
+
+interface Professional {
+  id: string;
+  full_name: string | null;
+  email: string;
+  role: string;
+  avatar_url: string | null;
+}
+
+interface ProfessionalAssignment extends Professional {
+  role_type: ProfessionalRole;
+}
+
 export default function AthleteProfilePage() {
   const { profile } = useAuth();
   const { t, language } = useLanguage();
@@ -45,6 +59,12 @@ export default function AthleteProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showOptionsModal, setShowOptionsModal] = useState(false);
+  const [professionalAssignments, setProfessionalAssignments] = useState<Partial<Record<ProfessionalRole, ProfessionalAssignment>>>({});
+  const [professionalOptions, setProfessionalOptions] = useState<Professional[]>([]);
+  const [professionalRole, setProfessionalRole] = useState<ProfessionalRole>('head_coach');
+  const [professionalSearch, setProfessionalSearch] = useState('');
+  const [loadingProfessionals, setLoadingProfessionals] = useState(false);
+  const [savingProfessionalRole, setSavingProfessionalRole] = useState<ProfessionalRole | null>(null);
 
   const isTrainer = profile?.role === 'trainer' || profile?.role === 'admin';
   const isAthlete = profile?.role === 'athlete';
@@ -53,6 +73,7 @@ export default function AthleteProfilePage() {
     if (profile?.id) {
       loadProfileDetails();
       loadCoachNotes();
+      if (profile.role === 'athlete') loadProfessionalTeam(profile.id);
     }
   }, [profile?.id]);
 
@@ -101,6 +122,66 @@ export default function AthleteProfilePage() {
     } catch (error) {
       console.error('Error loading coach notes:', error);
     }
+  };
+
+  const loadProfessionalTeam = async (athleteId: string) => {
+    const { data, error } = await supabase.rpc('get_athlete_professional_team', { p_athlete_id: athleteId });
+    if (error) {
+      console.error('Error loading professional team:', error);
+      return;
+    }
+
+    const nextAssignments: Partial<Record<ProfessionalRole, ProfessionalAssignment>> = {};
+    (data || []).forEach((assignment: ProfessionalAssignment) => {
+      nextAssignments[assignment.role_type] = assignment;
+    });
+    setProfessionalAssignments(nextAssignments);
+  };
+
+  useEffect(() => {
+    if (!isAthlete) return;
+    let cancelled = false;
+    const loadOptions = async () => {
+      setLoadingProfessionals(true);
+      const { data, error } = await supabase.rpc('search_athlete_professionals', {
+        p_role_type: professionalRole,
+        p_search: professionalSearch,
+      });
+      if (!cancelled) {
+        if (error) {
+          console.error('Error loading professionals:', error);
+          setProfessionalOptions([]);
+        } else {
+          setProfessionalOptions((data || []) as Professional[]);
+        }
+        setLoadingProfessionals(false);
+      }
+    };
+    loadOptions();
+    return () => { cancelled = true; };
+  }, [isAthlete, professionalRole, professionalSearch]);
+
+  const handleAssignProfessional = async (professionalId: string, role: ProfessionalRole) => {
+    if (!profile?.id) return;
+    setSavingProfessionalRole(role);
+    const { error } = await supabase.rpc('assign_athlete_professional', {
+      p_athlete_id: profile.id,
+      p_professional_id: professionalId,
+      p_role_type: role,
+    });
+    if (error) {
+      showError(language === 'es' ? 'No se pudo conectar al profesional' : 'The professional could not be connected');
+    } else {
+      await loadProfessionalTeam(profile.id);
+      success(language === 'es' ? 'Profesional conectado' : 'Professional connected');
+    }
+    setSavingProfessionalRole(null);
+  };
+
+  const professionalRoleLabels: Record<ProfessionalRole, { es: string; en: string }> = {
+    head_coach: { es: 'Head Coach', en: 'Head Coach' },
+    trainer: { es: 'Trainer', en: 'Trainer' },
+    nutritionist: { es: 'Nutricionista', en: 'Nutritionist' },
   };
 
   const handleSaveDetails = async () => {
@@ -298,6 +379,81 @@ export default function AthleteProfilePage() {
           </div>
         </div>
       </div>
+
+      {isAthlete && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+            <Users className="w-6 h-6 text-[#fdda36]" />
+            {language === 'es' ? 'Mi Equipo Profesional' : 'My Professional Team'}
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+            {language === 'es' ? 'Conecta un profesional para cada área de tu preparación.' : 'Connect one professional for each area of your preparation.'}
+          </p>
+
+          <div className="space-y-3 mb-5">
+            {(['head_coach', 'trainer', 'nutritionist'] as ProfessionalRole[]).map((role) => {
+              const assignment = professionalAssignments[role];
+              const label = professionalRoleLabels[role][language === 'es' ? 'es' : 'en'];
+              return (
+                <div key={role} className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-700 px-3 py-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</p>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                      {assignment?.full_name || assignment?.email || (language === 'es' ? 'Sin asignar' : 'Not assigned')}
+                    </p>
+                    {assignment?.full_name && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{assignment.email}</p>}
+                  </div>
+                  {assignment && <Check className="w-5 h-5 text-green-500 shrink-0" />}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 p-4">
+            <div className="flex flex-col sm:flex-row gap-3 mb-3">
+              <select
+                value={professionalRole}
+                onChange={(event) => setProfessionalRole(event.target.value as ProfessionalRole)}
+                className="sm:w-44 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                {(['head_coach', 'trainer', 'nutritionist'] as ProfessionalRole[]).map((role) => (
+                  <option key={role} value={role}>{professionalRoleLabels[role][language === 'es' ? 'es' : 'en']}</option>
+                ))}
+              </select>
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                <input
+                  value={professionalSearch}
+                  onChange={(event) => setProfessionalSearch(event.target.value)}
+                  placeholder={language === 'es' ? 'Buscar por nombre o correo...' : 'Search by name or email...'}
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                />
+              </div>
+            </div>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {loadingProfessionals ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400 py-2">{language === 'es' ? 'Buscando profesionales...' : 'Searching professionals...'}</p>
+              ) : professionalOptions.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400 py-2">{language === 'es' ? 'No hay profesionales disponibles.' : 'No professionals available.'}</p>
+              ) : professionalOptions.map((professional) => (
+                <button
+                  key={professional.id}
+                  type="button"
+                  onClick={() => handleAssignProfessional(professional.id, professionalRole)}
+                  disabled={savingProfessionalRole !== null}
+                  className="w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-left hover:bg-[#fdda36]/15 transition-colors disabled:opacity-50"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-gray-900 dark:text-white truncate">{professional.full_name || professional.email}</span>
+                    <span className="block text-xs text-gray-500 dark:text-gray-400 truncate">{professional.email}</span>
+                  </span>
+                  <Plus className="w-4 h-4 text-[#514163] dark:text-[#fdda36] shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Coach Notes Section */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">

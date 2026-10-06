@@ -12,11 +12,21 @@ interface ExerciseStatsPanelProps {
   onClose: () => void;
 }
 
+interface SessionSet {
+  reps: number;
+  weight: number | null;
+  rir: number | null;
+}
+
 interface SessionLog {
+  id: string;
   date: string;
   weight: number;
+  hasWeight: boolean;
   sets: number;
   reps: number;
+  setDetails: SessionSet[];
+  rirValues: number[];
   volume: number;
 }
 
@@ -63,13 +73,22 @@ export default function ExerciseStatsPanel({
           weight_used,
           reps_completed,
           set_number,
+          rir,
           logged_at,
+          athlete_workout_id,
           workout_exercise_id,
+          athlete_workouts!inner (
+            scheduled_date,
+            completed_at
+          ),
           workout_exercises!inner (
             exercise_id,
             reps,
             sets,
             primary_value,
+            primary_metric,
+            secondary_value,
+            secondary_metric,
             custom_exercise_name,
             exercises (
               id,
@@ -81,7 +100,6 @@ export default function ExerciseStatsPanel({
         `)
         .eq('athlete_id', athId)
         .eq('workout_exercises.exercise_id', exId)
-        .not('weight_used', 'is', null)
         .order('logged_at', { ascending: false });
 
       if (error) throw error;
@@ -104,24 +122,42 @@ export default function ExerciseStatsPanel({
 
       const sessionMap = new Map<string, SessionLog>();
       matchLogs.forEach((log: any) => {
-        const dateKey = new Date(log.logged_at).toLocaleDateString('en-CA');
-        const weight = parseFloat(log.weight_used) || 0;
         const we = log.workout_exercises;
-        const plannedReps = we?.reps ? parseInt(String(we.reps), 10) : (we?.primary_value ? parseInt(String(we.primary_value), 10) : 0);
-        const reps = log.reps_completed || plannedReps || 0;
-        const existing = sessionMap.get(dateKey);
+        const workoutDate = log.athlete_workouts?.completed_at || log.athlete_workouts?.scheduled_date || log.logged_at;
+        const dateKey = String(workoutDate || '').slice(0, 10);
+        const sessionId = log.athlete_workout_id || dateKey;
+        const plannedReps = parseFloat(String(we?.reps || we?.primary_value || '0')) || 0;
+        const plannedWeightValue = we?.primary_metric === 'kg'
+          ? we.primary_value
+          : we?.secondary_metric === 'kg'
+            ? we.secondary_value
+            : null;
+        const plannedWeight = parseFloat(String(plannedWeightValue ?? '')) || 0;
+        const loggedWeight = parseFloat(String(log.weight_used ?? '')) || 0;
+        const weight = loggedWeight > 0 ? loggedWeight : plannedWeight > 0 ? plannedWeight : null;
+        const reps = parseFloat(String(log.reps_completed || '')) || plannedReps;
+        const rir = log.rir !== null && log.rir !== undefined ? Number(log.rir) : null;
+        const existing = sessionMap.get(sessionId);
+
         if (existing) {
           existing.sets += 1;
-          existing.volume += weight * reps;
-          if (weight > existing.weight) existing.weight = weight;
           existing.reps += reps;
+          existing.volume += (weight || 0) * reps;
+          existing.setDetails.push({ reps, weight, rir });
+          if (rir !== null) existing.rirValues.push(rir);
+          if (weight !== null && weight > existing.weight) existing.weight = weight;
+          existing.hasWeight = existing.hasWeight || weight !== null;
         } else {
-          sessionMap.set(dateKey, {
+          sessionMap.set(sessionId, {
+            id: sessionId,
             date: dateKey,
-            weight,
+            weight: weight || 0,
+            hasWeight: weight !== null,
             sets: 1,
             reps,
-            volume: weight * reps,
+            setDetails: [{ reps, weight, rir }],
+            rirValues: rir !== null ? [rir] : [],
+            volume: (weight || 0) * reps,
           });
         }
       });
@@ -282,6 +318,18 @@ export default function ExerciseStatsPanel({
       day: 'numeric',
       year: 'numeric',
     });
+  };
+
+  const formatSessionReps = (session: SessionLog) => {
+    const reps = session.setDetails.map((set) => set.reps);
+    const allEqual = reps.every((value) => value === reps[0]);
+    return allEqual ? String(reps[0]) : reps.join(' / ');
+  };
+
+  const formatSessionRir = (session: SessionLog) => {
+    if (session.rirValues.length === 0) return null;
+    const values = [...new Set(session.rirValues)];
+    return values.length === 1 ? String(values[0]) : values.join(' / ');
   };
 
   if (!isOpen) return null;
@@ -516,7 +564,7 @@ export default function ExerciseStatsPanel({
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                          {session.weight} kg
+                          {session.hasWeight ? `${session.weight} kg` : '—'}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                           {formatDate(session.date)}
@@ -525,10 +573,11 @@ export default function ExerciseStatsPanel({
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className="text-sm text-gray-700 dark:text-gray-300">
-                        {session.sets} × {session.reps} {t('reps', 'reps')}
+                        {session.sets} × {formatSessionReps(session)} {t('reps', 'reps')}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {Math.round(session.volume).toLocaleString()} kg {t('vol', 'vol')}
+                        {formatSessionRir(session) !== null && `RIR ${formatSessionRir(session)} · `}
+                        {session.hasWeight ? `${Math.round(session.volume).toLocaleString()} kg ${t('vol', 'vol')}` : t('Sin peso', 'No weight')}
                       </p>
                     </div>
                   </div>
