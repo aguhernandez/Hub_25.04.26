@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Share2, Download, X, CheckCircle, MapPin, Clock, Zap, Mountain, QrCode, Copy } from 'lucide-react';
+import { Share2, X, CheckCircle, MapPin, Clock, Zap, Mountain, QrCode, Copy } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -312,9 +312,9 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
   const [cardType, setCardType] = useState<CardType>('map');
   const [sharing, setSharing] = useState(false);
   const [shared, setShared] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [savedOk, setSavedOk] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [copyingImage, setCopyingImage] = useState(false);
+  const [imageCopied, setImageCopied] = useState(false);
+  const [copyImageError, setCopyImageError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [fontLoaded, setFontLoaded] = useState(false);
   const [logoLoaded, setLogoLoaded] = useState(false);
@@ -706,9 +706,9 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     await renderCardToCanvas(canvas, cardType);
   }, [cardType, renderCardToCanvas]);
 
-  const createExportCanvas = useCallback(async () => {
+  const createExportCanvas = useCallback(async (type: CardType = cardType) => {
     const canvas = document.createElement('canvas');
-    return renderCardToCanvas(canvas, cardType);
+    return renderCardToCanvas(canvas, type);
   }, [cardType, renderCardToCanvas]);
 
   useEffect(() => {
@@ -717,87 +717,43 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     return () => cancelAnimationFrame(raf);
   }, [ready, fontLoaded, logoLoaded, generateCard]);
 
-  // ─── Save to Camera Roll ─────────────────────────────────────────
-  const handleSaveToGallery = async () => {
-    if (saving || !ready || !fontLoaded || !logoLoaded) return;
+  // Start clipboard.write synchronously in the button gesture. Mobile browsers
+  // can reject clipboard writes if image generation happens before the call.
+  const handleCopyImage = () => {
+    if (copyingImage || !ready || !fontLoaded || !logoLoaded) return;
+    if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+      setCopyImageError(language === 'es'
+        ? 'Este navegador no permite copiar imágenes.'
+        : 'This browser cannot copy images.');
+      return;
+    }
 
-    setSaving(true);
-    setSaveError(null);
+    setCopyingImage(true);
+    setImageCopied(false);
+    setCopyImageError(null);
+
+    const pngBlob = createExportCanvas('transparent').then((canvas) => new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('PNG export failed'));
+      }, 'image/png');
+    }));
 
     try {
-      const canvas = await createExportCanvas();
-      const dateStr = activityData.date || new Date().toISOString().split('T')[0];
-      const fileName = `asciende-${activityData.sportType}-${dateStr}.png`;
-
-      let platform = 'web';
-      try {
-        const { Capacitor } = await import('@capacitor/core');
-        if (Capacitor.isNativePlatform()) platform = Capacitor.getPlatform();
-      } catch { /* web */ }
-
-      if (platform === 'ios' || platform === 'android') {
-        const { Media } = await import('@capacitor-community/media');
-
-        // Request permission first (this prompts the user on first use)
-        try {
-          await (Media as any).getPermissions?.();
-        } catch {
-          // Older versions don't have getPermissions — savePhoto will prompt
-        }
-
-        const base64 = await canvasToBase64(canvas);
-
-        // Save directly to Camera Roll (default album if Asciende album fails)
-        let albumId: string | undefined;
-        try {
-          const { albums } = await Media.getAlbums();
-          const existing = albums.find((a: any) =>
-            a.name?.toLowerCase() === 'asciende'
-          );
-          if (existing) {
-            albumId = existing.identifier ?? existing.id;
-          } else {
-            const created = await Media.createAlbum({ name: 'Asciende' });
-            albumId = created.identifier ?? created.id;
-          }
-        } catch {
-          // Album ops failed — save to default Camera Roll
-        }
-
-        await Media.savePhoto({
-          path: `data:image/png;base64,${base64}`,
-          albumIdentifier: albumId,
-          fileName,
-        } as any);
-
-        setSavedOk(true);
-        setTimeout(() => setSavedOk(false), 3000);
-      } else {
-        // Web: trigger file download
-        const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        a.click();
-        URL.revokeObjectURL(url);
-        setSavedOk(true);
-        setTimeout(() => setSavedOk(false), 2500);
-      }
-    } catch (e: any) {
-      if (e?.name !== 'AbortError') {
-        if (e?.message?.includes('denied') || e?.message?.includes('permission')) {
-          setSaveError(language === 'es'
-            ? 'Permiso denegado. Habilita en Ajustes.'
-            : 'Permission denied. Enable in Settings.');
-        } else {
-          setSaveError(language === 'es' ? 'No se pudo guardar' : 'Could not save');
-        }
-        setTimeout(() => setSaveError(null), 4000);
-      }
-    } finally {
-      setSaving(false);
+      const item = new ClipboardItem({ 'image/png': pngBlob });
+      void navigator.clipboard.write([item]).then(() => {
+        setImageCopied(true);
+        setTimeout(() => setImageCopied(false), 3000);
+      }).catch(() => {
+        setCopyImageError(language === 'es'
+          ? 'No se pudo copiar. Prueba desde la app o un navegador actualizado.'
+          : 'Could not copy. Try the app or an updated browser.');
+      }).finally(() => setCopyingImage(false));
+    } catch {
+      setCopyingImage(false);
+      setCopyImageError(language === 'es'
+        ? 'No se pudo copiar. Prueba desde la app o un navegador actualizado.'
+        : 'Could not copy. Try the app or an updated browser.');
     }
   };
 
@@ -814,6 +770,48 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
         reader.readAsDataURL(blob);
       }, 'image/png');
     });
+  };
+
+  // Retained for the existing Share fallback on browsers without Web Share.
+  const saveImageForShareFallback = async () => {
+    try {
+      const canvas = await createExportCanvas();
+      const dateStr = activityData.date || new Date().toISOString().split('T')[0];
+      const fileName = `asciende-${activityData.sportType}-${dateStr}.png`;
+
+      let platform = 'web';
+      try {
+        const { Capacitor } = await import('@capacitor/core');
+        if (Capacitor.isNativePlatform()) platform = Capacitor.getPlatform();
+      } catch { /* web */ }
+
+      if (platform === 'ios' || platform === 'android') {
+        const { Media } = await import('@capacitor-community/media');
+        try { await (Media as any).getPermissions?.(); } catch { /* savePhoto may prompt */ }
+        const base64 = await canvasToBase64(canvas);
+        let albumId: string | undefined;
+        try {
+          const { albums } = await Media.getAlbums();
+          const existing = albums.find((album: any) => album.name?.toLowerCase() === 'asciende');
+          if (existing) albumId = existing.identifier ?? existing.id;
+          else {
+            const created = await Media.createAlbum({ name: 'Asciende' });
+            albumId = created.identifier ?? created.id;
+          }
+        } catch { /* save to the default Camera Roll */ }
+        await Media.savePhoto({ path: `data:image/png;base64,${base64}`, albumIdentifier: albumId, fileName } as any);
+        return;
+      }
+
+      const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { /* preserve the existing Share fallback without surfacing a save error */ }
   };
 
   // ─── Share: Try Instagram Stories sticker first, then native share ──
@@ -873,14 +871,14 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
         setShared(true);
         setTimeout(() => setShared(false), 3000);
       } else {
-        await handleSaveToGallery();
+        await saveImageForShareFallback();
         await navigator.clipboard.writeText(shareUrl).catch(() => {});
         setShared(true);
         setTimeout(() => setShared(false), 3000);
       }
     } catch (e: any) {
       if (e?.name !== 'AbortError') {
-        await handleSaveToGallery();
+        await saveImageForShareFallback();
       }
     } finally {
       setSharing(false);
@@ -1021,33 +1019,36 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
             )}
           </div>
 
-          {/* Actions: Save + Copy Link + Share */}
+          {/* Actions: Copy image + Link + Share */}
           <div className="flex gap-2">
             <button
-              onClick={handleSaveToGallery}
-              disabled={saving}
-              className={`flex items-center gap-1.5 px-3 py-2.5 border text-xs font-medium rounded-xl transition-all ${
-                savedOk
+              onClick={handleCopyImage}
+              disabled={copyingImage}
+              title={copyImageError ?? undefined}
+              className={`flex items-center gap-1.5 px-2.5 py-2.5 border text-[10px] font-medium rounded-xl transition-all whitespace-nowrap ${
+                imageCopied
                   ? 'border-green-400 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
-                  : saveError
+                  : copyImageError
                   ? 'border-red-400 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20'
                   : 'border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800'
               } disabled:opacity-60 disabled:cursor-not-allowed`}
             >
-              {saving ? (
+              {copyingImage ? (
                 <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-              ) : savedOk ? (
+              ) : imageCopied ? (
                 <CheckCircle className="w-4 h-4" />
+              ) : copyImageError ? (
+                <X className="w-4 h-4" />
               ) : (
-                <Download className="w-4 h-4" />
+                <Copy className="w-4 h-4" />
               )}
-              {saving
-                ? (language === 'es' ? 'Guardando...' : 'Saving...')
-                : savedOk
-                ? (language === 'es' ? 'Guardado' : 'Saved')
-                : saveError
-                ? saveError
-                : (language === 'es' ? 'Guardar' : 'Save')}
+              {copyingImage
+                ? (language === 'es' ? 'Copiando...' : 'Copying...')
+                : imageCopied
+                ? (language === 'es' ? 'Copiado' : 'Copied')
+                : copyImageError
+                ? (language === 'es' ? 'Error' : 'Error')
+                : (language === 'es' ? 'Copiar PNG' : 'Copy to Clipboard')}
             </button>
             <button
               onClick={() => setShowQR(true)}
@@ -1074,10 +1075,10 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
             </button>
           </div>
 
-          <p className="text-[9px] text-center text-neutral-400 dark:text-neutral-500">
-            {language === 'es'
+          <p className={`text-[9px] text-center ${copyImageError ? 'text-red-500' : 'text-neutral-400 dark:text-neutral-500'}`}>
+            {copyImageError ?? (language === 'es'
               ? 'Compartir abre Instagram Stories directamente (o mas opciones si no esta instalado)'
-              : 'Share opens Instagram Stories directly (or more options if not installed)'}
+              : 'Share opens Instagram Stories directly (or more options if not installed)')}
           </p>
         </div>
       </div>
