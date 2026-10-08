@@ -356,6 +356,7 @@ export default function WorkoutBuilderPage() {
             primary_metric,
             secondary_metric,
             section_title,
+            block_instance_id,
             working_set,
             exercises (
               id,
@@ -413,21 +414,31 @@ export default function WorkoutBuilderPage() {
 
       const exercisesArray = Object.values(groupedExercises);
 
-      const sectionTitles = [...new Set(exercisesArray.map((ex: any) => ex.section_title).filter(Boolean))] as string[];
-      const reconstructedBlocks: BlockInstance[] = sectionTitles.map(title => {
-        const available = availableBlocks.find(b => b.name === title);
-        return {
-          instanceId: `block_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          typeId: available?.id || 'custom',
-          name: title,
-          color: available?.color || 'blue',
-        };
+      // Reconstruct blocks preserving duplicates: group by block_instance_id (or section_title for legacy)
+      const blockMap = new Map<string, { title: string; firstIndex: number }>();
+      exercisesArray.forEach((ex: any, i: number) => {
+        const key = ex.block_instance_id || ex.section_title || '_default';
+        if (!blockMap.has(key)) {
+          blockMap.set(key, { title: ex.section_title || 'Main Work', firstIndex: i });
+        }
       });
+      const reconstructedBlocks: BlockInstance[] = Array.from(blockMap.entries())
+        .sort((a, b) => a[1].firstIndex - b[1].firstIndex)
+        .map(([key, info]) => {
+          const available = availableBlocks.find(b => b.name === info.title);
+          return {
+            instanceId: key.startsWith('block_') ? key : `block_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            typeId: available?.id || 'custom',
+            name: info.title,
+            color: available?.color || 'blue',
+          };
+        });
       setOrderedBlocks(reconstructedBlocks);
 
-      const titleToInstanceId = new Map(reconstructedBlocks.map(b => [b.name, b.instanceId]));
+      const keyToInstanceId = new Map(reconstructedBlocks.map(b => [b.instanceId, b.instanceId]));
       exercisesArray.forEach((ex: any) => {
-        ex.block_instance_id = titleToInstanceId.get(ex.section_title) || reconstructedBlocks[0]?.instanceId || 'default';
+        const key = ex.block_instance_id || ex.section_title || '_default';
+        ex.block_instance_id = keyToInstanceId.get(key) || reconstructedBlocks[0]?.instanceId || 'default';
       });
 
       setWorkoutExercises(exercisesArray);
@@ -836,6 +847,7 @@ export default function WorkoutBuilderPage() {
             primary_metric: ex.primary_metric,
             secondary_metric: ex.secondary_metric,
             section_title: lineIndex === 0 ? ex.section_title : null,
+            block_instance_id: lineIndex === 0 ? (ex.block_instance_id || null) : null,
             working_set: line.working_set ?? false
           });
         });

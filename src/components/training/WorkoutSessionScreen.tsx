@@ -36,6 +36,7 @@ interface Exercise {
   rest_seconds: number;
   link?: string;
   section_title?: string;
+  block_instance_id?: string;
   actualSets?: number;
   primary_value?: string;
   secondary_value?: string;
@@ -73,12 +74,14 @@ interface WorkoutSessionScreenProps {
 
 function groupIntoSections(exercises: Exercise[]): WorkoutSection[] {
   const sections: WorkoutSection[] = [];
+  let currentKey = '';
   let currentTitle = '';
   let currentExercises: Exercise[] = [];
 
   exercises.forEach((ex) => {
     const title = ex.section_title || '';
-    if (title !== currentTitle) {
+    const key = ex.block_instance_id || title;
+    if (key !== currentKey) {
       if (currentExercises.length > 0) {
         sections.push({
           title: currentTitle,
@@ -88,6 +91,7 @@ function groupIntoSections(exercises: Exercise[]): WorkoutSection[] {
             currentTitle.toLowerCase().includes('evaluación'),
         });
       }
+      currentKey = key;
       currentTitle = title;
       currentExercises = [ex];
     } else {

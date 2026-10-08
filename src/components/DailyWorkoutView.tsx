@@ -36,6 +36,7 @@ interface Exercise {
   rest_seconds: number;
   link?: string;
   section_title?: string;
+  block_instance_id?: string;
   actualSets?: number;
   primary_value?: string;
   secondary_value?: string;
@@ -151,6 +152,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
           rest_seconds: item.rest_seconds || 60,
           link: item.exercises?.link,
           section_title: item.section_title,
+          block_instance_id: item.block_instance_id,
           primary_value: item.primary_value,
           secondary_value: item.secondary_value,
           primary_metric: item.primary_metric,
@@ -386,7 +388,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       console.log('🔍 Loading exercises for workout:', allActivities[0].workout_id);
       const { data: exercisesData, error: exError } = await supabase
         .from('workout_exercises')
-        .select('id, order_index, sets, reps, rest_seconds, section_title, primary_value, secondary_value, primary_metric, secondary_metric, working_set, exercises(id, exercise, exercise_en, exercise_es, description, description_en, description_es, link)')
+        .select('id, order_index, sets, reps, rest_seconds, section_title, block_instance_id, primary_value, secondary_value, primary_metric, secondary_metric, working_set, exercises(id, exercise, exercise_en, exercise_es, description, description_en, description_es, link)')
         .eq('workout_id', allActivities[0].workout_id)
         .order('order_index');
 
@@ -1018,7 +1020,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
     if (selectedWorkout?.workout_id) {
       const { data: exercisesData } = await supabase
         .from('workout_exercises')
-        .select('id, order_index, sets, reps, rest_seconds, section_title, primary_value, secondary_value, primary_metric, secondary_metric, working_set, exercises(id, exercise, exercise_en, exercise_es, description, description_en, description_es, link)')
+        .select('id, order_index, sets, reps, rest_seconds, section_title, block_instance_id, primary_value, secondary_value, primary_metric, secondary_metric, working_set, exercises(id, exercise, exercise_en, exercise_es, description, description_en, description_es, link)')
         .eq('workout_id', selectedWorkout.workout_id)
         .order('order_index');
 
@@ -1452,14 +1454,15 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
                 return language === 'es' ? 'reps' : 'reps';
               };
 
-              const sections: { title: string; exercises: typeof exercises }[] = [];
+              const sections: { title: string; key: string; exercises: typeof exercises }[] = [];
               exercises.forEach((ex) => {
                 const title = ex.section_title || (language === 'es' ? 'Ejercicios' : 'Exercises');
+                const key = ex.block_instance_id || title;
                 const last = sections[sections.length - 1];
-                if (last && last.title === title) {
+                if (last && last.key === key) {
                   last.exercises.push(ex);
                 } else {
-                  sections.push({ title, exercises: [ex] });
+                  sections.push({ title, key, exercises: [ex] });
                 }
               });
 

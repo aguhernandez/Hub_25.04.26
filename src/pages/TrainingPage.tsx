@@ -884,6 +884,8 @@ export default function TrainingPage() {
           rpe,
           working_set,
           exercise_id,
+          section_title,
+          block_instance_id,
           exercises (
             id,
             exercise,
@@ -1657,7 +1659,7 @@ export default function TrainingPage() {
 
     const { data: originalExercises, error: exErr } = await supabase
       .from('workout_exercises')
-      .select('exercise_id, custom_exercise_name, custom_exercise_video_url, sets, reps, rest_seconds, notes, superset_group, order_index, primary_metric, secondary_metric, set_lines, section_title, use_1rm_auto_load, target_1rm_percentage, reference_1rm_method, calculated_load, rir, rpe, primary_value, secondary_value')
+      .select('exercise_id, custom_exercise_name, custom_exercise_video_url, sets, reps, rest_seconds, notes, superset_group, order_index, primary_metric, secondary_metric, set_lines, section_title, block_instance_id, use_1rm_auto_load, target_1rm_percentage, reference_1rm_method, calculated_load, rir, rpe, primary_value, secondary_value')
       .eq('workout_id', sourceWorkoutId)
       .order('order_index');
     if (exErr) throw exErr;
