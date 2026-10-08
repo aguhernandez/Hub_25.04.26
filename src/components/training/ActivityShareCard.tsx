@@ -680,21 +680,36 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
     drawLogoOrText(ctx, logoImgRef.current, W / 2, ctaY + 200, W * 0.45, 100, f('700 44px'));
   }, [activityData, language, sport, shareMode, activeProject, profile]);
 
-  const generateCard = useCallback(async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
+  const renderCardToCanvas = useCallback(async (canvas: HTMLCanvasElement, type: CardType) => {
     const W = 1080;
     const H = 1920;
     canvas.width = W;
     canvas.height = H;
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) throw new Error('Could not create transparent canvas');
 
-    if (cardType === 'map') await drawMapCard(ctx, W, H);
-    else if (cardType === 'transparent') drawTransparentCard(ctx, W, H);
+    if (type === 'map') await drawMapCard(ctx, W, H);
+    else if (type === 'transparent') drawTransparentCard(ctx, W, H);
     else await drawStoryCard(ctx, W, H);
-  }, [cardType, drawMapCard, drawTransparentCard, drawStoryCard]);
+
+    // These styles must remain overlays. Catch any accidental opaque fill before
+    // the image leaves the app; (0, 0) is outside both transparent card layouts.
+    if (type !== 'map' && ctx.getImageData(0, 0, 1, 1).data[3] !== 0) {
+      throw new Error('Transparent export contains an opaque background');
+    }
+    return canvas;
+  }, [drawMapCard, drawTransparentCard, drawStoryCard]);
+
+  const generateCard = useCallback(async () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    await renderCardToCanvas(canvas, cardType);
+  }, [cardType, renderCardToCanvas]);
+
+  const createExportCanvas = useCallback(async () => {
+    const canvas = document.createElement('canvas');
+    return renderCardToCanvas(canvas, cardType);
+  }, [cardType, renderCardToCanvas]);
 
   useEffect(() => {
     if (!ready || !fontLoaded || !logoLoaded) return;
@@ -704,13 +719,13 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
 
   // ─── Save to Camera Roll ─────────────────────────────────────────
   const handleSaveToGallery = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas || saving) return;
+    if (saving || !ready || !fontLoaded || !logoLoaded) return;
 
     setSaving(true);
     setSaveError(null);
 
     try {
+      const canvas = await createExportCanvas();
       const dateStr = activityData.date || new Date().toISOString().split('T')[0];
       const fileName = `asciende-${activityData.sportType}-${dateStr}.png`;
 
@@ -803,10 +818,10 @@ export default function ActivityShareCard({ activityData, onClose }: ActivitySha
 
   // ─── Share: Try Instagram Stories sticker first, then native share ──
   const handleShare = async () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (sharing || !ready || !fontLoaded || !logoLoaded) return;
     setSharing(true);
     try {
+      const canvas = await createExportCanvas();
       try {
         const { Capacitor } = await import('@capacitor/core');
         if (Capacitor.isNativePlatform()) {
