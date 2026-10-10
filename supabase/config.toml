@@ -39,3 +39,6 @@ verify_jwt = false
 
 [functions.hub-data-proxy]
 verify_jwt = false
+
+[functions.open-wearables]
+verify_jwt = true

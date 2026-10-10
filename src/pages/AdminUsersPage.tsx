@@ -56,6 +56,7 @@ interface AdminUser {
     current_period_end: string | null;
     max_athletes: number;
   } | null;
+  wearable?: { link?: any; connections?: any; summary?: any; error?: any } | null;
 }
 
 const PAGE_SIZE = 20;
@@ -74,6 +75,12 @@ function AdminUsersPageContent() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [wearableFilter, setWearableFilter] = useState('all');
+  const [expandedWearable, setExpandedWearable] = useState<string | null>(null);
+  const [wearableRaw, setWearableRaw] = useState<Record<string, unknown>>({});
+  const [owUsers, setOwUsers] = useState<any[]>([]);
+  const [linkingUser, setLinkingUser] = useState<string | null>(null);
+  const [selectedOwUser, setSelectedOwUser] = useState('');
 
   const [pendingRoles, setPendingRoles] = useState<Record<string, UserRole>>({});
   const [savingRoleId, setSavingRoleId] = useState<string | null>(null);
@@ -92,6 +99,51 @@ function AdminUsersPageContent() {
   const [complimentaryTarget, setComplimentaryTarget] = useState<AdminUser | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+
+  const wearableStatus = (user: AdminUser) => {
+    const entry = user.wearable;
+    if (!entry) return 'none';
+    if (entry.error || entry.connections?.error || entry.summary?.error) return 'error';
+    const rows = Array.isArray(entry.connections) ? entry.connections : (entry.connections?.items || entry.connections?.connections || []);
+    if (!rows.length) return 'none';
+    if (rows.some((row: any) => ['error', 'expired', 'revoked'].includes(String(row.status || '').toLowerCase()))) return 'error';
+    const activeRows = rows.filter((row: any) => ['active', 'connected'].includes(String(row.status || '').toLowerCase()));
+    if (!activeRows.length) return 'none';
+    if (activeRows.some((row: any) => !row.last_synced_at || Date.now() - new Date(row.last_synced_at).getTime() > 48 * 60 * 60 * 1000)) return 'stale';
+    return 'ok';
+  };
+  const wearableLabel = (status: string) => ({ none: language === 'es' ? 'Sin conexión' : 'Not connected', ok: 'OK', stale: language === 'es' ? 'Sin sync' : 'No sync', error: language === 'es' ? 'Error / vencida' : 'Error / expired' }[status] || status);
+  const wearableStyle = (status: string) => status === 'ok' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' : status === 'stale' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' : status === 'error' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+  const filteredUsers = users.filter(user => wearableFilter === 'all' || (wearableFilter === 'none' ? wearableStatus(user) === 'none' : ['error', 'stale'].includes(wearableStatus(user))));
+  const openWearableDetails = async (user: AdminUser) => {
+    if (expandedWearable === user.id) { setExpandedWearable(null); return; }
+    setExpandedWearable(user.id);
+    if (!wearableRaw[user.id]) {
+      const { data, error: invokeError } = await supabase.functions.invoke('open-wearables', { body: { action: 'admin-raw', asciende_user_id: user.id } });
+      setWearableRaw(current => ({ ...current, [user.id]: invokeError ? { error: invokeError.message } : data }));
+    }
+  };
+  const prepareWearableLink = async (user: AdminUser) => {
+    setLinkingUser(user.id);
+    const { data, error: invokeError } = await supabase.functions.invoke('open-wearables', { body: { action: 'admin-list-ow-users' } });
+    if (invokeError) { error(language === 'es' ? 'No se pudo listar usuarios de Open Wearables' : 'Could not list Open Wearables users'); return; }
+    const items = data?.items || [];
+    setOwUsers(items);
+    const match = items.find((item: any) => String(item.email || '').toLowerCase() === user.email.toLowerCase());
+    setSelectedOwUser(match?.id || '');
+  };
+  const confirmWearableLink = async (userId: string) => {
+    if (!selectedOwUser) return;
+    const { error: invokeError } = await supabase.functions.invoke('open-wearables', { body: { action: 'admin-link', asciende_user_id: userId, ow_user_id: selectedOwUser } });
+    if (invokeError) { error(language === 'es' ? 'No se pudo vincular la cuenta' : 'Could not link account'); return; }
+    setLinkingUser(null); setSelectedOwUser(''); void loadUsers();
+  };
+  const unlinkWearable = async (userId: string) => {
+    const { error: invokeError } = await supabase.functions.invoke('open-wearables', { body: { action: 'admin-unlink', asciende_user_id: userId } });
+    if (invokeError) { error(language === 'es' ? 'No se pudo deshacer el vínculo' : 'Could not unlink account'); return; }
+    setWearableRaw(current => ({ ...current, [userId]: null }));
+    void loadUsers();
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -152,6 +204,12 @@ function AdminUsersPageContent() {
         }
       });
 
+      let wearableByUser = new Map<string, any>();
+      try {
+        const { data: overview, error: overviewError } = await supabase.functions.invoke('open-wearables', { body: { action: 'admin-overview' } });
+        if (overviewError) throw overviewError;
+        (overview?.users || []).forEach((entry: any) => { if (entry?.user?.id) wearableByUser.set(entry.user.id, entry); });
+      } catch (wearableError) { console.warn('Could not load wearable overview:', wearableError); }
       const usersWithMemberships: AdminUser[] = profiles.map((p: any) => ({
         id: p.id,
         email: p.email,
@@ -166,6 +224,7 @@ function AdminUsersPageContent() {
         avatar_url: p.avatar_url,
         membership: membershipByUser.get(p.id) || null,
         proSubscription: proSubByUser.get(p.id) || null,
+        wearable: wearableByUser.get(p.id) || null,
       }));
 
       setUsers(usersWithMemberships);
@@ -488,6 +547,11 @@ function AdminUsersPageContent() {
               <option value="active">{t('active')}</option>
               <option value="inactive">{t('inactive')}</option>
             </select>
+            <select value={wearableFilter} onChange={e => setWearableFilter(e.target.value)} className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+              <option value="all">{language === 'es' ? 'Todas las conexiones' : 'All connections'}</option>
+              <option value="none">{language === 'es' ? 'Sin conexión' : 'Not connected'}</option>
+              <option value="issues">{language === 'es' ? 'Con error o sin sync' : 'Error or no sync'}</option>
+            </select>
           </div>
         </div>
 
@@ -529,6 +593,7 @@ function AdminUsersPageContent() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         {t('membership')}
                       </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{language === 'es' ? 'Conexiones' : 'Connections'}</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         {t('proSub')}
                       </th>
@@ -538,7 +603,7 @@ function AdminUsersPageContent() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {users.map((user) => {
+                    {filteredUsers.map((user) => {
                       const isActive = user.is_active ?? true;
                       return (
                         <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
@@ -637,6 +702,28 @@ function AdminUsersPageContent() {
                                 {t('noMembership')}
                               </span>
                             )}
+                          </td>
+                          <td className="px-6 py-4 min-w-56">
+                            {(() => { const state = wearableStatus(user); const rows = Array.isArray(user.wearable?.connections) ? user.wearable.connections : (user.wearable?.connections?.items || user.wearable?.connections?.connections || []); return <>
+                              <button onClick={() => void openWearableDetails(user)} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${wearableStyle(state)}`}>
+                                {wearableLabel(state)}{rows.length > 1 ? ` · ${rows.length}` : ''}{expandedWearable === user.id ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                              </button>
+                              {expandedWearable === user.id && <div className="mt-3 min-w-72 space-y-3 rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                                {user.wearable?.error && <p className="text-xs text-red-600">{user.wearable.error.error || (language === 'es' ? 'Error consultando Open Wearables' : 'Open Wearables query failed')}</p>}
+                                {user.wearable?.summary_error && <p className="text-xs text-amber-600">{language === 'es' ? 'Resumen de disponibilidad no accesible: ' : 'Data summary unavailable: '}{user.wearable.summary_error.error}</p>}
+                                {rows.length ? rows.map((row: any, index: number) => <div key={`${row.provider || 'provider'}-${index}`} className="border-b border-gray-100 pb-2 text-xs last:border-0 dark:border-gray-700">
+                                  <p className="font-semibold text-gray-900 dark:text-white">{row.provider || 'Proveedor'} · {row.status || 'unknown'}</p>
+                                  <p className="text-gray-500">{language === 'es' ? 'Conexión' : 'Connected'}: {row.connected_at ? formatDateTime(row.connected_at) : '—'}</p>
+                                  <p className="text-gray-500">{language === 'es' ? 'Última sincronización' : 'Last sync'}: {row.last_synced_at ? formatDateTime(row.last_synced_at) : '—'}</p>
+                                  {row.last_error && <p className="text-red-600">{String(row.last_error)}</p>}
+                                </div>) : <p className="text-xs text-gray-500">{language === 'es' ? 'Sin proveedor vinculado.' : 'No provider linked.'}</p>}
+                                {Array.isArray(user.wearable?.data_types) && user.wearable.data_types.length > 0 && <div className="space-y-1 text-xs text-gray-500">{user.wearable.data_types.map((item: any, index: number) => <p key={`${item.type}-${index}`}>{item.type}: {item.last_data_at ? formatDateTime(item.last_data_at) : '—'}</p>)}</div>}
+                                <button onClick={() => void prepareWearableLink(user)} className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400">{language === 'es' ? 'Vincular con usuario existente de Open Wearables' : 'Link existing Open Wearables user'}</button>
+                                {user.wearable?.link && <button onClick={() => void unlinkWearable(user.id)} className="ml-3 text-xs font-medium text-red-600 hover:underline dark:text-red-400">{language === 'es' ? 'Deshacer vínculo' : 'Undo link'}</button>}
+                                {linkingUser === user.id && <div className="space-y-2"><select value={selectedOwUser} onChange={e => setSelectedOwUser(e.target.value)} className="w-full rounded border border-gray-300 bg-white p-2 text-xs text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white"><option value="">{language === 'es' ? 'Seleccionar usuario…' : 'Select user…'}</option>{owUsers.map((item: any) => <option key={item.id} value={item.id}>{item.email || item.id}{String(item.email || '').toLowerCase() === user.email.toLowerCase() ? ' · match' : ''}</option>)}</select><button disabled={!selectedOwUser} onClick={() => void confirmWearableLink(user.id)} className="rounded bg-[#fdda36] px-3 py-1.5 text-xs font-semibold text-[#514163] disabled:opacity-50">{language === 'es' ? 'Confirmar vínculo' : 'Confirm link'}</button><button onClick={() => setLinkingUser(null)} className="ml-2 text-xs text-gray-500">{language === 'es' ? 'Cancelar' : 'Cancel'}</button></div>}
+                                <details><summary className="cursor-pointer text-xs text-gray-500">{language === 'es' ? 'Respuesta cruda temporal' : 'Temporary raw response'}</summary><pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-gray-50 p-2 text-[10px] dark:bg-gray-900">{wearableRaw[user.id] ? JSON.stringify(wearableRaw[user.id], null, 2) : (language === 'es' ? 'Cargando…' : 'Loading…')}</pre></details>
+                              </div>}
+                            </>; })()}
                           </td>
                           {/* Pro Subscription */}
                           <td className="px-6 py-4 whitespace-nowrap">

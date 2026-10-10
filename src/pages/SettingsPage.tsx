@@ -54,6 +54,7 @@ import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 import { initPushNotifications } from '../services/pushNotificationService';
 import { ROLE_LABELS, ROLE_LABELS_ES, USER_ROLES, type UserRole } from '../types/roles';
+import WearableConnectionsSection from '../components/WearableConnectionsSection';
 
 const TRAINER_ROLE_OPTIONS = [
   { value: 'head_coach',     labelEs: 'Entrenador Principal',              labelEn: 'Head Coach' },
@@ -171,9 +172,9 @@ export default function SettingsPage() {
 
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [activeSection, setActiveSection] = useState<'profile' | 'security' | 'membership' | 'athlete-subscription' | 'subscription' | 'admin' | 'preferences' | 'support' | 'about-coach' | 'notifications' | 'trainingpeaks' | 'strava' | 'satellites' | 'planner-connections' | 'invoices' | 'payment-config'>(() => {
+  const [activeSection, setActiveSection] = useState<'profile' | 'security' | 'membership' | 'athlete-subscription' | 'subscription' | 'admin' | 'preferences' | 'support' | 'about-coach' | 'notifications' | 'trainingpeaks' | 'strava' | 'satellites' | 'planner-connections' | 'invoices' | 'payment-config' | 'wearables'>(() => {
     const section = new URLSearchParams(window.location.search).get('section');
-    return section === 'membership' ? 'membership' : section === 'athlete-subscription' ? 'athlete-subscription' : 'profile';
+    return section === 'wearables' ? 'wearables' : section === 'membership' ? 'membership' : section === 'athlete-subscription' ? 'athlete-subscription' : 'profile';
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -506,6 +507,13 @@ export default function SettingsPage() {
         >
           <Lock className="w-4 h-4" />
           {language === 'es' ? 'Seguridad' : 'Security'}
+        </button>
+        <button
+          onClick={() => setActiveSection('wearables')}
+          className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${activeSection === 'wearables' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
+        >
+          <Activity className="w-4 h-4" />
+          {language === 'es' ? 'Dispositivos y datos' : 'Devices and data'}
         </button>
         {profile?.role === 'athlete' && (
           <>
@@ -1345,6 +1353,7 @@ export default function SettingsPage() {
 
       {/* Security Section */}
       {activeSection === 'security' && <SecuritySection />}
+      {activeSection === 'wearables' && <WearableConnectionsSection />}
 
       {/* Notification Settings Section */}
       {activeSection === 'notifications' && <NotificationSettings />}
