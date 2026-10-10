@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 
-type Provider = { id?: string; name?: string; provider?: string; display_name?: string; available?: boolean; enabled?: boolean; [key: string]: unknown };
+type Provider = { id?: string; name?: string; provider?: string; display_name?: string; available?: boolean; enabled?: boolean; is_enabled?: boolean; has_cloud_api?: boolean; [key: string]: unknown };
 type Connection = { provider?: string; status?: string; last_synced_at?: string | null; connected_at?: string | null; [key: string]: unknown };
 const call = async (action: string, data: Record<string, unknown> = {}) => {
   const { data: result, error } = await supabase.functions.invoke('open-wearables', { body: { action, ...data } });
@@ -54,7 +54,7 @@ export default function WearableConnectionsSection() {
       if (providerState.status === 'fulfilled') {
         const list = Array.isArray(providerResult) ? providerResult : (providerResult?.items || providerResult?.providers || []);
         const first = ['oura', 'polar', 'suunto'];
-        setProviders(list.filter((p: Provider) => p.available !== false && p.enabled !== false).sort((a: Provider, b: Provider) => {
+      setProviders(list.filter((p: Provider) => p.available !== false && p.enabled !== false && p.is_enabled !== false && p.has_cloud_api !== false).sort((a: Provider, b: Provider) => {
           const aId = String(a.id || a.provider || '').toLowerCase();
           const bId = String(b.id || b.provider || '').toLowerCase();
           return (first.indexOf(aId) < 0 ? 99 : first.indexOf(aId)) - (first.indexOf(bId) < 0 ? 99 : first.indexOf(bId));

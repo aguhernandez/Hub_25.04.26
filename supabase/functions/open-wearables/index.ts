@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
       return response({ consent_at: new Date().toISOString(), consent_version: CONSENT_VERSION });
     }
     if (action === 'ensure-user') return response({ link: await ensureUser() });
-    if (action === 'providers') return response(await ow('/providers'));
+    if (action === 'providers') return response(await ow('/oauth/providers'));
     if (action === 'connect-start') {
       if (typeof body.provider !== 'string' || !body.provider) return response({ error: 'provider is required' }, 400);
       const link = await requireConsent();
