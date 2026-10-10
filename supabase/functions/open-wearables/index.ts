@@ -1,11 +1,15 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const CONSENT_VERSION = '2026-10-10-v1';
-const cache = new Map<string, { expires: number; value: unknown }>();
 
-function response(body: unknown, status = 200, origin: string | null = null) {
-  const allowed = origin && (origin.endsWith('.asciende.pro') || origin === 'https://asciende.pro' || origin.includes('localhost')) ? origin : 'https://hub.asciende.pro';
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': allowed, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Vary': 'Origin' } });
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
+};
+
+function response(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
 function apiBase() {
@@ -65,23 +69,22 @@ function normalizeDataTypes(raw: unknown) {
 }
 
 Deno.serve(async (req) => {
-  const origin = req.headers.get('origin');
-  if (req.method === 'OPTIONS') return response({}, 200, origin);
-  if (req.method !== 'POST') return response({ error: 'Method not allowed' }, 405, origin);
+  if (req.method === 'OPTIONS') return new Response(null, { status: 200, headers: corsHeaders });
+  if (req.method !== 'POST') return response({ error: 'Method not allowed' }, 405);
 
   try {
     const auth = req.headers.get('authorization') || '';
     const token = auth.replace(/^Bearer\s+/i, '');
-    if (!token) return response({ error: 'Authentication required' }, 401, origin);
+    if (!token) return response({ error: 'Authentication required' }, 401);
     const url = Deno.env.get('SUPABASE_URL')!;
     const anon = Deno.env.get('SUPABASE_ANON_KEY')!;
     const service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const userClient = createClient(url, anon, { global: { headers: { Authorization: `Bearer ${token}` } } });
     const { data: authData, error: authError } = await userClient.auth.getUser(token);
-    if (authError || !authData.user) return response({ error: 'Invalid session' }, 401, origin);
+    if (authError || !authData.user) return response({ error: 'Invalid session' }, 401);
     const admin = createClient(url, service);
     const { data: profile } = await admin.from('profiles').select('id, email, full_name, role').eq('id', authData.user.id).maybeSingle();
-    if (!profile) return response({ error: 'Profile not found' }, 403, origin);
+    if (!profile) return response({ error: 'Profile not found' }, 403);
     const body = await req.json();
     const action = body.action as string;
     const requireAdmin = () => { if (profile.role !== 'admin') throw Object.assign(new Error('Admin access required'), { status: 403 }); };
@@ -128,14 +131,14 @@ Deno.serve(async (req) => {
     if (action === 'consent') {
       const { error } = await admin.from('wearable_links').upsert({ asciende_user_id: profile.id, ow_user_id: (await ensureUser()).ow_user_id, consent_at: new Date().toISOString(), consent_version: CONSENT_VERSION }, { onConflict: 'asciende_user_id' });
       if (error) throw error;
-      return response({ consent_at: new Date().toISOString(), consent_version: CONSENT_VERSION }, 200, origin);
+      return response({ consent_at: new Date().toISOString(), consent_version: CONSENT_VERSION });
     }
-    if (action === 'ensure-user') return response({ link: await ensureUser() }, 200, origin);
-    if (action === 'providers') return response(await ow('/providers'), 200, origin);
+    if (action === 'ensure-user') return response({ link: await ensureUser() });
+    if (action === 'providers') return response(await ow('/providers'));
     if (action === 'connect-start') {
-      if (typeof body.provider !== 'string' || !body.provider) return response({ error: 'provider is required' }, 400, origin);
+      if (typeof body.provider !== 'string' || !body.provider) return response({ error: 'provider is required' }, 400);
       const link = await requireConsent();
-      const redirectOrigin = origin && (origin.endsWith('.asciende.pro') || origin === 'https://asciende.pro' || origin.includes('localhost')) ? origin : 'https://hub.asciende.pro';
+      const redirectOrigin = 'https://hub.asciende.pro';
       const redirect = new URL('/settings', redirectOrigin);
       redirect.searchParams.set('section', 'wearables');
       redirect.searchParams.set('wearable', 'success');
@@ -143,33 +146,30 @@ Deno.serve(async (req) => {
       const authorization = await ow(`/oauth/${encodeURIComponent(body.provider)}/authorize?${query}`);
       const object = authorization as Record<string, unknown>;
       const authorization_url = object.authorization_url || object.url;
-      if (!authorization_url) return response({ error: 'Authorization response has no URL', raw: authorization }, 502, origin);
-      return response({ authorization_url, raw: authorization }, 200, origin);
+      if (!authorization_url) return response({ error: 'Authorization response has no URL', raw: authorization }, 502);
+      return response({ authorization_url, raw: authorization });
     }
     if (action === 'connections') {
       const link = await getLink();
-      if (!link) return response({ linked: false, connections: [], summary: null }, 200, origin);
+      if (!link) return response({ linked: false, connections: [], summary: null });
       const [connections, summaryResult] = await Promise.allSettled([
         ow(`/users/${link.ow_user_id}/connections`),
         ow(`/users/${link.ow_user_id}/data-summary`),
       ]);
       if (connections.status === 'rejected') throw connections.reason;
       const summary = summaryResult.status === 'fulfilled' ? normalizeDataTypes(summaryResult.value) : null;
-      return response({ linked: true, connections: connections.value, data_types: summary, summary_error: summaryResult.status === 'rejected' ? errorBody(summaryResult.reason) : null }, 200, origin);
+      return response({ linked: true, connections: connections.value, data_types: summary, summary_error: summaryResult.status === 'rejected' ? errorBody(summaryResult.reason) : null });
     }
     if (action === 'disconnect') {
       // Disconnect is a privacy control and must remain available even when consent
       // has been withdrawn or the account was linked by an administrator.
       const link = await getLink();
-      if (!link) return response({ error: 'No Open Wearables user is linked' }, 404, origin);
-      if (!body.provider) return response({ error: 'provider is required' }, 400, origin);
-      return response(await ow(`/users/${link.ow_user_id}/connections/${encodeURIComponent(body.provider)}`, { method: 'DELETE' }), 200, origin);
+      if (!link) return response({ error: 'No Open Wearables user is linked' }, 404);
+      if (!body.provider) return response({ error: 'provider is required' }, 400);
+      return response(await ow(`/users/${link.ow_user_id}/connections/${encodeURIComponent(body.provider)}`, { method: 'DELETE' }));
     }
     if (action === 'admin-overview') {
       requireAdmin();
-      const now = Date.now();
-      const cached = cache.get('admin-overview');
-      if (cached && cached.expires > now) return response(cached.value, 200, origin);
       const { data: links, error: linkError } = await admin.from('wearable_links').select('asciende_user_id, ow_user_id, consent_at, consent_version, created_at');
       if (linkError) throw linkError;
       const profilesById = new Map<string, unknown>();
@@ -192,8 +192,7 @@ Deno.serve(async (req) => {
         }
       });
       const value = { users: linked };
-      cache.set('admin-overview', { expires: now + 60_000, value });
-      return response(value, 200, origin);
+      return response(value);
     }
     if (action === 'admin-list-ow-users') {
       requireAdmin();
@@ -203,44 +202,42 @@ Deno.serve(async (req) => {
         items.push(...(result.items || []));
         if (!result.has_next) break;
       }
-      return response({ items }, 200, origin);
+      return response({ items });
     }
     if (action === 'admin-link') {
       requireAdmin();
-      if (typeof body.asciende_user_id !== 'string' || typeof body.ow_user_id !== 'string') return response({ error: 'Both user ids are required' }, 400, origin);
+      if (typeof body.asciende_user_id !== 'string' || typeof body.ow_user_id !== 'string') return response({ error: 'Both user ids are required' }, 400);
       const { data: target, error: targetError } = await admin.from('profiles').select('id').eq('id', body.asciende_user_id).maybeSingle();
-      if (targetError || !target) return response({ error: 'Asciende user not found' }, 404, origin);
+      if (targetError || !target) return response({ error: 'Asciende user not found' }, 404);
       const { data: exists, error: existsError } = await admin.from('wearable_links').select('asciende_user_id').eq('ow_user_id', body.ow_user_id).maybeSingle();
       if (existsError) throw existsError;
-      if (exists && exists.asciende_user_id !== body.asciende_user_id) return response({ error: 'Open Wearables user is already linked to another Asciende user' }, 409, origin);
+      if (exists && exists.asciende_user_id !== body.asciende_user_id) return response({ error: 'Open Wearables user is already linked to another Asciende user' }, 409);
       const current = await getLink(body.asciende_user_id);
-      if (current && current.ow_user_id !== body.ow_user_id) return response({ error: 'This Asciende user is already linked. Unlink it before replacing the link.' }, 409, origin);
+      if (current && current.ow_user_id !== body.ow_user_id) return response({ error: 'This Asciende user is already linked. Unlink it before replacing the link.' }, 409);
       const { data, error } = await admin.from('wearable_links').upsert({ asciende_user_id: body.asciende_user_id, ow_user_id: body.ow_user_id }, { onConflict: 'asciende_user_id' }).select().single();
       if (error) throw error;
-      cache.delete('admin-overview');
-      return response({ link: data }, 200, origin);
+      return response({ link: data });
     }
     if (action === 'admin-unlink') {
       requireAdmin();
-      if (typeof body.asciende_user_id !== 'string') return response({ error: 'asciende_user_id is required' }, 400, origin);
+      if (typeof body.asciende_user_id !== 'string') return response({ error: 'asciende_user_id is required' }, 400);
       const { error } = await admin.from('wearable_links').delete().eq('asciende_user_id', body.asciende_user_id);
       if (error) throw error;
-      cache.delete('admin-overview');
-      return response({ ok: true }, 200, origin);
+      return response({ ok: true });
     }
     if (action === 'admin-raw') {
       requireAdmin();
       const link = await getLink(body.asciende_user_id);
-      if (!link) return response({ linked: false }, 200, origin);
+      if (!link) return response({ linked: false });
       const raw = await Promise.allSettled([
         ow(`/users/${link.ow_user_id}`),
         ow(`/users/${link.ow_user_id}/connections`),
       ]);
-      return response({ link, raw }, 200, origin);
+      return response({ link, raw });
     }
-    return response({ error: 'Unknown action' }, 400, origin);
+    return response({ error: 'Unknown action' }, 400);
   } catch (error) {
     const result = errorBody(error);
-    return response(result, result.status, origin);
+    return response(result, result.status);
   }
 });

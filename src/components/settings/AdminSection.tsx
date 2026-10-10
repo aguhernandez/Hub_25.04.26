@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { supabase } from '../../lib/supabase';
-import { Shield, Crown, Users, Save, AlertCircle, Key, Inbox, Tag, Cpu } from 'lucide-react';
+import { Shield, Crown, Users, Save, AlertCircle, Key, Inbox, Tag, Cpu, Activity } from 'lucide-react';
 import ApiConfigSection from './ApiConfigSection';
 import BrandDiscountManager from './BrandDiscountManager';
 import AIMonitoringSection from './AIMonitoringSection';
+import WearableAdminPanel from './WearableAdminPanel';
 
 interface AdminSectionProps {
   currentProfile: any;
@@ -15,7 +16,7 @@ export default function AdminSection({ currentProfile }: AdminSectionProps) {
   const { profile } = useAuth();
   const { language } = useLanguage();
 
-  const [adminTab, setAdminTab] = useState<'users' | 'apis' | 'requests' | 'brands' | 'ai_monitoring'>('users');
+  const [adminTab, setAdminTab] = useState<'users' | 'apis' | 'requests' | 'brands' | 'ai_monitoring' | 'wearables'>('users');
   const [role, setRole] = useState('athlete');
   const [membershipPlan, setMembershipPlan] = useState('inicia');
   const [membershipStatus, setMembershipStatus] = useState('active');
@@ -146,6 +147,17 @@ export default function AdminSection({ currentProfile }: AdminSectionProps) {
             >
               <Cpu className="w-4 h-4" />
               {language === 'es' ? 'IA' : 'AI'}
+            </button>
+            <button
+              onClick={() => setAdminTab('wearables')}
+              className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 whitespace-nowrap ${
+                adminTab === 'wearables'
+                  ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+            >
+              <Activity className="w-4 h-4" />
+              {language === 'es' ? 'Wearables' : 'Wearables'}
             </button>
           </>
         )}
@@ -325,6 +337,9 @@ export default function AdminSection({ currentProfile }: AdminSectionProps) {
 
       {/* AI Monitoring Tab */}
       {adminTab === 'ai_monitoring' && isAdmin && <AIMonitoringSection />}
+
+      {/* Wearables Tab */}
+      {adminTab === 'wearables' && isAdmin && <WearableAdminPanel />}
     </div>
   );
 }
