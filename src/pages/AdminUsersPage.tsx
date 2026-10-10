@@ -22,6 +22,8 @@ import {
   Pencil,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Loader2,
   UserX,
   UserCheck,
