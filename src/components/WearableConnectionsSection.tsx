@@ -8,7 +8,20 @@ type Provider = { id?: string; name?: string; provider?: string; display_name?: 
 type Connection = { provider?: string; status?: string; last_synced_at?: string | null; connected_at?: string | null; [key: string]: unknown };
 const call = async (action: string, data: Record<string, unknown> = {}) => {
   const { data: result, error } = await supabase.functions.invoke('open-wearables', { body: { action, ...data } });
-  if (error) throw error;
+  if (error) {
+    const context = (error as { context?: unknown }).context;
+    let detail = '';
+    let status = '';
+    if (context instanceof Response) {
+      status = String(context.status);
+      try {
+        const body = await context.clone().json() as { error?: unknown; status?: unknown };
+        if (typeof body.error === 'string') detail = body.error;
+        if (body.status) status = String(body.status);
+      } catch { /* Keep the generic SDK message if its response is not JSON. */ }
+    }
+    throw new Error(`${action}: ${detail || error.message}${status ? ` (HTTP ${status})` : ''}`);
+  }
   if (result?.error) throw new Error(result.error);
   return result;
 };
@@ -30,18 +43,34 @@ export default function WearableConnectionsSection() {
   const refresh = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [providerResult, connectionResult] = await Promise.all([call('providers'), call('connections')]);
-      const list = Array.isArray(providerResult) ? providerResult : (providerResult?.items || providerResult?.providers || []);
-      const first = ['oura', 'polar', 'suunto'];
-      setProviders(list.filter((p: Provider) => p.available !== false && p.enabled !== false).sort((a: Provider, b: Provider) => {
-        const aId = String(a.id || a.provider || '').toLowerCase();
-        const bId = String(b.id || b.provider || '').toLowerCase();
-        return (first.indexOf(aId) < 0 ? 99 : first.indexOf(aId)) - (first.indexOf(bId) < 0 ? 99 : first.indexOf(bId));
-      }));
-      const rows = Array.isArray(connectionResult?.connections) ? connectionResult.connections : (connectionResult?.connections?.items || []);
-      setConnections(rows);
-      setDataTypes(Array.isArray(connectionResult?.data_types) ? connectionResult.data_types : []);
-      setLinked(!!connectionResult?.linked);
+      const [providerState, connectionState] = await Promise.allSettled([call('providers'), call('connections')]);
+      const failures: string[] = [];
+      let providerResult: any = null;
+      let connectionResult: any = null;
+      if (providerState.status === 'fulfilled') providerResult = providerState.value;
+      else failures.push(providerState.reason instanceof Error ? providerState.reason.message : 'providers: request failed');
+      if (connectionState.status === 'fulfilled') connectionResult = connectionState.value;
+      else failures.push(connectionState.reason instanceof Error ? connectionState.reason.message : 'connections: request failed');
+      if (providerState.status === 'fulfilled') {
+        const list = Array.isArray(providerResult) ? providerResult : (providerResult?.items || providerResult?.providers || []);
+        const first = ['oura', 'polar', 'suunto'];
+        setProviders(list.filter((p: Provider) => p.available !== false && p.enabled !== false).sort((a: Provider, b: Provider) => {
+          const aId = String(a.id || a.provider || '').toLowerCase();
+          const bId = String(b.id || b.provider || '').toLowerCase();
+          return (first.indexOf(aId) < 0 ? 99 : first.indexOf(aId)) - (first.indexOf(bId) < 0 ? 99 : first.indexOf(bId));
+        }));
+      } else {
+        setProviders([]);
+      }
+      if (connectionState.status === 'fulfilled') {
+        const rows = Array.isArray(connectionResult?.connections) ? connectionResult.connections : (connectionResult?.connections?.items || []);
+        setConnections(rows);
+        setDataTypes(Array.isArray(connectionResult?.data_types) ? connectionResult.data_types : []);
+        setLinked(!!connectionResult?.linked);
+      } else {
+        setConnections([]); setDataTypes([]); setLinked(false);
+      }
+      if (failures.length) setError(failures.join(' · '));
     } catch (e) { setError(e instanceof Error ? e.message : (es ? 'No se pudo cargar el estado.' : 'Could not load connection status.')); }
     finally { setLoading(false); }
   }, [es]);
