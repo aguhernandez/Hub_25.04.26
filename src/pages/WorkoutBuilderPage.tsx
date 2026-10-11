@@ -387,7 +387,7 @@ export default function WorkoutBuilderPage() {
       workout.workout_exercises
         .sort((a: any, b: any) => a.order_index - b.order_index)
         .forEach((we: any) => {
-          const key = `${we.exercise_id}-${we.superset_group || 'none'}`;
+          const key = `${we.exercise_id}-${we.superset_group || 'none'}-${we.block_instance_id || 'no-block'}`;
           if (!groupedExercises[key]) {
             groupedExercises[key] = {
               exercise_id: we.exercise_id,
