@@ -218,6 +218,51 @@ function timeseriesContract(spec: Awaited<ReturnType<typeof getOpenApiSpec>>) {
   };
 }
 
+function workoutEventsContract(spec: Awaited<ReturnType<typeof getOpenApiSpec>>) {
+  const candidates = Object.entries(spec.paths || {}).filter(([path, methods]) =>
+    /\/users?\/\{[^}]+\}/events\/workouts$/i.test(path) &&
+    Object.keys(methods || {}).some(method => method.toLowerCase() === 'get')
+  );
+  const fallback = '/users/{user_id}/events/workouts';
+  const template = candidates.length ? candidates[0][0] : fallback;
+  const operation = candidates.length ? Object.entries(candidates[0][1]).find(([method]) => method.toLowerCase() === 'get')?.[1] as Record<string, unknown> : null;
+  const parameters = (operation?.parameters || []) as Array<Record<string, unknown>>;
+  const queries = parameters.filter(parameter => parameter.in === 'query');
+  const queryName = (pattern: RegExp) => {
+    const found = queries.find(parameter => pattern.test(String(parameter.name)));
+    return found ? String(found.name) : null;
+  };
+  const startName = queryName(/^start_(date|time)$/i) || 'start_date';
+  const endName = queryName(/^end_(date|time)$/i) || 'end_date';
+  const cursorName = queryName(/^(cursor|page_token|next_token)$/) || 'cursor';
+  const limitName = queryName(/^(limit|page_size)$/) || 'limit';
+  return { template, startName, endName, cursorName, limitName };
+}
+
+function providerWorkoutRoutes(spec: Awaited<ReturnType<typeof getOpenApiSpec>>) {
+  return Object.entries(spec.paths || {})
+    .filter(([path, methods]) =>
+      /\/providers?\/\{[^}]+\}\/users?\/\{[^}]+\}/workouts$/i.test(path) &&
+      Object.keys(methods || {}).some(method => method.toLowerCase() === 'get')
+    )
+    .map(([template, methods]) => {
+      const operation = Object.entries(methods).find(([method]) => method.toLowerCase() === 'get')?.[1] as Record<string, unknown>;
+      const parameters = (operation?.parameters || []) as Array<Record<string, unknown>>;
+      const queries = parameters.filter(p => p.in === 'query');
+      const qName = (pattern: RegExp) => {
+        const found = queries.find(p => pattern.test(String(p.name)));
+        return found ? String(found.name) : null;
+      };
+      return {
+        template,
+        startName: qName(/^start_(date|time)$/i) || 'start_date',
+        endName: qName(/^end_(date|time)$/i) || 'end_date',
+        cursorName: qName(/^(cursor|page_token|next_token)$/) || 'cursor',
+        limitName: qName(/^(limit|page_size)$/) || 'limit',
+      };
+    });
+}
+
 function seriesRecords(raw: unknown, fallbackType: string): TimedSample[] {
   const output: TimedSample[] = [];
   const add = (item: unknown, type = fallbackType) => {
@@ -359,14 +404,18 @@ Deno.serve(async (req) => {
       if (lastIngestedError) throw lastIngestedError;
       const now = new Date();
       const start = lastStarted?.start_time ? new Date(new Date(lastStarted.start_time).getTime() - 2 * 86400000) : new Date(now.getTime() - 30 * 86400000);
-      const baseQuery = new URLSearchParams({ start_date: start.toISOString(), end_date: now.toISOString(), limit: '100' });
+      const spec = await getOpenApiSpec();
+      const wc = workoutEventsContract(spec);
+      const eventsPath = wc.template.replace(/\{([^}]+)\}/g, (_match, name: string) => /user/i.test(name) ? encodeURIComponent(link.ow_user_id) : _match).replace(/^\/api\/v1/i, '');
+      const baseQuery = new URLSearchParams({ [wc.startName]: start.toISOString(), [wc.endName]: now.toISOString() });
+      if (wc.limitName) baseQuery.set(wc.limitName, '100');
       const records = new Map<string, Record<string, unknown>>();
       let cursor: string | null = null;
       const seenCursors = new Set<string>();
       for (let page = 0; page < 100; page++) {
         const query = new URLSearchParams(baseQuery);
-        if (cursor) query.set('cursor', cursor);
-        const pageData = await ow(`/users/${encodeURIComponent(link.ow_user_id)}/events/workouts?${query}`);
+        if (cursor && wc.cursorName) query.set(wc.cursorName, cursor);
+        const pageData = await ow(`${eventsPath}?${query}`);
         for (const event of eventRows(pageData)) {
           const id = firstValue(event, ['id', 'event_id', 'uuid']);
           if (typeof id === 'string' || typeof id === 'number') records.set(String(id), event);
@@ -374,11 +423,51 @@ Deno.serve(async (req) => {
         }
         const next = cursorFrom(pageData);
         const hasMore = !!pageData && typeof pageData === 'object' && (pageData as Record<string, unknown>).has_more === true;
+        if (hasMore && !next && !wc.cursorName) break;
         if (hasMore && !next) throw new Error('Open Wearables indicated more workout pages but did not return a cursor');
         if (!next) break;
         if (seenCursors.has(next)) throw new Error('Open Wearables repeated a workout cursor; import stopped to avoid truncating results');
         seenCursors.add(next); cursor = next;
         if (page === 99) throw new Error('Open Wearables workout pagination exceeded 100 pages');
+      }
+      const providerRoutes = providerWorkoutRoutes(spec);
+      if (providerRoutes.length) {
+        const rawConnections = await ow(`/users/${encodeURIComponent(link.ow_user_id)}/connections`);
+        const connRows = Array.isArray(rawConnections) ? rawConnections : ((rawConnections as Record<string, unknown>)?.items as unknown[] || (rawConnections as Record<string, unknown>)?.connections as unknown[] || []);
+        const active = (connRows as Array<Record<string, unknown>>).filter(c => ['active', 'connected'].includes(String(c.status || '').toLowerCase()) && typeof c.provider === 'string');
+        for (const conn of active) {
+          const provider = String(conn.provider);
+          for (const route of providerRoutes) {
+            const providerPath = route.template.replace(/\{([^}]+)\}/g, (_match, name: string) => {
+              if (/provider/i.test(name)) return encodeURIComponent(provider);
+              if (/user/i.test(name)) return encodeURIComponent(link.ow_user_id);
+              return _match;
+            }).replace(/^\/api\/v1/i, '');
+            const providerQuery = new URLSearchParams();
+            if (route.startName) providerQuery.set(route.startName, start.toISOString());
+            if (route.endName) providerQuery.set(route.endName, now.toISOString());
+            if (route.limitName) providerQuery.set(route.limitName, '100');
+            let pCursor: string | null = null;
+            const pSeen = new Set<string>();
+            for (let pPage = 0; pPage < 50; pPage++) {
+              const pq = new URLSearchParams(providerQuery);
+              if (pCursor && route.cursorName) pq.set(route.cursorName, pCursor);
+              const pPageData = await ow(`${providerPath}?${pq}`);
+              for (const event of eventRows(pPageData)) {
+                const id = firstValue(event, ['id', 'event_id', 'uuid']);
+                if (typeof id === 'string' || typeof id === 'number') {
+                  if (!event.provider) event.provider = provider;
+                  records.set(String(id), event);
+                }
+              }
+              const pNext = cursorFrom(pPageData);
+              if (!pNext) break;
+              if (pSeen.has(pNext)) break;
+              pSeen.add(pNext); pCursor = pNext;
+              if (pPage === 49) break;
+            }
+          }
+        }
       }
       const ingestedAt = new Date().toISOString();
       const rows = [...records.entries()].map(([eventId, event]) => ({
