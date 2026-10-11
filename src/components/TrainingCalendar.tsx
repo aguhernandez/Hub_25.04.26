@@ -40,6 +40,7 @@ interface TrainingCalendarProps {
   onAddRestDay?: (date: Date) => void;
   onAddNote?: (date: Date) => void;
   onCalendarEventClick?: (event: any) => void;
+  onWearableMatchAction?: (sessionId: string, status: 'manual_matched' | 'dismissed' | 'unplanned', plannedWorkoutId?: string) => void;
 }
 
 const SESSION_DOT_COLORS: Record<string, string> = {
@@ -345,6 +346,7 @@ export default function TrainingCalendar({
   onAddRestDay,
   onAddNote,
   onCalendarEventClick,
+  onWearableMatchAction,
   wellnessEntries = [],
   onWellnessClick,
 }: TrainingCalendarProps) {
@@ -814,12 +816,19 @@ export default function TrainingCalendar({
                             <SportIcon sport={workout.sport} className={`w-3 h-3 flex-shrink-0 ${cs.textLight} ${cs.textDark}`} />
                             <span className={`font-medium ${cs.textLight} ${cs.textDark} truncate text-[10px]`}>{workout.name}</span>
                           </div>
+                          {workout.wearable_match && <div className="mt-1 flex flex-wrap items-center gap-1 text-[9px]">
+                            <span className="rounded bg-white/70 px-1 py-0.5 text-gray-700 dark:bg-black/20 dark:text-gray-200">{language === 'es' ? 'Fuente' : 'Source'}: {workout.wearable_match.source === 'watch' ? (language === 'es' ? 'Reloj' : 'Watch') : workout.wearable_match.source === 'gps' ? 'GPS' : (language === 'es' ? 'Manual' : 'Manual')}{workout.wearable_match.session?.duration_seconds != null && workout.endurance_workout_data?.estimated_duration_minutes != null ? ` · ${Math.round(workout.wearable_match.session.duration_seconds / 60 - workout.endurance_workout_data.estimated_duration_minutes)} min` : ''}</span>
+                            {workout.wearable_match.status === 'suggested' && <button onClick={event => { event.stopPropagation(); onWearableMatchAction?.(workout.wearable_match.session.id, 'manual_matched', workout.endurance_workout_data?.id); }} className="rounded bg-white px-1 py-0.5 font-semibold text-cyan-800 dark:bg-gray-800 dark:text-cyan-200">{language === 'es' ? 'Confirmar' : 'Confirm'}</button>}
+                          </div>}
+                          {!workout.wearable_match && workout.status !== 'completed' && workout.scheduled_date < new Date().toISOString().slice(0, 10) && <span className="mt-1 inline-block rounded bg-gray-200/80 px-1 py-0.5 text-[9px] text-gray-600 dark:bg-gray-700 dark:text-gray-300">{language === 'es' ? 'Sin ejecutar' : 'Not completed'}</span>}
                         </div>
                       );
                     }
 
                     const sourceIcon = workout.source === 'trainingpeaks'
                       ? <Activity className="w-3 h-3 text-blue-500" />
+                      : workout.source === 'open_wearables'
+                      ? <Activity className="w-3 h-3 text-violet-500" />
                       : workout.source === 'asciende_gps'
                       ? <Activity className="w-3 h-3 text-teal-500" />
                       : workout.source === 'strava'
@@ -831,10 +840,10 @@ export default function TrainingCalendar({
                     return (
                       <div
                         key={workout.id || idx}
-                        draggable
+                        draggable={workout.source !== 'open_wearables'}
                         onDragStart={(e) => {
                           e.stopPropagation();
-                          if (workout.id) { setDraggedWorkout(workout.id); e.dataTransfer.effectAllowed = 'move'; }
+                          if (workout.source !== 'open_wearables' && workout.id) { setDraggedWorkout(workout.id); e.dataTransfer.effectAllowed = 'move'; }
                         }}
                         onDragEnd={() => setDraggedWorkout(null)}
                         onClick={(e) => { e.stopPropagation(); if (onWorkoutClick) onWorkoutClick(workout); }}
@@ -866,6 +875,7 @@ export default function TrainingCalendar({
                               </button>
                             )}
                           </div>
+                          {workout.type === 'wearable_executed' && <p className="mt-1 text-[9px] text-violet-700 dark:text-violet-300">{language === 'es' ? `Sesión sin plan · ${workout.completion_source === 'watch' ? 'Reloj' : workout.completion_source === 'gps' ? 'GPS' : 'Manual'}` : `Unplanned session · ${workout.completion_source === 'watch' ? 'Watch' : workout.completion_source === 'gps' ? 'GPS' : 'Manual'}`}</p>}
                         </div>
                       </div>
                     );

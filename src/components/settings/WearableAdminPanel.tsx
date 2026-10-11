@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Activity, RefreshCw, Search, Unlink, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { Activity, RefreshCw, Search, Unlink, Eye, ChevronDown, ChevronUp, FileJson } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useLanguage } from '../../contexts/LanguageContext';
 
@@ -12,6 +12,7 @@ type OverviewUser = {
 };
 
 type RawEntry = { link: Record<string, unknown>; raw: PromiseSettledResult<unknown>[] };
+type ExecutedSession = { id: string; provider: string | null; sport_raw: string | null; sport_category?: string | null; start_time: string | null; duration_seconds: number | null; distance_m: number | null; avg_hr: number | null; max_hr?: number | null; calories?: number | null };
 
 const call = async (action: string, data: Record<string, unknown> = {}) => {
   const { data: result, error } = await supabase.functions.invoke('open-wearables', { body: { action, ...data } });
@@ -30,6 +31,14 @@ export default function WearableAdminPanel() {
   const [expandedRaw, setExpandedRaw] = useState<string | null>(null);
   const [rawData, setRawData] = useState<Record<string, RawEntry | null>>({});
   const [rawLoading, setRawLoading] = useState<string | null>(null);
+  const [sessionsByUser, setSessionsByUser] = useState<Record<string, ExecutedSession[]>>({});
+  const [sessionsLoading, setSessionsLoading] = useState<string | null>(null);
+  const [expandedEvent, setExpandedEvent] = useState<string | null>(null);
+  const [eventRaw, setEventRaw] = useState<Record<string, unknown>>({});
+  const [metricsBySession, setMetricsBySession] = useState<Record<string, Record<string, unknown>>>({});
+  const [recalculating, setRecalculating] = useState<string | null>(null);
+  const [rangeByUser, setRangeByUser] = useState<Record<string, { start: string; end: string }>>({});
+  const [unmappedByUser, setUnmappedByUser] = useState<Record<string, string[]>>({});
 
   const refresh = useCallback(async () => {
     setLoading(true); setError('');
@@ -45,6 +54,7 @@ export default function WearableAdminPanel() {
   const loadRaw = async (userId: string) => {
     if (expandedRaw === userId) { setExpandedRaw(null); return; }
     setExpandedRaw(userId);
+    void loadImportedSessions(userId);
     if (rawData[userId]) return;
     setRawLoading(userId);
     try {
@@ -53,6 +63,45 @@ export default function WearableAdminPanel() {
     } catch (e) {
       setRawData(prev => ({ ...prev, [userId]: { link: {}, raw: [{ status: 'rejected', reason: { error: e instanceof Error ? e.message : 'failed' } }] } }));
     } finally { setRawLoading(null); }
+  };
+
+  const loadImportedSessions = async (userId: string) => {
+    if (sessionsByUser[userId]) return;
+    setSessionsLoading(userId);
+    try {
+      const result = await call('admin-read-imports', { athlete_id: userId });
+      setSessionsByUser(prev => ({ ...prev, [userId]: result.sessions || [] }));
+      setMetricsBySession(prev => ({ ...prev, ...Object.fromEntries((result.metrics || []).map((metric: Record<string, unknown>) => [String(metric.executed_session_id), metric])) }));
+      setUnmappedByUser(prev => ({ ...prev, [userId]: result.unmapped_sports || [] }));
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not load imported workouts.'); }
+    setSessionsLoading(null);
+  };
+
+  const toggleEventRaw = async (sessionId: string) => {
+    if (expandedEvent === sessionId) { setExpandedEvent(null); return; }
+    setExpandedEvent(sessionId);
+    if (Object.prototype.hasOwnProperty.call(eventRaw, sessionId)) return;
+    const user = Object.entries(sessionsByUser).find(([, rows]) => rows.some(row => row.id === sessionId))?.[0];
+    if (!user) return;
+    try {
+      const result = await call('admin-read-imports', { athlete_id: user, include_raw: true });
+      const row = (result.sessions || []).find((session: ExecutedSession & { raw?: unknown }) => session.id === sessionId);
+      if (row) setEventRaw(prev => ({ ...prev, [sessionId]: row.raw }));
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not load raw JSON.'); }
+  };
+
+  const recalculate = async (userId: string, sessionId?: string, range?: { start: string; end: string }) => {
+    const key = sessionId || userId; setRecalculating(key);
+    try {
+      await call('admin-recalculate-metrics', sessionId ? { executed_session_id: sessionId } : { athlete_id: userId, ...(range?.start ? { range_start: `${range.start}T00:00:00.000Z` } : {}), ...(range?.end ? { range_end: `${range.end}T23:59:59.999Z` } : {}) });
+      setMetricsBySession({});
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      const result = await call('admin-read-imports', { athlete_id: userId });
+      setSessionsByUser(prev => ({ ...prev, [userId]: result.sessions || [] }));
+      setMetricsBySession(Object.fromEntries((result.metrics || []).map((metric: Record<string, unknown>) => [String(metric.executed_session_id), metric])));
+      setUnmappedByUser(prev => ({ ...prev, [userId]: result.unmapped_sports || [] }));
+    } catch (e) { setError(e instanceof Error ? e.message : 'Recalculation failed.'); }
+    finally { setRecalculating(null); }
   };
 
   const unlink = async (userId: string) => {
@@ -143,6 +192,15 @@ export default function WearableAdminPanel() {
                 {isExpanded && (
                   <tr className="bg-gray-50 dark:bg-gray-800/50">
                     <td colSpan={5} className="px-4 py-3">
+                      <section className="mb-5 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+                        <div className="flex flex-wrap items-center justify-between gap-2"><h5 className="text-sm font-semibold text-gray-900 dark:text-white">{es ? 'Importados en Asciende' : 'Imported into Asciende'}</h5><div className="flex flex-wrap items-center gap-1"><input aria-label={es ? 'Desde' : 'From'} type="date" value={rangeByUser[uid]?.start || ''} onChange={event => setRangeByUser(prev => ({ ...prev, [uid]: { start: event.target.value, end: prev[uid]?.end || '' } }))} className="rounded border border-gray-300 bg-white px-1 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white" /><input aria-label={es ? 'Hasta' : 'To'} type="date" value={rangeByUser[uid]?.end || ''} onChange={event => setRangeByUser(prev => ({ ...prev, [uid]: { start: prev[uid]?.start || '', end: event.target.value } }))} className="rounded border border-gray-300 bg-white px-1 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white" /><button onClick={() => void recalculate(uid, undefined, rangeByUser[uid])} disabled={recalculating === uid} className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 disabled:opacity-50 dark:border-gray-600 dark:text-gray-200">{recalculating === uid ? (es ? 'Recalculando…' : 'Recalculating…') : (es ? 'Recalcular rango' : 'Recalculate range')}</button></div></div>
+                        {sessionsLoading === uid ? <p className="mt-2 text-xs text-gray-500">{es ? 'Cargando…' : 'Loading…'}</p> : (sessionsByUser[uid] || []).length === 0 ? <p className="mt-2 text-xs text-gray-500">{es ? 'No hay entrenamientos importados.' : 'No imported workouts.'}</p> : <div className="mt-2 space-y-2">{sessionsByUser[uid].map(session => <div key={session.id} className="rounded-md border border-gray-100 p-2 dark:border-gray-800">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-700 dark:text-gray-300"><span>{fmtDate(session.start_time)} · {session.sport_raw || '—'}{session.sport_category === 'other' && <span className="ml-1 rounded bg-amber-100 px-1 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{es ? 'Sin mapear' : 'Unmapped'}</span>} · {session.duration_seconds == null ? '—' : `${Math.round(session.duration_seconds / 60)} min`} · {session.distance_m == null ? '—' : `${(session.distance_m / 1000).toFixed(2)} km`} · {session.avg_hr == null ? '—' : `${session.avg_hr} bpm`}</span><span className="flex gap-2"><button onClick={() => void recalculate(uid, session.id)} disabled={recalculating === session.id} className="rounded border border-gray-300 px-2 py-1 dark:border-gray-600">{recalculating === session.id ? '…' : (es ? 'Recalcular' : 'Recalculate')}</button><button onClick={() => void toggleEventRaw(session.id)} className="inline-flex items-center gap-1 rounded border border-gray-300 px-2 py-1 dark:border-gray-600"><FileJson className="h-3 w-3" />{expandedEvent === session.id ? (es ? 'Ocultar JSON crudo' : 'Hide raw JSON') : (es ? 'Ver JSON crudo' : 'View raw JSON')}</button></span></div>
+                          {metricsBySession[session.id] && <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{(metricsBySession[session.id].avg_power as number | null) != null ? `${es ? 'Potencia media' : 'Avg power'} ${Math.round(metricsBySession[session.id].avg_power as number)} W · ` : ''}{(metricsBySession[session.id].normalized_power as number | null) != null ? `NP ${Math.round(metricsBySession[session.id].normalized_power as number)} W · ` : ''}{(metricsBySession[session.id].tss as number | null) != null ? `TSS ${Math.round(metricsBySession[session.id].tss as number)} · ` : ''}{metricsBySession[session.id].coverage_pct != null ? `${es ? 'Cobertura' : 'Coverage'} ${Math.round(metricsBySession[session.id].coverage_pct as number)}%` : (es ? 'Métricas pendientes o sin series disponibles' : 'Metrics pending or no data series available')}</p>}
+                          {expandedEvent === session.id && eventRaw[session.id] !== undefined && <pre className="mt-2 max-h-64 overflow-auto rounded bg-gray-50 p-2 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-200">{JSON.stringify(eventRaw[session.id], null, 2)}</pre>}
+                        </div>)}</div>}
+                        {(unmappedByUser[uid] || []).length > 0 && <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{es ? 'Deportes sin mapear: ' : 'Unmapped sports: '}{unmappedByUser[uid].join(', ')}</p>}
+                      </section>
                       {rawLoading === uid ? <p className="text-xs text-gray-500">{es ? 'Cargando...' : 'Loading...'}</p> : rawData[uid] ? (() => {
                         const raw = rawData[uid]!;
                         const userResult = raw.raw[0]?.status === 'fulfilled' ? raw.raw[0].value : null;

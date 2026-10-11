@@ -157,11 +157,34 @@ export default function TrainingPage() {
   const [deletingPlanIds, setDeletingPlanIds] = useState<Set<string>>(new Set());
   const [staledPlanIds, setStaledPlanIds] = useState<Set<string>>(new Set());
   const [expandedPending, setExpandedPending] = useState<Set<string>>(new Set());
+  const [selectedWearableSession, setSelectedWearableSession] = useState<any | null>(null);
+  const [showChangeWearableMatch, setShowChangeWearableMatch] = useState(false);
+  const [wearableCalendarActive, setWearableCalendarActive] = useState(false);
+  const [selectedSessionAnalysis, setSelectedSessionAnalysis] = useState<any | null>(null);
+
+  const updateWearableMatch = async (sessionId: string, status: 'manual_matched' | 'dismissed' | 'unplanned', plannedWorkoutId?: string) => {
+    const { error: invokeError } = await supabase.functions.invoke('open-wearables', { body: { action: 'analysis-update-match', executed_session_id: sessionId, status, planned_workout_id: plannedWorkoutId } });
+    if (invokeError) { showToast(language === 'es' ? 'No se pudo actualizar el vínculo.' : 'Could not update session match.', 'error'); return; }
+    await loadWorkouts();
+  };
 
   useEffect(() => {
     loadWorkouts();
     loadWellnessEntries();
   }, [profile?.id, selectedAthleteId, selectedDate, calendarView]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const planId = selectedEnduranceWorkout?.id?.replace(/^endurance-workout-/, '');
+    const isWeeklyPlan = !!planId && /^endurance-plan-[0-9a-f-]{36}-\d+$/i.test(planId);
+    if (!planId || (!/^[0-9a-f-]{36}$/i.test(planId) && !isWeeklyPlan) || !wearableCalendarActive) {
+      setSelectedSessionAnalysis(null);
+      return;
+    }
+    supabase.functions.invoke('open-wearables', { body: { action: 'get-session-analysis', planned_workout_id: planId } })
+      .then(({ data, error }) => { if (!cancelled) setSelectedSessionAnalysis(error ? null : data); });
+    return () => { cancelled = true; };
+  }, [selectedEnduranceWorkout?.id, wearableCalendarActive]);
 
   useEffect(() => {
     if (profile?.id) checkTodayWellness();
@@ -828,15 +851,49 @@ export default function TrainingPage() {
         creator_role: ev.creator?.role || null,
       }));
 
+      // Endurance completion sources are resolved server-side for consented athletes.
+      // The result is kept separate from gym completion and training-log state.
+      let wearableExecuted: any[] = [];
+      let resolvedGpsActivityIds = new Set<string>();
+      try {
+        const wearableStart = parseDateStr(startDateStr); wearableStart.setDate(wearableStart.getDate() - 1);
+        const wearableEnd = parseDateStr(endDateStr); wearableEnd.setDate(wearableEnd.getDate() + 1);
+        const { data: wearable } = await supabase.functions.invoke('open-wearables', { body: { action: 'analysis-calendar', athlete_id: effectiveAthleteId, range_start: wearableStart.toISOString(), range_end: wearableEnd.toISOString() } });
+        setWearableCalendarActive(!!wearable?.active);
+        if (wearable?.active) {
+          const completionRows = wearable.completions || [];
+          resolvedGpsActivityIds = new Set(completionRows.filter((item: any) => item.source === 'gps').map((item: any) => item.id));
+          const matchByPlan = new Map<string, any>(completionRows.filter((item: any) => item.planned_workout_id).map((item: any) => {
+            const metrics = item.source === 'watch' ? (wearable.metrics || []).find((metric: any) => metric.executed_session_id === item.id) : null;
+            return [item.planned_workout_id, { source: item.source, status: item.priority_status, executed_session_id: item.source === 'watch' ? item.id : null, session: item, metrics, athlete_feedback: item.athlete_feedback }];
+          }));
+          formattedEndurancePlans.forEach(plan => {
+            const planId = String(plan.id).replace(/^endurance-workout-/, '');
+            plan.wearable_match = matchByPlan.get(planId) || null;
+            plan.status = plan.wearable_match ? 'completed' : plan.status === 'completed' ? 'planned' : plan.status;
+          });
+          wearableExecuted = completionRows.filter((item: any) => !item.planned_workout_id).map((session: any) => ({
+            id: `completed-${session.source}-${session.id}`, executed_session_id: session.source === 'watch' ? session.id : null,
+            name: session.sport_raw || session.name || session.sport || (language === 'es' ? 'Sesión realizada' : 'Completed session'), description: '',
+            scheduled_date: String(session.start_time || '').slice(0, 10), status: 'completed', source: session.source, type: 'wearable_executed', sport: session.sport_category || session.sport,
+            duration_seconds: session.duration_seconds, distance_m: session.distance_m, avg_hr: session.avg_hr, max_hr: session.max_hr, calories: session.calories,
+            completion_source: session.source, athlete_feedback: session.athlete_feedback,
+            wearable_metrics: session.source === 'watch' ? (wearable.metrics || []).find((metric: any) => metric.executed_session_id === session.id) : null,
+            wearable_match: (wearable.matches || []).find((match: any) => match.executed_session_id === session.id) || null,
+          }));
+        }
+      } catch { setWearableCalendarActive(false); /* A missing wearable link must not interfere with calendar loading. */ }
+
       // Combine all activities
       const allActivities = [
         ...formattedWorkouts,
         ...formattedCompletedWorkouts,
         ...formattedExtra,
-        ...formattedExternal,
+        ...formattedExternal.filter((item: any) => !resolvedGpsActivityIds.has(item.external_activity_id)),
         ...formattedEndurancePlans,
         ...formattedRacePlans,
         ...formattedCalendarEvents,
+        ...wearableExecuted,
       ].sort((a, b) => {
         return parseDateStr(a.scheduled_date).getTime() - parseDateStr(b.scheduled_date).getTime();
       });
@@ -1353,6 +1410,8 @@ export default function TrainingPage() {
       return;
     }
 
+    if ((workout as any).type === 'wearable_executed') { setSelectedWearableSession(workout); return; }
+
     // Endurance plan items — show the detail card modal
     if ((workout as any).type === 'endurance_plan') {
       const raw = (workout as any).endurance_workout_data;
@@ -1412,6 +1471,7 @@ export default function TrainingPage() {
           target_zones: formattedZones,
           rpe: raw.rpe || w.rpe,
           notes: raw.notes || w.notes,
+          wearable_match: w.wearable_match,
         } as EnduranceWorkout);
       } else {
         setSelectedEnduranceWorkout({
@@ -1431,6 +1491,7 @@ export default function TrainingPage() {
           target_zones: formattedZones,
           rpe: w.rpe,
           notes: w.notes,
+          wearable_match: w.wearable_match,
         } as EnduranceWorkout);
       }
       return;
@@ -1823,6 +1884,23 @@ export default function TrainingPage() {
   const handleDragEnd = () => {
     setDraggedWorkout(null);
   };
+
+  const enduranceWeeklySummary = (() => {
+    const start = new Date(selectedDate); start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); start.setHours(0, 0, 0, 0);
+    const end = new Date(start); end.setDate(end.getDate() + 7);
+    const from = formatDateLocal(start); const until = formatDateLocal(end);
+    const planned = workouts.filter(workout => workout.type === 'endurance_plan' && workout.scheduled_date >= from && workout.scheduled_date < until);
+    const actuals: any[] = [];
+    for (const workout of workouts as any[]) {
+      if (workout.type === 'wearable_executed' && workout.scheduled_date >= from && workout.scheduled_date < until) actuals.push(workout);
+      if (workout.wearable_match?.session && workout.scheduled_date >= from && workout.scheduled_date < until) actuals.push({ ...workout.wearable_match.session, sport_category: workout.endurance_workout_data?.sport || workout.sport, wearable_metrics: workout.wearable_match.metrics, wearable_match: { planned_workout_id: workout.id } });
+    }
+    const plannedMinutes = planned.reduce((sum, workout: any) => sum + Number(workout.estimated_duration_minutes || workout.endurance_workout_data?.estimated_duration_minutes || 0), 0);
+    const actualMinutes = actuals.reduce((sum, session) => sum + Number(session.duration_seconds || 0) / 60, 0);
+    const tss = actuals.reduce((sum, session) => sum + (Number.isFinite(Number(session.wearable_metrics?.tss)) ? Number(session.wearable_metrics.tss) : 0), 0);
+    const sports = ['running', 'cycling', 'swimming', 'other'].map(sport => ({ sport, planned: planned.filter((workout: any) => (workout.endurance_workout_data?.sport || workout.sport) === sport).reduce((sum, workout: any) => sum + Number(workout.estimated_duration_minutes || workout.endurance_workout_data?.estimated_duration_minutes || 0), 0), actual: actuals.filter(session => (session.sport_category || session.sport) === sport).reduce((sum, session) => sum + Number(session.duration_seconds || 0) / 60, 0) })).filter(row => row.planned || row.actual);
+    return { plannedMinutes, actualMinutes, tss, unplanned: actuals.filter(session => !(session as any).wearable_match?.planned_workout_id).length, sports };
+  })();
 
   if (profile?.role === 'trainer' && !selectedAthleteId) {
     return (
@@ -2359,6 +2437,7 @@ export default function TrainingPage() {
 
       {activeTab === 'calendar' && (
       <>
+      {wearableCalendarActive && <section className="rounded-xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-900 dark:bg-violet-950/30"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-violet-900 dark:text-violet-200">{language === 'es' ? 'Resumen semanal Endurance' : 'Weekly endurance summary'}</h3><div className="flex flex-wrap gap-3 text-sm text-gray-700 dark:text-gray-200"><span>{language === 'es' ? 'Plan' : 'Planned'}: {Math.round(enduranceWeeklySummary.plannedMinutes)} min</span><span>{language === 'es' ? 'Realizado' : 'Completed'}: {Math.round(enduranceWeeklySummary.actualMinutes)} min</span><span>TSS: {enduranceWeeklySummary.tss ? Math.round(enduranceWeeklySummary.tss) : '—'}</span><span>{language === 'es' ? 'Sin plan' : 'Unplanned'}: {enduranceWeeklySummary.unplanned}</span></div></div>{enduranceWeeklySummary.sports.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{enduranceWeeklySummary.sports.map(row => <span key={row.sport} className="rounded-full bg-white/80 px-2 py-1 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-200">{row.sport}: {Math.round(row.planned)} / {Math.round(row.actual)} min</span>)}</div>}</section>}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center gap-3">
@@ -2491,6 +2570,7 @@ export default function TrainingPage() {
                 }}
                 onWorkoutMove={handleWorkoutMove}
                 onWorkoutClick={openWorkoutModal}
+                onWearableMatchAction={(sessionId, status, plannedWorkoutId) => void updateWearableMatch(sessionId, status, plannedWorkoutId)}
                 onWorkoutEdit={handleEditWorkout}
                 onWorkoutDuplicate={handleDuplicateWorkout}
                 onWorkoutDelete={(workoutId) => {
@@ -3214,9 +3294,50 @@ export default function TrainingPage() {
                 setReassignSourceWorkout(w);
               }}
             />
+            {(selectedEnduranceWorkout as any).wearable_match?.session && (() => {
+              const match = (selectedEnduranceWorkout as any).wearable_match;
+              const done = match.session;
+              const metrics = match.metrics;
+              const planId = selectedEnduranceWorkout.id;
+              return <section className="rounded-b-2xl border-t border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900">
+                <h3 className="font-semibold text-gray-900 dark:text-white">{language === 'es' ? 'Planificado y realizado' : 'Planned and completed'}</h3>
+                <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-gray-600 dark:text-gray-300">
+                  <div><p className="mb-1 font-semibold">{language === 'es' ? 'Planificado' : 'Planned'}</p><p>{selectedEnduranceWorkout.estimated_duration_minutes || '—'} min</p></div>
+                  <div><p className="mb-1 font-semibold">{language === 'es' ? 'Realizado' : 'Completed'}</p><p>{done.duration_seconds == null ? '—' : `${Math.round(done.duration_seconds / 60)} min`}</p><p>{done.distance_m == null ? '—' : `${(done.distance_m / 1000).toFixed(2)} km`}</p><p>{done.avg_hr == null ? '—' : `${done.avg_hr} bpm`}{done.max_hr != null ? ` · max ${done.max_hr}` : ''}</p><p>{done.calories == null ? '—' : `${done.calories} kcal`}</p></div>
+                </div>
+                {(() => {
+                  const zoneObject = metrics?.hr_zone_seconds?.zones5 || metrics?.power_zone_seconds?.zones5 || done.athlete_feedback?.time_in_zones || {};
+                  const zoneEntries = Object.entries(zoneObject as Record<string, unknown>).map(([name, value]) => [name, Number(value)] as const).filter(([, value]) => Number.isFinite(value) && value > 0);
+                  const total = zoneEntries.reduce((sum, [, value]) => sum + value, 0);
+                  return total > 0 ? <div className="mt-3"><p className="mb-1 text-xs font-semibold text-gray-700 dark:text-gray-200">{language === 'es' ? 'Tiempo realizado por zonas' : 'Completed time in zones'}</p><div className="flex h-3 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">{zoneEntries.map(([zone, seconds], index) => <span key={zone} title={`${zone}: ${Math.round(seconds / 60)} min`} className={['bg-sky-500', 'bg-emerald-500', 'bg-amber-400', 'bg-orange-500', 'bg-rose-500', 'bg-violet-500', 'bg-fuchsia-500'][index % 7]} style={{ width: `${seconds / total * 100}%` }} />)}</div><p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">{zoneEntries.map(([zone, seconds]) => `${String(zone).replace('zone_', 'Z').replace('_seconds', '')}: ${Math.round(seconds / 60)} min`).join(' · ')}</p></div> : null;
+                })()}
+                {selectedSessionAnalysis?.planned_zone_time && <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">{language === 'es' ? 'Objetivo por zonas' : 'Planned zone target'}: {['zones5', 'zones7'].map(key => { const row = selectedSessionAnalysis.planned_zone_time[key]; return row?.seconds ? `${key === 'zones5' ? '5Z' : '7Z'} ${Object.entries(row.seconds).map(([zone, seconds]) => `${zone.replace('zone_', 'Z').replace('_seconds', '')} ${Math.round(Number(seconds) / 60)}m`).join(' ')}` : null; }).filter(Boolean).join(' · ') || (language === 'es' ? 'sin objetivo de zona interpretable' : 'no interpretable zone target')}</p>}
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="rounded-full bg-violet-100 px-2 py-1 font-medium text-violet-800 dark:bg-violet-900/40 dark:text-violet-200">{language === 'es' ? 'Fuente' : 'Source'}: {match.source === 'watch' ? (language === 'es' ? 'Reloj' : 'Watch') : match.source === 'gps' ? 'GPS' : (language === 'es' ? 'Manual' : 'Manual')}</span>
+                  {selectedSessionAnalysis?.biological_passport_date && <span className="text-gray-500 dark:text-gray-400">{language === 'es' ? 'Pasaporte biológico' : 'Biological passport'}: {selectedSessionAnalysis.biological_passport_date}</span>}
+                  {selectedSessionAnalysis?.coach_comment?.comment && <p className="w-full rounded-lg bg-amber-50 p-2 text-gray-700 dark:bg-amber-950/30 dark:text-gray-200">{language === 'es' ? 'Comentario del entrenador' : 'Coach comment'}: {selectedSessionAnalysis.coach_comment.comment}</p>}
+                  {match.athlete_feedback?.comments && <p className="w-full rounded-lg bg-gray-50 p-2 text-gray-700 dark:bg-gray-800 dark:text-gray-200">{language === 'es' ? 'Devolución del atleta' : 'Athlete feedback'}: {match.athlete_feedback.comments}{match.athlete_feedback.rpe != null ? ` · RPE ${match.athlete_feedback.rpe}` : ''}</p>}
+                </div>
+                {import.meta.env.VITE_PLANNER_BASE_URL && <button onClick={() => {
+                  const url = new URL('/', import.meta.env.VITE_PLANNER_BASE_URL);
+                  url.searchParams.set('view', 'session-analysis');
+                  url.searchParams.set('athlete', effectiveAthleteId || profile?.id || '');
+                  url.searchParams.set('planned', String(selectedEnduranceWorkout.id).replace(/^endurance-workout-/, ''));
+                  url.searchParams.set('executed', match.source === 'watch' ? String(match.session.id) : 'none');
+                  window.open(url.toString(), '_blank', 'noopener,noreferrer');
+                }} className="mt-3 rounded-lg bg-violet-700 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-800">{language === 'es' ? 'Análisis detallado' : 'Detailed analysis'}</button>}
+                {match.planned_comparison && <div className="mt-3 rounded-lg bg-gray-50 p-2 dark:bg-gray-800"><p className="text-xs font-semibold text-gray-700 dark:text-gray-200">{language === 'es' ? 'Zonas planificadas y realizadas' : 'Planned and completed zones'}</p>{(['zones5', 'zones7'] as const).map(zoneSet => { const comparison = match.planned_comparison[zoneSet]; return <div key={zoneSet} className="mt-2 text-[11px] text-gray-600 dark:text-gray-300"><p className="font-medium">{zoneSet === 'zones5' ? '5' : '7'} {language === 'es' ? 'zonas' : 'zones'}</p>{comparison?.target_intensity && <p>{language === 'es' ? 'Objetivo planificado' : 'Planned target'}: {Math.round(comparison.target_intensity.target_ftp_percent)}% FTP{metrics?.intensity_factor != null ? ` · ${language === 'es' ? 'real' : 'actual'} IF ${Number(metrics.intensity_factor).toFixed(2)}` : ''}</p>}{comparison?.seconds ? <p>{language === 'es' ? 'Plan' : 'Plan'}: {Object.entries(comparison.seconds).map(([zone, seconds]) => `${zone.replace('zone_', 'Z').replace('_seconds', '')} ${Math.round(Number(seconds) / 60)} min`).join(' · ')}</p> : !comparison?.target_intensity && <p>{comparison?.reason || (language === 'es' ? 'Sin información planificada interpretable' : 'No interpretable planned target')}</p>}{metrics?.hr_zone_seconds?.[zoneSet] && <p>{language === 'es' ? 'FC real' : 'Actual HR'}: {Object.entries(metrics.hr_zone_seconds[zoneSet]).map(([zone, seconds]) => `${zone.replace('zone_', 'Z').replace('_seconds', '')} ${Math.round(Number(seconds) / 60)} min`).join(' · ')}</p>}{metrics?.power_zone_seconds?.[zoneSet] && <p>{language === 'es' ? 'Potencia real' : 'Actual power'}: {Object.entries(metrics.power_zone_seconds[zoneSet]).map(([zone, seconds]) => `${zone.replace('zone_', 'Z').replace('_seconds', '')} ${Math.round(Number(seconds) / 60)} min`).join(' · ')}</p>}</div>; })}</div>}
+                {metrics?.hr_zone_seconds && !match.planned_comparison && <div className="mt-3"><p className="text-xs font-semibold text-gray-700 dark:text-gray-200">{language === 'es' ? 'Zonas de frecuencia cardíaca' : 'Heart rate zones'}</p><div className="mt-1 grid grid-cols-2 gap-2 text-[11px] text-gray-600 dark:text-gray-300">{Object.entries(metrics.hr_zone_seconds).map(([zoneSet, seconds]) => <p key={zoneSet}>{zoneSet === 'zones5' ? '5' : '7'} {language === 'es' ? 'zonas' : 'zones'}: {seconds ? Object.entries(seconds as Record<string, number>).map(([zone, value]) => `${zone.replace('zone_', 'Z').replace('_seconds', '')} ${Math.round(Number(value) / 60)} min`).join(' · ') : '—'}</p>)}</div></div>}
+                {metrics?.has_power && <div className="mt-3"><p className="text-xs font-semibold text-gray-700 dark:text-gray-200">{language === 'es' ? 'Potencia' : 'Power'}</p><p className="text-xs text-gray-600 dark:text-gray-300">{(['avg_power', 'max_power', 'normalized_power', 'variability_index', 'intensity_factor', 'tss'] as const).filter(key => metrics[key] != null).map(key => `${key.replace(/_/g, ' ')}: ${Math.round(metrics[key])}`).join(' · ')}</p>{metrics.coverage_pct != null && metrics.coverage_pct < 70 && <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">{language === 'es' ? 'Cobertura de potencia baja; interpreta estas métricas con cautela.' : 'Low power coverage; interpret these metrics with care.'}</p>}</div>}
+                {match.source === 'watch' && <div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setShowChangeWearableMatch(value => !value)} className="rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600">{language === 'es' ? 'Cambiar vínculo' : 'Change match'}</button><button onClick={() => void updateWearableMatch(done.id, 'unplanned')} className="rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600">{language === 'es' ? 'Desvincular' : 'Unlink'}</button><button onClick={() => void updateWearableMatch(done.id, 'dismissed')} className="rounded border border-gray-300 px-2 py-1 text-xs dark:border-gray-600">{language === 'es' ? 'Descartar' : 'Dismiss'}</button></div>}
+                {showChangeWearableMatch && <div className="mt-2 space-y-1">{workouts.filter(item => item.type === 'endurance_plan' && item.scheduled_date <= new Date().toISOString().slice(0, 10) && item.id !== `endurance-workout-${planId}`).map(item => <button key={item.id} onClick={() => { const id = String(item.id).replace(/^endurance-workout-/, ''); void updateWearableMatch(done.id, 'manual_matched', id); setShowChangeWearableMatch(false); }} className="block w-full rounded bg-gray-50 px-2 py-1 text-left text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-200">{item.scheduled_date} · {item.name}</button>)}</div>}
+              </section>;
+            })()}
           </div>
         </div>
       )}
+
+      {selectedWearableSession && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedWearableSession(null)}><section role="dialog" aria-modal="true" onClick={event => event.stopPropagation()} className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900"><div className="flex items-center justify-between"><h3 className="text-lg font-semibold text-gray-900 dark:text-white">{language === 'es' ? 'Entrenamiento del reloj' : 'Watch workout'}</h3><button onClick={() => setSelectedWearableSession(null)} aria-label={language === 'es' ? 'Cerrar' : 'Close'}><X className="h-5 w-5" /></button></div><p className="mt-3 text-sm text-gray-700 dark:text-gray-300">{selectedWearableSession.name} · {selectedWearableSession.scheduled_date}</p><div className="mt-2 grid grid-cols-2 gap-2 text-sm text-gray-600 dark:text-gray-300"><span>{language === 'es' ? 'Duración' : 'Duration'}: {selectedWearableSession.duration_seconds == null ? '—' : `${Math.round(selectedWearableSession.duration_seconds / 60)} min`}</span><span>{language === 'es' ? 'Distancia' : 'Distance'}: {selectedWearableSession.distance_m == null ? '—' : `${(selectedWearableSession.distance_m / 1000).toFixed(2)} km`}</span><span>FC media: {selectedWearableSession.avg_hr ?? '—'}</span><span>FC máxima: {selectedWearableSession.max_hr ?? '—'}</span><span>{language === 'es' ? 'Calorías' : 'Calories'}: {selectedWearableSession.calories ?? '—'}</span></div>{selectedWearableSession.wearable_metrics && <pre className="mt-3 max-h-40 overflow-auto rounded bg-gray-50 p-2 text-xs dark:bg-gray-800">{JSON.stringify({ hr_zone_seconds: selectedWearableSession.wearable_metrics.hr_zone_seconds, power: selectedWearableSession.wearable_metrics.has_power ? { avg_power: selectedWearableSession.wearable_metrics.avg_power, max_power: selectedWearableSession.wearable_metrics.max_power, normalized_power: selectedWearableSession.wearable_metrics.normalized_power, variability_index: selectedWearableSession.wearable_metrics.variability_index, intensity_factor: selectedWearableSession.wearable_metrics.intensity_factor, tss: selectedWearableSession.wearable_metrics.tss, power_zone_seconds: selectedWearableSession.wearable_metrics.power_zone_seconds } : null }, null, 2)}</pre>}<div className="mt-4 flex flex-wrap gap-2">{selectedWearableSession.wearable_match?.status === 'suggested' && <button onClick={() => void updateWearableMatch(selectedWearableSession.executed_session_id, 'manual_matched', selectedWearableSession.wearable_match.planned_workout_id)} className="rounded bg-[#fdda36] px-3 py-2 text-sm font-semibold">{language === 'es' ? 'Confirmar sugerencia' : 'Confirm suggestion'}</button>}<button onClick={() => setShowChangeWearableMatch(value => !value)} className="rounded border px-3 py-2 text-sm">{language === 'es' ? 'Cambiar vínculo' : 'Change match'}</button><button onClick={() => void updateWearableMatch(selectedWearableSession.executed_session_id, 'unplanned')} className="rounded border px-3 py-2 text-sm">{language === 'es' ? 'Desvincular' : 'Unlink'}</button><button onClick={() => void updateWearableMatch(selectedWearableSession.executed_session_id, 'dismissed')} className="rounded border px-3 py-2 text-sm">{language === 'es' ? 'Descartar' : 'Dismiss'}</button></div>{showChangeWearableMatch && <div className="mt-2 space-y-1">{workouts.filter(item => { if (item.type !== 'endurance_plan' || item.scheduled_date > new Date().toISOString().slice(0, 10)) return false; const target = new Date(`${selectedWearableSession.scheduled_date}T00:00:00`); const planDate = new Date(`${item.scheduled_date}T00:00:00`); return Math.abs(target.getTime() - planDate.getTime()) <= 86400000; }).map(item => <button key={item.id} onClick={() => { const id = String(item.id).replace(/^endurance-workout-/, ''); void updateWearableMatch(selectedWearableSession.executed_session_id, 'manual_matched', id); setShowChangeWearableMatch(false); }} className="block w-full rounded bg-gray-50 px-2 py-1 text-left text-xs dark:bg-gray-800">{item.scheduled_date} · {item.name}</button>)}</div>}</section></div>}
 
       {selectedRacePlan && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">

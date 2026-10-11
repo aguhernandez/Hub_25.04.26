@@ -9,6 +9,83 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      executed_sessions: {
+        Row: {
+          id: string
+          athlete_id: string
+          ow_event_id: string
+          provider: string | null
+          sport_raw: string | null
+          sport_category: string | null
+          start_time: string | null
+          end_time: string | null
+          duration_seconds: number | null
+          distance_m: number | null
+          avg_hr: number | null
+          max_hr: number | null
+          calories: number | null
+          raw: Json
+          ingested_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          athlete_id: string
+          ow_event_id: string
+          provider?: string | null
+          sport_raw?: string | null
+          sport_category?: string | null
+          start_time?: string | null
+          end_time?: string | null
+          duration_seconds?: number | null
+          distance_m?: number | null
+          avg_hr?: number | null
+          max_hr?: number | null
+          calories?: number | null
+          raw: Json
+          ingested_at?: string
+          updated_at?: string
+        }
+        Update: {
+          provider?: string | null
+          sport_raw?: string | null
+          sport_category?: string | null
+          start_time?: string | null
+          end_time?: string | null
+          duration_seconds?: number | null
+          distance_m?: number | null
+          avg_hr?: number | null
+          max_hr?: number | null
+          calories?: number | null
+          raw?: Json
+          ingested_at?: string
+          updated_at?: string
+        }
+      }
+      session_matches: {
+        Row: { id: string; executed_session_id: string; planned_workout_id: string | null; status: 'auto_matched' | 'suggested' | 'manual_matched' | 'unplanned' | 'dismissed'; score: number | null; matched_by: string | null; created_at: string; updated_at: string }
+        Insert: { id?: string; executed_session_id: string; planned_workout_id?: string | null; status: 'auto_matched' | 'suggested' | 'manual_matched' | 'unplanned' | 'dismissed'; score?: number | null; matched_by?: string | null; created_at?: string; updated_at?: string }
+        Update: { planned_workout_id?: string | null; status?: 'auto_matched' | 'suggested' | 'manual_matched' | 'unplanned' | 'dismissed'; score?: number | null; matched_by?: string | null; updated_at?: string }
+        Relationships: []
+      }
+      executed_session_metrics: {
+        Row: { id: string; executed_session_id: string; has_hr: boolean; has_power: boolean; sample_count: number; coverage_pct: number | null; avg_power: number | null; max_power: number | null; normalized_power: number | null; variability_index: number | null; intensity_factor: number | null; tss: number | null; power_zone_seconds: Json | null; hr_zone_seconds: Json | null; ftp_used: number | null; zones_used: Json | null; computed_at: string }
+        Insert: { id?: string; executed_session_id: string; has_hr?: boolean; has_power?: boolean; sample_count?: number; coverage_pct?: number | null; avg_power?: number | null; max_power?: number | null; normalized_power?: number | null; variability_index?: number | null; intensity_factor?: number | null; tss?: number | null; power_zone_seconds?: Json | null; hr_zone_seconds?: Json | null; ftp_used?: number | null; zones_used?: Json | null; computed_at?: string }
+        Update: { has_hr?: boolean; has_power?: boolean; sample_count?: number; coverage_pct?: number | null; avg_power?: number | null; max_power?: number | null; normalized_power?: number | null; variability_index?: number | null; intensity_factor?: number | null; tss?: number | null; power_zone_seconds?: Json | null; hr_zone_seconds?: Json | null; ftp_used?: number | null; zones_used?: Json | null; computed_at?: string }
+        Relationships: []
+      }
+      wearable_access_log: {
+        Row: { id: string; viewer_user_id: string; athlete_user_id: string; section: string; range_start: string | null; range_end: string | null; created_at: string }
+        Insert: { id?: string; viewer_user_id: string; athlete_user_id: string; section: string; range_start?: string | null; range_end?: string | null; created_at?: string }
+        Update: { section?: string; range_start?: string | null; range_end?: string | null }
+        Relationships: []
+      }
+      session_reviews: {
+        Row: { id: string; athlete_id: string; planned_workout_id: string | null; executed_session_id: string | null; reviewer_id: string; status: 'pending' | 'reviewed'; comment: string; visible_to_athlete: boolean; created_at: string; updated_at: string }
+        Insert: { id?: string; athlete_id: string; planned_workout_id?: string | null; executed_session_id?: string | null; reviewer_id: string; status?: 'pending' | 'reviewed'; comment: string; visible_to_athlete?: boolean; created_at?: string; updated_at?: string }
+        Update: { planned_workout_id?: string | null; executed_session_id?: string | null; status?: 'pending' | 'reviewed'; comment?: string; visible_to_athlete?: boolean; updated_at?: string }
+        Relationships: []
+      }
       workout_drafts: {
         Row: {
           id: string
@@ -67,6 +144,7 @@ export type Database = {
           updated_at: string
           assigned_trainer_id: string | null
           assigned_nutritionist_id: string | null
+          timezone: string | null
         }
         Insert: {
           id: string
@@ -94,6 +172,7 @@ export type Database = {
           is_active?: boolean
           assigned_trainer_id?: string | null
           assigned_nutritionist_id?: string | null
+          timezone?: string | null
         }
         Update: {
           email?: string
@@ -120,6 +199,7 @@ export type Database = {
           is_active?: boolean
           assigned_trainer_id?: string | null
           assigned_nutritionist_id?: string | null
+          timezone?: string | null
         }
       }
       habits: {

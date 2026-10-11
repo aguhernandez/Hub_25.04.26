@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, CheckCircle2, Loader2, Unplug } from 'lucide-react';
+import { Activity, CheckCircle2, Loader2, Unplug, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,15 +14,18 @@ const call = async (action: string, data: Record<string, unknown> = {}) => {
     let status = '';
     if (context instanceof Response) {
       status = String(context.status);
+      let retryAfter: number | undefined;
       try {
-        const body = await context.clone().json() as { error?: unknown; status?: unknown };
+        const body = await context.clone().json() as { error?: unknown; status?: unknown; retry_after_minutes?: unknown };
         if (typeof body.error === 'string') detail = body.error;
         if (body.status) status = String(body.status);
+        if (typeof body.retry_after_minutes === 'number') retryAfter = body.retry_after_minutes;
       } catch { /* Keep the generic SDK message if its response is not JSON. */ }
+      throw Object.assign(new Error(`${action}: ${detail || error.message}${status ? ` (HTTP ${status})` : ''}`), retryAfter ? { retry_after_minutes: retryAfter } : {});
     }
-    throw new Error(`${action}: ${detail || error.message}${status ? ` (HTTP ${status})` : ''}`);
+    throw error;
   }
-  if (result?.error) throw new Error(result.error);
+  if (result?.error) throw Object.assign(new Error(result.error), result);
   return result;
 };
 
@@ -39,6 +42,12 @@ export default function WearableConnectionsSection() {
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState('');
   const [linked, setLinked] = useState(false);
+  const [lastImportAt, setLastImportAt] = useState<string | null>(null);
+  const [importedCount, setImportedCount] = useState<number | null>(null);
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ready' | 'error' | 'waiting'>('idle');
+  const [waitMinutes, setWaitMinutes] = useState<number | null>(null);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [profileTimezone, setProfileTimezone] = useState('UTC');
 
   const refresh = useCallback(async () => {
     setLoading(true); setError('');
@@ -67,6 +76,15 @@ export default function WearableConnectionsSection() {
         setConnections(rows);
         setDataTypes(Array.isArray(connectionResult?.data_types) ? connectionResult.data_types : []);
         setLinked(!!connectionResult?.linked);
+        if (connectionResult?.linked) {
+          if (rows.some((row: Connection) => ['active', 'connected'].includes(String(row.status || '').toLowerCase()))) {
+            void call('profile-timezone').then(result => setProfileTimezone(result.timezone || 'UTC')).catch(() => setProfileTimezone('UTC'));
+          }
+          void call('ow-ingest-if-stale').then((result) => {
+            setLastImportAt(result.last_import_at || null);
+            setImportedCount(result.total_count ?? null);
+          }).catch((e) => setSyncMessage(e instanceof Error ? e.message : (es ? 'No se pudo importar automáticamente.' : 'Automatic import failed.')));
+        }
       } else {
         setConnections([]); setDataTypes([]); setLinked(false);
       }
@@ -109,12 +127,45 @@ export default function WearableConnectionsSection() {
     finally { setBusy(''); }
   };
 
+  const syncNow = async () => {
+    setSyncState('syncing'); setWaitMinutes(null); setSyncMessage('');
+    try {
+      const result = await call('ow-sync-now');
+      setLastImportAt(result.last_import_at || null);
+      setImportedCount(result.total_count ?? null);
+      setSyncState('ready');
+      setSyncMessage(es ? `Listo · ${result.imported_count ?? 0} entrenamientos importados` : `Ready · ${result.imported_count ?? 0} workouts imported`);
+      await refresh();
+    } catch (e) {
+      const error = e as Error & { retry_after_minutes?: number };
+      if (error.retry_after_minutes) {
+        setWaitMinutes(error.retry_after_minutes); setSyncState('waiting');
+        setSyncMessage(es ? `Espera ${error.retry_after_minutes} min antes de volver a sincronizar.` : `Wait ${error.retry_after_minutes} min before syncing again.`);
+      } else { setSyncState('error'); setSyncMessage(error.message || (es ? 'Error al sincronizar.' : 'Sync failed.')); }
+    }
+  };
+
+  const updateTimezone = async (timezone: string) => {
+    try { const result = await call('update-timezone', { timezone }); setProfileTimezone(result.timezone); }
+    catch (e) { setError(e instanceof Error ? e.message : (es ? 'No se pudo guardar la zona horaria.' : 'Could not save timezone.')); }
+  };
+
+  const timezones: string[] = (() => {
+    try { return (Intl as typeof Intl & { supportedValuesOf?: (key: 'timeZone') => string[] }).supportedValuesOf?.('timeZone') || ['Africa/Nairobi', 'America/Argentina/Buenos_Aires', 'America/Los_Angeles', 'America/Mexico_City', 'America/New_York', 'America/Santiago', 'Asia/Tokyo', 'Atlantic/Canary', 'Europe/London', 'Europe/Madrid', 'Europe/Paris', 'UTC']; }
+    catch { return ['Africa/Nairobi', 'America/Argentina/Buenos_Aires', 'America/Los_Angeles', 'America/Mexico_City', 'America/New_York', 'America/Santiago', 'Asia/Tokyo', 'Atlantic/Canary', 'Europe/London', 'Europe/Madrid', 'Europe/Paris', 'UTC']; }
+  })();
+
   return <section className="space-y-5">
     <div>
       <h2 className="text-xl font-bold text-gray-900 dark:text-white">{es ? 'Dispositivos y datos' : 'Devices and data'}</h2>
       <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{es ? 'Conecta tus plataformas de salud y actividad física.' : 'Connect your health and activity platforms.'}</p>
     </div>
     {error && <div role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">{error}</div>}
+    {linked && <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-semibold text-gray-900 dark:text-white">{es ? 'Entrenamientos importados' : 'Imported workouts'}</h3><p className="mt-1 text-xs text-gray-600 dark:text-gray-400">{es ? 'Último import' : 'Last import'}: {displayDate(lastImportAt)} · {importedCount == null ? (es ? 'sin datos' : 'no data') : `${importedCount} ${es ? 'entrenamientos' : 'workouts'}`}</p></div><button onClick={() => void syncNow()} disabled={syncState === 'syncing'} className="inline-flex items-center gap-2 rounded-lg bg-[#fdda36] px-4 py-2 text-sm font-semibold text-[#514163] disabled:opacity-60"><RefreshCw className={`h-4 w-4 ${syncState === 'syncing' ? 'animate-spin' : ''}`} />{syncState === 'syncing' ? (es ? 'Sincronizando…' : 'Syncing…') : (es ? 'Sincronizar ahora' : 'Sync now')}</button></div>
+      {syncMessage && <p role={syncState === 'error' ? 'alert' : undefined} className={`mt-2 text-sm ${syncState === 'error' ? 'text-red-600 dark:text-red-400' : syncState === 'ready' ? 'text-green-600 dark:text-green-400' : 'text-gray-600 dark:text-gray-300'}`}>{syncMessage}{waitMinutes ? ` (${waitMinutes} min)` : ''}</p>}
+      {profileTimezone === 'UTC' && connections.some(connection => ['active', 'connected'].includes(String(connection.status || '').toLowerCase())) && <label className="mt-4 flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-gray-200"><span>{es ? 'Confirma tu zona horaria para el calendario' : 'Confirm your timezone for the calendar'}</span><select value={profileTimezone} onChange={event => void updateTimezone(event.target.value)} className="rounded-md border border-gray-300 bg-white px-2 py-1 dark:border-gray-600 dark:bg-gray-900">{timezones.map(zone => <option key={zone} value={zone}>{zone}</option>)}</select></label>}
+    </div>}
     {loading ? <div className="flex items-center gap-2 text-gray-500"><Loader2 className="h-4 w-4 animate-spin" />{es ? 'Cargando proveedores…' : 'Loading providers…'}</div> : providers.length === 0 ? <p className="rounded-xl border border-gray-200 p-5 text-sm text-gray-500 dark:border-gray-700">{es ? 'No hay proveedores disponibles en este momento.' : 'No providers are currently available.'}</p> : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {providers.map(provider => {
         const id = String(provider.id || provider.provider || '');

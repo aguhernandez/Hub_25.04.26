@@ -124,6 +124,40 @@ Deno.serve(async (req: Request) => {
     }
 
     const userId = authUser.id;
+    let plannedWorkoutId: string | null = null;
+    let plannedWeekId: string | null = null;
+    let plannedDayIndex: number | null = null;
+    if (data.planned_workout_id) {
+      const admin = createClient(supabaseUrl, supabaseServiceRoleKey);
+      const weeklyMatch = data.planned_workout_id.match(/^endurance-plan-([0-9a-f-]{36})-(\d+)$/i);
+      if (weeklyMatch) {
+        const { data: week, error: weekError } = await admin.from("external_endurance_plans")
+          .select("id, plan_data").eq("id", weeklyMatch[1]).eq("athlete_id", userId).maybeSingle();
+        if (weekError) throw weekError;
+        const dayIndex = Number(weeklyMatch[2]);
+        if (!week || !Array.isArray((week.plan_data as any)?.days) || !(week.plan_data as any).days[dayIndex]) {
+          return new Response(JSON.stringify({ error: "Planned weekly workout not found for this athlete" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        plannedWeekId = week.id;
+        plannedDayIndex = dayIndex;
+      } else {
+        const { data: planned, error: planError } = await admin
+          .from("external_endurance_workouts")
+          .select("id")
+          .eq("id", data.planned_workout_id)
+          .eq("athlete_id", userId)
+          .maybeSingle();
+        if (planError) throw planError;
+        if (!planned) {
+          return new Response(JSON.stringify({ error: "Planned workout not found for this athlete" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        plannedWorkoutId = planned.id;
+      }
+    }
     const firstTimestamp = data.gpsPoints[0].timestamp;
     const lastTimestamp = data.gpsPoints[data.gpsPoints.length - 1].timestamp;
 
@@ -280,6 +314,8 @@ Deno.serve(async (req: Request) => {
     const extResult = await restPost(supabaseUrl, supabaseServiceRoleKey, "external_activities", {
       user_id: userId,
       source: "asciende_gps",
+      ...(plannedWorkoutId ? { planned_workout_id: plannedWorkoutId } : {}),
+      ...(plannedWeekId ? { plan_week_id: plannedWeekId, plan_day_index: plannedDayIndex } : {}),
       external_id: `gps-${activityId}`,
       sport_type: data.sportType,
       name: data.title,
@@ -341,7 +377,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── 5. Mark planned workout as completed ───────────────────────────────────
-    if (data.planned_workout_id) {
+    if (plannedWorkoutId) {
       const completionPayload: Record<string, unknown> = {
         status: "completed",
         updated_at: new Date().toISOString(),
@@ -356,7 +392,7 @@ Deno.serve(async (req: Request) => {
         supabaseUrl,
         supabaseServiceRoleKey,
         "external_endurance_workouts",
-        `id=eq.${data.planned_workout_id}&athlete_id=eq.${userId}`,
+        `id=eq.${plannedWorkoutId}&athlete_id=eq.${userId}`,
         completionPayload
       );
       if (!completionResult.ok) {
