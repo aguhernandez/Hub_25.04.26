@@ -1086,8 +1086,213 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // ════════════════════════════════════════════════════════════════
+    // POST action-based dispatch (Planner integration)
+    // Body: { action, ...params }
+    // ════════════════════════════════════════════════════════════════
+    if (req.method === "POST") {
+      let body: any;
+      try { body = await req.json(); } catch { body = {}; }
+      const action = body.action;
+      const actionAthleteId = body.athlete_id || athleteId;
+      const json = (data: any, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+      // ── get-session-analysis ──
+      if (action === "get-session-analysis") {
+        const { executed_session_id, external_activity_id } = body;
+        if (!executed_session_id && !external_activity_id) return json({ error: "executed_session_id or external_activity_id required" }, 400);
+
+        let sessionRow: any = null;
+        let sessionId: string | null = null;
+
+        if (executed_session_id) {
+          const { data } = await serviceSupabase.from("executed_sessions").select("*").eq("id", executed_session_id).eq("athlete_id", actionAthleteId).maybeSingle();
+          sessionRow = data;
+          sessionId = executed_session_id;
+        } else if (external_activity_id) {
+          const { data: ea } = await serviceSupabase.from("external_activities").select("*").eq("external_id", external_activity_id).eq("user_id", actionAthleteId).maybeSingle();
+          if (ea) {
+            sessionRow = { id: ea.id, athlete_id: ea.user_id, ow_event_id: ea.external_id, provider: ea.source, sport_raw: ea.sport_type, sport_category: null, start_time: ea.start_time, end_time: null, duration_seconds: ea.duration_seconds, distance_m: ea.distance_meters, avg_hr: ea.average_heartrate, max_hr: ea.max_heartrate, calories: ea.calories, raw: ea.raw_data };
+            sessionId = ea.id;
+          }
+        }
+
+        let metrics: any = null;
+        if (sessionId) {
+          const { data: m } = await serviceSupabase.from("executed_session_metrics").select("*").eq("executed_session_id", sessionId).maybeSingle();
+          metrics = m;
+        }
+
+        let matchRow: any = null;
+        if (sessionId) {
+          const { data: sm } = await serviceSupabase.from("session_matches").select("*").eq("executed_session_id", sessionId).maybeSingle();
+          matchRow = sm;
+        }
+
+        let plannedWorkout: any = null;
+        if (matchRow?.planned_workout_id) {
+          const { data: pw } = await serviceSupabase.from("external_endurance_workouts").select("*").eq("id", matchRow.planned_workout_id).maybeSingle();
+          plannedWorkout = pw;
+        }
+
+        return json({
+          session: sessionRow,
+          metrics: metrics || null,
+          match: matchRow || null,
+          planned_workout: plannedWorkout || null,
+        });
+      }
+
+      // ── get-session-timeseries ──
+      if (action === "get-session-timeseries") {
+        const { executed_session_id, external_activity_id } = body;
+        if (!executed_session_id && !external_activity_id) return json({ error: "executed_session_id or external_activity_id required" }, 400);
+
+        let activityId: string | null = null;
+        if (executed_session_id) {
+          const { data: s } = await serviceSupabase.from("executed_sessions").select("ow_event_id").eq("id", executed_session_id).eq("athlete_id", actionAthleteId).maybeSingle();
+          if (s?.ow_event_id) {
+            const { data: ea } = await serviceSupabase.from("external_activities").select("id").eq("external_id", s.ow_event_id).eq("user_id", actionAthleteId).maybeSingle();
+            activityId = ea?.id || null;
+          }
+        } else if (external_activity_id) {
+          const { data: ea } = await serviceSupabase.from("external_activities").select("id").eq("external_id", external_activity_id).eq("user_id", actionAthleteId).maybeSingle();
+          activityId = ea?.id || null;
+        }
+
+        if (!activityId) return json({ timeseries: [], note: "No matching external activity found" });
+
+        const { data: streams } = await serviceSupabase.from("activity_streams").select("*").eq("activity_id", activityId).maybeSingle();
+        if (!streams) return json({ timeseries: [], note: "No streams available" });
+
+        const series: Record<string, any[]> = {};
+        const fields: Array<{ key: string; col: string }> = [
+          { key: "heartrate", col: "heartrate_stream" },
+          { key: "power", col: "watts_stream" },
+          { key: "cadence", col: "cadence_stream" },
+          { key: "speed", col: "velocity_smooth_stream" },
+          { key: "altitude", col: "altitude_stream" },
+          { key: "distance", col: "distance_stream" },
+          { key: "time", col: "time_stream" },
+          { key: "latlng", col: "latlng_stream" },
+        ];
+        for (const f of fields) {
+          const arr = (streams as any)[f.col];
+          if (Array.isArray(arr) && arr.length > 0) series[f.key] = arr;
+        }
+
+        return json({ activity_id: activityId, timeseries: series });
+      }
+
+      // ── list-review-inbox ──
+      if (action === "list-review-inbox") {
+        const df = body.date_from || new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
+        const dt = body.date_to || new Date().toISOString().split("T")[0];
+
+        // Executed sessions for athlete in date range
+        const { data: sessions } = await serviceSupabase
+          .from("executed_sessions")
+          .select("id, ow_event_id, provider, sport_raw, sport_category, start_time, end_time, duration_seconds, distance_m, avg_hr, max_hr, calories, ingested_at")
+          .eq("athlete_id", actionAthleteId)
+          .gte("start_time", df + "T00:00:00")
+          .lte("start_time", dt + "T23:59:59")
+          .order("start_time", { ascending: false })
+          .limit(100);
+
+        if (!sessions || sessions.length === 0) return json({ inbox: [] });
+
+        // Matches for these sessions
+        const sessionIds = sessions.map((s: any) => s.id);
+        const { data: matches } = await serviceSupabase.from("session_matches").select("*").in("executed_session_id", sessionIds);
+        const matchMap = new Map((matches || []).map((m: any) => [m.executed_session_id, m]));
+
+        // Reviews for these sessions
+        const { data: reviews } = await serviceSupabase.from("session_reviews").select("*").in("executed_session_id", sessionIds);
+        const reviewMap = new Map((reviews || []).map((r: any) => [r.executed_session_id, r]));
+
+        // Planned workout names
+        const plannedIds = (matches || []).map((m: any) => m.planned_workout_id).filter(Boolean);
+        let plannedMap: Record<string, any> = {};
+        if (plannedIds.length > 0) {
+          const { data: planned } = await serviceSupabase.from("external_endurance_workouts").select("id, scheduled_date, workout_data").in("id", plannedIds);
+          for (const p of (planned || [])) plannedMap[(p as any).id] = p;
+        }
+
+        const inbox = sessions.map((s: any) => {
+          const match = matchMap.get(s.id);
+          const review = reviewMap.get(s.id);
+          const planned = match?.planned_workout_id ? plannedMap[match.planned_workout_id] : null;
+          return {
+            executed_session_id: s.id,
+            ow_event_id: s.ow_event_id,
+            provider: s.provider,
+            sport: s.sport_raw || s.sport_category,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            duration_seconds: s.duration_seconds,
+            distance_m: s.distance_m,
+            avg_hr: s.avg_hr,
+            max_hr: s.max_hr,
+            calories: s.calories,
+            match_status: match?.status || "unplanned",
+            match_score: match?.score || null,
+            planned_workout: planned ? { id: planned.id, scheduled_date: planned.scheduled_date, name: planned.workout_data?.name || planned.workout_data?.title || null } : null,
+            review_status: review?.status || null,
+            review_comment: review?.comment || null,
+            review_id: review?.id || null,
+          };
+        });
+
+        return json({ inbox });
+      }
+
+      // ── save-review ──
+      if (action === "save-review") {
+        const { executed_session_id, planned_workout_id, comment, status, visible_to_athlete } = body;
+        if (!executed_session_id && !planned_workout_id) return json({ error: "executed_session_id or planned_workout_id required" }, 400);
+        if (!comment || typeof comment !== "string") return json({ error: "comment is required" }, 400);
+        const reviewStatus = status || "reviewed";
+
+        // If planner token auth, use plannerInfo.id as reviewer; else use userId
+        const reviewerId = plannerInfo?.id === "admin-config" ? userId : (userId || plannerInfo?.id || null);
+        if (!reviewerId) return json({ error: "Could not determine reviewer identity" }, 400);
+
+        const insertRow: any = {
+          athlete_id: actionAthleteId,
+          reviewer_id: reviewerId,
+          status: reviewStatus,
+          comment,
+          visible_to_athlete: visible_to_athlete !== false,
+        };
+        if (executed_session_id) insertRow.executed_session_id = executed_session_id;
+        if (planned_workout_id) insertRow.planned_workout_id = planned_workout_id;
+
+        const { data, error: insertError } = await serviceSupabase.from("session_reviews").insert(insertRow).select("id").single();
+        if (insertError) throw insertError;
+
+        return json({ success: true, review_id: data.id });
+      }
+
+      // ── capabilities (discovery) ──
+      if (action === "capabilities" || !action) {
+        return json({
+          capabilities: [
+            "get-session-analysis",
+            "get-session-timeseries",
+            "list-review-inbox",
+            "save-review",
+            "capabilities",
+          ],
+          auth: "X-Planner-Token",
+          version: "1.0",
+        });
+      }
+
+      return json({ error: `Unknown action: ${action}` }, 400);
+    }
+
     return new Response(JSON.stringify({
-      error: "Unknown endpoint. Available: training-schedule, activities, training-logs, training-log, athlete-profile, biological-passport, push-endurance-plan, push-training-log, push-tags, push-endurance-workout, push-endurance-workouts, delete-endurance-workout, endurance-workouts, endurance-data, wellness, athlete-habits, tdee",
+      error: "Unknown endpoint. Available: training-schedule, activities, training-logs, training-log, athlete-profile, biological-passport, push-endurance-plan, push-training-log, push-tags, push-endurance-workout, push-endurance-workouts, delete-endurance-workout, endurance-workouts, endurance-data, wellness, athlete-habits, tdee, or POST { action, ...params }",
     }), {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
