@@ -980,25 +980,31 @@ Deno.serve(async (req) => {
       const link = await getLink(sessionIdentity.athlete_id);
       if (!link?.consent_at || !link.consent_version) return response({ error: 'Registered consent is required' }, 403);
       const [{ data: session, error }, { data: match, error: matchError }] = await Promise.all([
-        admin.from('executed_sessions').select('id, athlete_id, sport_category, start_time, end_time, duration_seconds').eq('id', sessionId).maybeSingle(),
+        admin.from('executed_sessions').select('id, athlete_id, sport_category, start_time, end_time, duration_seconds, raw').eq('id', sessionId).maybeSingle(),
         admin.from('session_matches').select('status').eq('executed_session_id', sessionId).maybeSingle(),
       ]);
       if (error) throw error; if (matchError) throw matchError;
       if (!session) return response({ error: 'Executed session not found' }, 404);
-      if (!session.start_time) return response({ error: 'Session start_time is required' }, 422);
-      const endTime = session.end_time || (numericValue(session.duration_seconds) ? new Date(Date.parse(session.start_time) + Number(session.duration_seconds) * 1000).toISOString() : null);
-      if (!endTime) return response({ error: 'Session end_time or duration_seconds is required' }, 422);
+      const rawFields = workoutFields(session.raw, session);
+      const rawStart = workoutValue(session.raw, ['start_time', 'start_date', 'started_at']);
+      const rawEnd = workoutValue(session.raw, ['end_time', 'end_date', 'ended_at']);
+      const validIso = (value: unknown) => typeof value === 'string' && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null;
+      const startTime = validIso(session.start_time) || validIso(rawStart);
+      if (!startTime) return response({ error: 'Workout details are unavailable because this event has no valid start time', executed_session_id: sessionId }, 422);
+      const durationSeconds = numericValue(session.duration_seconds) ?? rawFields.duration_seconds;
+      const endTime = validIso(session.end_time) || validIso(rawEnd) || (durationSeconds != null ? new Date(Date.parse(startTime) + durationSeconds * 1000).toISOString() : null);
+      if (!endTime) return response({ error: 'Workout details are unavailable because the event has no valid end time or duration', executed_session_id: sessionId, has_raw_event: !!session.raw }, 422);
       const spec = await getOpenApiSpec(); const contract = timeseriesContract(spec);
       const defaultTypes = [contract.hrType, contract.powerType, contract.latitudeType, contract.longitudeType, contract.elevationType, contract.speedType].filter((value): value is string => !!value);
       const requested = Array.isArray(body.types) ? body.types : defaultTypes;
       if (requested.some((type: unknown) => typeof type !== 'string')) return response({ error: 'types must contain only Open Wearables series type strings' }, 400);
       const invalid = requested.filter((type: string) => !contract.allowedTypes.includes(type));
       if (invalid.length) return response({ error: 'Requested series type is not allowed by the instance OpenAPI', invalid_types: invalid, allowed_types: contract.allowedTypes }, 400);
-      const samples = requested.length ? await readTimeseries(link.ow_user_id, session.start_time, endTime, [...new Set(requested)], contract) : [];
+      const samples = requested.length ? await readTimeseries(link.ow_user_id, startTime, endTime, [...new Set(requested)], contract) : [];
       const hr = samples.filter(sample => /heart.?rate|^hr(?:_|$)/i.test(sample.type));
       const power = samples.filter(sample => /power/i.test(sample.type) && !/heart/i.test(sample.type));
       const pace = samples.filter(sample => /pace|speed|velocity/i.test(sample.type));
-      const duration = numericValue(session.duration_seconds) || (Date.parse(endTime) - Date.parse(session.start_time)) / 1000;
+      const duration = durationSeconds || (Date.parse(endTime) - Date.parse(startTime)) / 1000;
       const derived = calculateDerivedAnalysis(hr, power, duration, { paceSamples: pace, continuous: true });
       const passport = await getPassport(session.athlete_id);
       const powerMetrics = power.length ? calculatePowerMetrics(power, duration, passport.ftp, passport.zones5.power || passport.zones7.power) : null;
@@ -1022,7 +1028,7 @@ Deno.serve(async (req) => {
       if (!gps.capabilities.altitude) diagnostics.push('Open Wearables did not return enough altitude samples to calculate ascent and descent.');
       if (!hr.length) diagnostics.push('No heart-rate time series was returned for this session.');
       if (!match?.status) diagnostics.push('This watch session has no planned-session match.');
-      return response({ executed_session_id: sessionId, window: { start_time: session.start_time, end_time: endTime }, series: Object.fromEntries([...new Set(samples.map(row => row.type))].map(type => [type, reduce(samples.filter(row => row.type === type))])), route: gps.route, elevation_gain_m: gps.elevation_gain_m, elevation_loss_m: gps.elevation_loss_m, capabilities: { ...gps.capabilities, hr: hr.length > 0, power: power.length > 0 }, hr_zone_seconds: hr.length ? zonePair(hr, 'hr') : null, power_zone_seconds: power.length ? zonePair(power, 'power') : null, power_metrics: powerMetrics, zones_used: { source: passport.source, measurement_date: passport.measurement_date, zones5: passport.zones5, zones7: passport.zones7 }, derived, diagnostics });
+      return response({ executed_session_id: sessionId, window: { start_time: startTime, end_time: endTime }, series: Object.fromEntries([...new Set(samples.map(row => row.type))].map(type => [type, reduce(samples.filter(row => row.type === type))])), route: gps.route, elevation_gain_m: gps.elevation_gain_m, elevation_loss_m: gps.elevation_loss_m, capabilities: { ...gps.capabilities, hr: hr.length > 0, power: power.length > 0 }, hr_zone_seconds: hr.length ? zonePair(hr, 'hr') : null, power_zone_seconds: power.length ? zonePair(power, 'power') : null, power_metrics: powerMetrics, zones_used: { source: passport.source, measurement_date: passport.measurement_date, zones5: passport.zones5, zones7: passport.zones7 }, derived, diagnostics });
     }
     if (action === 'list-review-inbox') {
       if (!['trainer', 'head_coach', 'admin'].includes(profile.role)) return response({ error: 'Coach or admin role is required' }, 403);

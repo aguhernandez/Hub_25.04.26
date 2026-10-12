@@ -196,7 +196,17 @@ export default function TrainingPage() {
     if (!sessionId) { setWearableDetailsLoading(false); return; }
     setWearableDetailsLoading(true);
     supabase.functions.invoke('open-wearables', { body: { action: 'get-session-timeseries', executed_session_id: sessionId } })
-      .then(({ data, error }) => { if (!cancelled) setSelectedWearableDetails(error ? { diagnostics: [error.message] } : data); })
+      .then(async ({ data, error }) => {
+        if (cancelled) return;
+        if (!error) { setSelectedWearableDetails(data); return; }
+        let message = error.message;
+        try {
+          const response = (error as any).context;
+          const body = response && typeof response.json === 'function' ? await response.json() : null;
+          if (typeof body?.error === 'string') message = body.error;
+        } catch { /* Keep the Functions client error if its response body is unavailable. */ }
+        if (!cancelled) setSelectedWearableDetails({ diagnostics: [message] });
+      })
       .catch(error => { if (!cancelled) setSelectedWearableDetails({ diagnostics: [error instanceof Error ? error.message : String(error)] }); })
       .finally(() => { if (!cancelled) setWearableDetailsLoading(false); });
     return () => { cancelled = true; };
