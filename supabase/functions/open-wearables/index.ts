@@ -85,6 +85,53 @@ function firstValue(event: Record<string, unknown>, keys: string[]) {
   return null;
 }
 
+const WORKOUT_ENVELOPES = ['workout', 'event', 'activity', 'summary', 'metrics', 'metadata', 'attributes', 'data', 'details'];
+
+/** Read known workout fields from OW's top-level event or its common response envelopes. */
+function workoutValue(event: unknown, aliases: string[]): unknown {
+  const visit = (value: unknown, depth: number): unknown => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const object = value as Record<string, unknown>;
+    for (const alias of aliases) {
+      const normalizedAlias = alias.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const entry = Object.entries(object).find(([key]) => key.toLowerCase().replace(/[^a-z0-9]/g, '') === normalizedAlias);
+      if (entry) {
+        const item = entry[1];
+        if (item && typeof item === 'object' && !Array.isArray(item)) {
+          const wrapped = firstValue(item as Record<string, unknown>, ['value', 'amount', 'total', 'count']);
+          if (wrapped !== null) return wrapped;
+        }
+        if (item !== null && item !== undefined && typeof item !== 'object') return item;
+      }
+    }
+    if (depth <= 0) return null;
+    // Prefer known envelopes so unrelated nested identifiers or measurements do not win.
+    for (const key of WORKOUT_ENVELOPES) {
+      const nestedKey = Object.keys(object).find(candidate => candidate.toLowerCase() === key);
+      if (!nestedKey) continue;
+      const found = visit(object[nestedKey], depth - 1);
+      if (found !== null && found !== undefined) return found;
+    }
+    return null;
+  };
+  return visit(event, 4);
+}
+
+function workoutFields(event: unknown, stored?: Record<string, unknown>) {
+  const pick = (storedValue: unknown, aliases: string[]) => storedValue ?? workoutValue(event, aliases);
+  const storedSport = stored?.sport_raw;
+  const nestedSport = workoutValue(event, ['subtype', 'sport_type', 'activity_type', 'workout_type', 'discipline', 'sport', 'name', 'type']);
+  const sport = storedSport != null && !['other', 'unknown'].includes(String(storedSport).trim().toLowerCase()) ? storedSport : (nestedSport ?? storedSport);
+  return {
+    sport_raw: sport,
+    duration_seconds: numericValue(pick(stored?.duration_seconds, ['duration_seconds', 'moving_time_seconds', 'duration', 'moving_time'])),
+    distance_m: numericValue(pick(stored?.distance_m, ['distance_meters', 'distance_m', 'total_distance_meters', 'total_distance', 'distance_in_meters', 'distance'])),
+    avg_hr: numericValue(pick(stored?.avg_hr, ['avg_hr', 'average_hr', 'avg_heart_rate', 'average_heart_rate', 'mean_heart_rate', 'average_heart_rate_bpm'])),
+    max_hr: numericValue(pick(stored?.max_hr, ['max_hr', 'max_heart_rate', 'maximum_heart_rate', 'max_heart_rate_bpm'])),
+    calories: numericValue(pick(stored?.calories, ['calories', 'total_calories', 'active_calories', 'calories_burned', 'calories_kcal', 'energy_kcal'])),
+  };
+}
+
 function numericValue(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value);
@@ -202,6 +249,10 @@ function timeseriesContract(spec: Awaited<ReturnType<typeof getOpenApiSpec>>) {
   const available = allowed;
   const hrType = available.find(type => /heart.?rate|^hr(?:_|$)/i.test(type));
   const powerType = available.find(type => /cycling.?power/i.test(type)) || available.find(type => /power/i.test(type) && !/heart/i.test(type));
+  const latitudeType = available.find(type => /(^|[_-])(gps[_-]?)?latitude($|[_-])|^lat(?:itude)?$/i.test(type));
+  const longitudeType = available.find(type => /(^|[_-])(gps[_-]?)?longitude($|[_-])|^lon(?:gitude)?$/i.test(type));
+  const elevationType = available.find(type => /elevation|altitude|^elev(?:ation)?$/i.test(type));
+  const speedType = available.find(type => /speed|velocity|pace/i.test(type));
   return {
     template,
     startName,
@@ -210,6 +261,10 @@ function timeseriesContract(spec: Awaited<ReturnType<typeof getOpenApiSpec>>) {
     typeIsArray: resolveSchemaType(typeSchema, spec.components?.schemas || {}) === 'array',
     hrType,
     powerType,
+    latitudeType,
+    longitudeType,
+    elevationType,
+    speedType,
     allowedTypes: available,
     cursorName: cursorName || null,
     pageName: pageName || null,
@@ -218,9 +273,48 @@ function timeseriesContract(spec: Awaited<ReturnType<typeof getOpenApiSpec>>) {
   };
 }
 
+function buildGpsRoute(samples: TimedSample[]) {
+  const classify = (type: string) => {
+    const value = type.toLowerCase();
+    if (/(^|[_-])(gps[_-]?)?latitude($|[_-])|^lat(?:itude)?$/.test(value)) return 'latitude';
+    if (/(^|[_-])(gps[_-]?)?longitude($|[_-])|^lon(?:gitude)?$/.test(value)) return 'longitude';
+    if (/elevation|altitude|^elev(?:ation)?$/.test(value)) return 'altitude';
+    return null;
+  };
+  const byTimestamp = new Map<number, { timestamp: number; latitude?: number; longitude?: number; altitude_m?: number }>();
+  for (const sample of samples) {
+    const kind = classify(sample.type);
+    if (!kind) continue;
+    const timestamp = Math.round(sample.timestamp / 1000) * 1000;
+    const point = byTimestamp.get(timestamp) || { timestamp };
+    if (kind === 'latitude') point.latitude = sample.value;
+    if (kind === 'longitude') point.longitude = sample.value;
+    if (kind === 'altitude') point.altitude_m = sample.value;
+    byTimestamp.set(timestamp, point);
+  }
+  const ordered = [...byTimestamp.values()].sort((a, b) => a.timestamp - b.timestamp);
+  const altitudePoints = ordered.filter(point => Number.isFinite(point.altitude_m));
+  let elevationGain = 0;
+  let elevationLoss = 0;
+  // Ignore small altitude fluctuations that are within normal GPS/barometer noise.
+  for (let index = 1; index < altitudePoints.length; index++) {
+    const delta = Number(altitudePoints[index].altitude_m) - Number(altitudePoints[index - 1].altitude_m);
+    if (delta >= 3) elevationGain += delta;
+    else if (delta <= -3) elevationLoss += Math.abs(delta);
+  }
+  const route = ordered.filter(point => Number.isFinite(point.latitude) && Number.isFinite(point.longitude));
+  const reducedRoute = route.length <= 2000 ? route : Array.from({ length: 2000 }, (_, index) => route[Math.floor(index * (route.length - 1) / 1999)]);
+  return {
+    route: reducedRoute.map(({ latitude, longitude, altitude_m, timestamp }) => ({ latitude, longitude, altitude_m: altitude_m ?? null, timestamp: new Date(timestamp).toISOString() })),
+    elevation_gain_m: altitudePoints.length >= 2 ? Math.round(elevationGain) : null,
+    elevation_loss_m: altitudePoints.length >= 2 ? Math.round(elevationLoss) : null,
+    capabilities: { gps: route.length > 1, altitude: altitudePoints.length > 1 },
+  };
+}
+
 function workoutEventsContract(spec: Awaited<ReturnType<typeof getOpenApiSpec>>) {
   const candidates = Object.entries(spec.paths || {}).filter(([path, methods]) =>
-    /\/users?\/\{[^}]+\}/events\/workouts$/i.test(path) &&
+    /\/users?\/\{[^}]+\}\/events\/workouts$/i.test(path) &&
     Object.keys(methods || {}).some(method => method.toLowerCase() === 'get')
   );
   const fallback = '/users/{user_id}/events/workouts';
@@ -242,7 +336,7 @@ function workoutEventsContract(spec: Awaited<ReturnType<typeof getOpenApiSpec>>)
 function providerWorkoutRoutes(spec: Awaited<ReturnType<typeof getOpenApiSpec>>) {
   return Object.entries(spec.paths || {})
     .filter(([path, methods]) =>
-      /\/providers?\/\{[^}]+\}\/users?\/\{[^}]+\}/workouts$/i.test(path) &&
+      /\/providers?\/\{[^}]+\}\/users?\/\{[^}]+\}\/workouts$/i.test(path) &&
       Object.keys(methods || {}).some(method => method.toLowerCase() === 'get')
     )
     .map(([template, methods]) => {
@@ -278,7 +372,7 @@ function seriesRecords(raw: unknown, fallbackType: string): TimedSample[] {
     if (Array.isArray(value)) { value.forEach(item => visit(item, type)); return; }
     if (!value || typeof value !== 'object') return;
     const object = value as Record<string, unknown>;
-    if (('timestamp' in object || 'time' in object || 'recorded_at' in object) && ('value' in object || 'measurement' in object)) { add(object, type); return; }
+    if (('timestamp' in object || 'time' in object || 'recorded_at' in object || 'date_time' in object) && ('value' in object || 'measurement' in object || 'data' in object)) { add(object, type); return; }
     const nestedType = String(object.type || object.data_type || object.series_type || type);
     const generic = new Set(['data', 'records', 'items', 'samples', 'results', 'values', 'timeseries', 'series']);
     for (const [key, child] of Object.entries(object)) {
@@ -470,23 +564,23 @@ Deno.serve(async (req) => {
         }
       }
       const ingestedAt = new Date().toISOString();
-      const rows = [...records.entries()].map(([eventId, event]) => ({
-        athlete_id: userId,
-        ow_event_id: eventId,
-        provider: firstValue(event, ['provider', 'source']) as string | null,
-        sport_raw: firstValue(event, ['subtype', 'sport', 'sport_type', 'activity_type', 'type']) as string | null,
-        sport_category: normalizeSport(firstValue(event, ['subtype', 'sport', 'sport_type', 'activity_type', 'type'])),
-        start_time: firstValue(event, ['start_time', 'start_date', 'started_at']) as string | null,
-        end_time: firstValue(event, ['end_time', 'end_date', 'ended_at']) as string | null,
-        duration_seconds: numericValue(firstValue(event, ['duration_seconds', 'duration'])),
-        distance_m: numericValue(firstValue(event, ['distance_meters', 'distance_m', 'distance'])),
-        avg_hr: numericValue(firstValue(event, ['avg_hr', 'average_heart_rate', 'average_heart_rate_bpm'])),
-        max_hr: numericValue(firstValue(event, ['max_hr', 'max_heart_rate', 'max_heart_rate_bpm'])),
-        calories: numericValue(firstValue(event, ['calories', 'calories_kcal', 'active_calories'])),
-        raw: event,
-        ingested_at: ingestedAt,
-        updated_at: ingestedAt,
-      }));
+      const rows = [...records.entries()].map(([eventId, event]) => {
+        const fields = workoutFields(event);
+        const sportRaw = fields.sport_raw == null ? null : String(fields.sport_raw);
+        return {
+          athlete_id: userId,
+          ow_event_id: eventId,
+          provider: workoutValue(event, ['provider', 'source']) as string | null,
+          ...fields,
+          sport_raw: sportRaw,
+          sport_category: normalizeSport(sportRaw),
+          start_time: workoutValue(event, ['start_time', 'start_date', 'started_at']) as string | null,
+          end_time: workoutValue(event, ['end_time', 'end_date', 'ended_at']) as string | null,
+          raw: event,
+          ingested_at: ingestedAt,
+          updated_at: ingestedAt,
+        };
+      });
       if (rows.length) {
         const { error } = await admin.from('executed_sessions').upsert(rows, { onConflict: 'athlete_id,ow_event_id' });
         if (error) throw error;
@@ -534,7 +628,7 @@ Deno.serve(async (req) => {
       return { passport_id: data?.id || null, measurement_date: data?.measurement_date || null, ftp: numericValue(data?.ftp_watts), critical_power: numericValue(data?.critical_power), lt1_power: numericValue(data?.lt1_power), lt2_power: numericValue(data?.lt2_power), lt1_hr: numericValue(data?.lt1_hr), lt2_hr: numericValue(data?.lt2_hr), zones5: { hr: zones('hr', 5), power: zones('power', 5) }, zones7: { hr: zones('hr', 7), power: zones('power', 7) }, source: 'biological_passports.active' };
     };
     const resolveCompletions = async (athleteId: string, rangeStart?: string | null, rangeEnd?: string | null): Promise<Array<Record<string, any>>> => {
-      let sessionsQuery = admin.from('executed_sessions').select('id, athlete_id, provider, sport_raw, sport_category, start_time, end_time, duration_seconds, distance_m, avg_hr, max_hr, calories').eq('athlete_id', athleteId);
+      let sessionsQuery = admin.from('executed_sessions').select('id, athlete_id, provider, sport_raw, sport_category, start_time, end_time, duration_seconds, distance_m, avg_hr, max_hr, calories, raw').eq('athlete_id', athleteId);
       let gpsQuery = admin.from('external_activities').select('id, planned_workout_id, plan_week_id, plan_day_index, sport_type, name, start_time, duration_seconds, distance_meters, average_heartrate, calories, raw_data, user_notes, perceived_exertion').eq('user_id', athleteId).eq('source', 'asciende_gps');
       let manualQuery = admin.from('endurance_completed_workouts').select('id, planned_workout_id, plan_week_id, plan_day_index, scheduled_date, sport, workout_name, duration_seconds, time_in_zones, intervals, rpe, effort, source, wellness, notes, created_at').eq('athlete_id', athleteId);
       if (rangeStart) {
@@ -559,7 +653,24 @@ Deno.serve(async (req) => {
       if (matchesError) throw matchesError;
       const matchBySession = new Map((matches || []).map(row => [row.executed_session_id, row]));
       const candidates = [
-        ...(sessionsResult.data || []).map(row => { const match = matchBySession.get(row.id); return { source: 'watch' as const, id: row.id, planned_workout_id: match && ['auto_matched', 'manual_matched'].includes(match.status) ? match.planned_workout_id : null, priority_status: match?.status || null, start_time: row.start_time, duration_seconds: numericValue(row.duration_seconds), ...row }; }),
+        ...(sessionsResult.data || []).map(row => {
+          const fields = workoutFields(row.raw, row);
+          const sportRaw = fields.sport_raw == null ? null : String(fields.sport_raw);
+          const match = matchBySession.get(row.id);
+          return {
+            source: 'watch' as const,
+            id: row.id,
+            athlete_id: row.athlete_id,
+            provider: row.provider,
+            sport_raw: sportRaw,
+            sport_category: row.sport_category === 'other' ? normalizeSport(sportRaw) : row.sport_category,
+            start_time: row.start_time,
+            end_time: row.end_time,
+            ...fields,
+            planned_workout_id: match && ['auto_matched', 'manual_matched'].includes(match.status) ? match.planned_workout_id : null,
+            priority_status: match?.status || null,
+          };
+        }),
         ...(gpsResult.data || []).map(row => ({ source: 'gps' as const, id: row.id, planned_workout_id: row.planned_workout_id || (row.plan_week_id && row.plan_day_index !== null ? `endurance-plan-${row.plan_week_id}-${row.plan_day_index}` : null), start_time: row.start_time, duration_seconds: numericValue(row.duration_seconds), distance_m: numericValue(row.distance_meters), avg_hr: numericValue(row.average_heartrate), calories: numericValue(row.calories), sport: row.sport_type, name: row.name, notes: row.user_notes, rpe: numericValue(row.perceived_exertion), gps_activity_id: (row.raw_data as any)?.activity_id })),
         ...(manualResult.data || []).map(row => ({ source: 'manual' as const, id: row.id, planned_workout_id: row.planned_workout_id || (row.plan_week_id && row.plan_day_index !== null ? `endurance-plan-${row.plan_week_id}-${row.plan_day_index}` : null), start_time: row.scheduled_date ? `${row.scheduled_date}T12:00:00Z` : row.created_at, duration_seconds: numericValue(row.duration_seconds), sport: row.sport, name: row.workout_name, rpe: row.rpe, effort: row.effort, notes: row.notes || (row.wellness as any)?.notes || (row.wellness as any)?.feedback_notes || null, wellness: row.wellness, intervals: row.intervals, time_in_zones: row.time_in_zones, log_source: row.source })),
       ];
@@ -869,23 +980,33 @@ Deno.serve(async (req) => {
       const link = await getLink(sessionIdentity.athlete_id);
       if (!link?.consent_at || !link.consent_version) return response({ error: 'Registered consent is required' }, 403);
       const [{ data: session, error }, { data: match, error: matchError }] = await Promise.all([
-        admin.from('executed_sessions').select('id, athlete_id, start_time, end_time, duration_seconds').eq('id', sessionId).maybeSingle(),
+        admin.from('executed_sessions').select('id, athlete_id, sport_category, start_time, end_time, duration_seconds').eq('id', sessionId).maybeSingle(),
         admin.from('session_matches').select('status').eq('executed_session_id', sessionId).maybeSingle(),
       ]);
       if (error) throw error; if (matchError) throw matchError;
       if (!session) return response({ error: 'Executed session not found' }, 404);
-      if (!session.start_time || !session.end_time) return response({ error: 'Session start_time and end_time are required' }, 422);
-      const requested = Array.isArray(body.types) ? body.types : [];
-      if (!requested.length || requested.some((type: unknown) => typeof type !== 'string')) return response({ error: 'types must be a non-empty array of Open Wearables series type strings' }, 400);
+      if (!session.start_time) return response({ error: 'Session start_time is required' }, 422);
+      const endTime = session.end_time || (numericValue(session.duration_seconds) ? new Date(Date.parse(session.start_time) + Number(session.duration_seconds) * 1000).toISOString() : null);
+      if (!endTime) return response({ error: 'Session end_time or duration_seconds is required' }, 422);
       const spec = await getOpenApiSpec(); const contract = timeseriesContract(spec);
+      const defaultTypes = [contract.hrType, contract.powerType, contract.latitudeType, contract.longitudeType, contract.elevationType, contract.speedType].filter((value): value is string => !!value);
+      const requested = Array.isArray(body.types) ? body.types : defaultTypes;
+      if (requested.some((type: unknown) => typeof type !== 'string')) return response({ error: 'types must contain only Open Wearables series type strings' }, 400);
       const invalid = requested.filter((type: string) => !contract.allowedTypes.includes(type));
       if (invalid.length) return response({ error: 'Requested series type is not allowed by the instance OpenAPI', invalid_types: invalid, allowed_types: contract.allowedTypes }, 400);
-      const samples = await readTimeseries(link.ow_user_id, session.start_time, session.end_time, requested, contract);
+      const samples = requested.length ? await readTimeseries(link.ow_user_id, session.start_time, endTime, [...new Set(requested)], contract) : [];
       const hr = samples.filter(sample => /heart.?rate|^hr(?:_|$)/i.test(sample.type));
       const power = samples.filter(sample => /power/i.test(sample.type) && !/heart/i.test(sample.type));
       const pace = samples.filter(sample => /pace|speed|velocity/i.test(sample.type));
-      const duration = numericValue(session.duration_seconds) || (Date.parse(session.end_time) - Date.parse(session.start_time)) / 1000;
+      const duration = numericValue(session.duration_seconds) || (Date.parse(endTime) - Date.parse(session.start_time)) / 1000;
       const derived = calculateDerivedAnalysis(hr, power, duration, { paceSamples: pace, continuous: true });
+      const passport = await getPassport(session.athlete_id);
+      const powerMetrics = power.length ? calculatePowerMetrics(power, duration, passport.ftp, passport.zones5.power || passport.zones7.power) : null;
+      const zonePair = (series: TimedSample[], kind: 'hr' | 'power') => ({
+        zones5: calculateZoneSeconds(series, passport.zones5[kind]),
+        zones7: calculateZoneSeconds(series, passport.zones7[kind]),
+      });
+      const gps = buildGpsRoute(samples);
       const reduce = (rows: TimedSample[]) => {
         if (rows.length <= 2000) return rows;
         const sortedRows = [...rows].sort((a, b) => a.timestamp - b.timestamp);
@@ -896,7 +1017,12 @@ Deno.serve(async (req) => {
           return /power/i.test(bin[0]?.type || '') ? { ...point, peak_value: Math.max(...bin.map(row => row.value)) } : point;
         }).filter(Boolean);
       };
-      return response({ executed_session_id: sessionId, window: { start_time: session.start_time, end_time: session.end_time }, series: Object.fromEntries([...new Set(samples.map(row => row.type))].map(type => [type, reduce(samples.filter(row => row.type === type))])), route: null, derived, diagnostics: ['Route geometry and altitude from Open Wearables are not verified by its published timeseries contract in this response; request native GPS only when capabilities confirms availability.', ...(match?.status ? [] : ['This watch session has no planned-session match.'])] });
+      const diagnostics = [] as string[];
+      if (!gps.capabilities.gps) diagnostics.push('Open Wearables did not return latitude and longitude samples for this session.');
+      if (!gps.capabilities.altitude) diagnostics.push('Open Wearables did not return enough altitude samples to calculate ascent and descent.');
+      if (!hr.length) diagnostics.push('No heart-rate time series was returned for this session.');
+      if (!match?.status) diagnostics.push('This watch session has no planned-session match.');
+      return response({ executed_session_id: sessionId, window: { start_time: session.start_time, end_time: endTime }, series: Object.fromEntries([...new Set(samples.map(row => row.type))].map(type => [type, reduce(samples.filter(row => row.type === type))])), route: gps.route, elevation_gain_m: gps.elevation_gain_m, elevation_loss_m: gps.elevation_loss_m, capabilities: { ...gps.capabilities, hr: hr.length > 0, power: power.length > 0 }, hr_zone_seconds: hr.length ? zonePair(hr, 'hr') : null, power_zone_seconds: power.length ? zonePair(power, 'power') : null, power_metrics: powerMetrics, zones_used: { source: passport.source, measurement_date: passport.measurement_date, zones5: passport.zones5, zones7: passport.zones7 }, derived, diagnostics });
     }
     if (action === 'list-review-inbox') {
       if (!['trainer', 'head_coach', 'admin'].includes(profile.role)) return response({ error: 'Coach or admin role is required' }, 403);
