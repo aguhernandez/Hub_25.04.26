@@ -1,5 +1,123 @@
 # Integración de Planificadores Satélite - Prompts y Documentación
 
+## 0. Lectura y revisión de entrenamientos importados (Endurance Planner)
+
+Estas cuatro acciones usan `POST https://ngkcbygyoobqhlmlnuvl.supabase.co/functions/v1/endurance-satellite-bridge`.
+Se requieren **ambos** encabezados: el secreto del Planner (`X-Planner-Token`) y un JWT de sesión válido de Hub (`Authorization: Bearer <Hub access_token>`). `Authorization` debe ser la sesión del usuario autenticada en el proyecto Supabase de Hub; un JWT de la propia aplicación Planner no sirve salvo que esa aplicación comparta el Auth de Hub. No existe un encabezado `X-Hub-Token` en este contrato.
+
+El Hub deriva la identidad del usuario del JWT. `athlete_id`, si se envía, solo sirve como filtro adicional y debe coincidir con el propietario resuelto desde la sesión/entrenamiento. Los atletas pueden leer sus propias sesiones; coaches/head coaches, las de perfiles cuyo `assigned_trainer_id` sea su propio ID; admins, todas. La bandeja de un atleta se limita a sí mismo. `save-review` requiere rol coach, head_coach o admin y consentimiento wearable registrado cuando la acción se reenvía a Open Wearables. Las lecturas de datos de otro usuario se registran en `wearable_access_log`.
+
+### A. `get-session-analysis`
+
+Request:
+
+```http
+POST /functions/v1/endurance-satellite-bridge
+X-Planner-Token: <planner-secret>
+Authorization: Bearer <hub-user-access-token>
+Content-Type: application/json
+```
+
+```json
+{"action":"get-session-analysis","executed_session_id":"<uuid>"}
+```
+
+Response (campos exactos; los valores pueden ser `null`):
+
+```json
+{
+  "session": {"source":"watch","id":"<uuid>","planned_workout_id":null,"start_time":"2026-10-11T08:00:00Z","duration_seconds":3600,"distance_m":5000,"avg_hr":120,"max_hr":150,"calories":300,"sport":"walking","name":null,"athlete_feedback":null},
+  "metrics": {"has_hr":true,"has_power":false,"sample_count":3600,"coverage_pct":95,"avg_power":null,"max_power":null,"normalized_power":null,"variability_index":null,"intensity_factor":null,"tss":null,"power_zone_seconds":null,"hr_zone_seconds":{},"ftp_used":null,"zones_used":{},"computed_at":"2026-10-11T09:05:00Z"},
+  "match": {"executed_session_id":"<uuid>","planned_workout_id":"<uuid>","status":"matched","score":0.9},
+  "planned_workout": {"id":"<uuid>","scheduled_date":"2026-10-11","scheduled_time":"08:00:00","duration_minutes":60,"sport":"run","sub_discipline":null,"steps":[],"intensity_basis":"hr"},
+  "planned_zone_time": {"zones5":{},"zones7":{}},
+  "zones_used": {},
+  "biological_passport_date": "2026-09-01",
+  "capabilities": {"hr":true,"power":false,"gps":false,"altitude":false,"cadence":false,"laps":false},
+  "coach_comment": null,
+  "diagnostics": []
+}
+```
+
+`session` intentionally omits the raw event. `capabilities` reports `{hr,power,gps,altitude,cadence,laps}`; GPS/altitude/cadence/laps are false unless the Hub can verify them for the analysis.
+
+### B. `get-session-timeseries`
+
+Request by completed session:
+
+```json
+{"action":"get-session-timeseries","executed_session_id":"<uuid>","types":["heart_rate","latitude","longitude","elevation"]}
+```
+
+Or request the time series around a planned workout:
+
+```json
+{"action":"get-session-timeseries","planned_workout_id":"<external-workout-uuid>"}
+```
+
+`types` is optional and must contain series type strings allowed by the connected Open Wearables instance. The response follows this shape (series/capability values depend on data available):
+
+```json
+{
+  "executed_session_id":"<uuid>",
+  "window":{"start_time":"2026-10-11T08:00:00Z","end_time":"2026-10-11T09:00:00Z"},
+  "series":{"heart_rate":[{"timestamp":1791705600,"value":120,"type":"heart_rate"}]},
+  "route":null,
+  "elevation_gain_m":null,
+  "elevation_loss_m":null,
+  "capabilities":{"gps":false,"altitude":false,"hr":true,"power":false},
+  "hr_zone_seconds":{"zones5":{},"zones7":{}},
+  "power_zone_seconds":null,
+  "power_metrics":null,
+  "zones_used":{"source":"biological_passport","measurement_date":"2026-09-01","zones5":{},"zones7":{}},
+  "derived":{},
+  "diagnostics":[]
+}
+```
+
+`capabilities` here is `{gps,altitude,hr,power}`. GPS route, ascent/descent, and HR/power zone seconds appear only when the corresponding series are present. A valid start and end (or duration) must be available to query Open Wearables; otherwise the Hub returns HTTP 422 with an explanation.
+
+### C. `list-review-inbox`
+
+Request for the authenticated coach's athletes (or the authenticated athlete's own sessions):
+
+```json
+{"action":"list-review-inbox","date_from":"2026-10-01","date_to":"2026-10-12"}
+```
+
+Optional `athlete_id` narrows the response only after the Hub verifies that athlete is within the caller's permissions. Dates are `YYYY-MM-DD`; omitted dates default to the last 14 days through today. Response:
+
+```json
+{
+  "inbox":[{
+    "athlete_id":"<uuid>","athlete_name":"Athlete Name","executed_session_id":"<uuid>","ow_event_id":"<event-id>",
+    "provider":"polar","sport":"walking","start_time":"2026-10-11T08:00:00Z","end_time":"2026-10-11T09:00:00Z",
+    "duration_seconds":3600,"distance_m":5000,"avg_hr":120,"max_hr":150,"calories":300,
+    "match_status":"matched","match_score":0.9,"planned_workout":{"id":"<uuid>","scheduled_date":"2026-10-11","name":"Easy run"},
+    "review_status":null,"review_comment":null,"review_id":null,
+    "capabilities":{"hr":true,"power":false,"zones":false,"gps":false,"altitude":false,"cadence":false,"laps":false}
+  }],"count":1,"date_from":"2026-10-01","date_to":"2026-10-12"
+}
+```
+
+Inbox `capabilities` is a lightweight summary `{hr,power,zones,gps,altitude,cadence,laps}`. `gps`, `altitude`, `cadence` and `laps` are not inspected in the inbox and therefore remain false there; call `get-session-timeseries` for verified GPS/altitude/series availability.
+
+### D. `save-review`
+
+Request (coach/head_coach/admin only):
+
+```json
+{"action":"save-review","executed_session_id":"<uuid>","comment":"Good pacing; keep the recovery easy.","status":"reviewed","visible_to_athlete":true}
+```
+
+`status` is normalized to `pending` only when explicitly set to `pending`; otherwise it is stored as `reviewed`. Send either `executed_session_id` or an `external_endurance_workouts` `planned_workout_id` (or both if they belong to the same athlete). Weekly-plan synthetic IDs cannot be used for review persistence. Response:
+
+```json
+{"success":true,"review":{"id":"<uuid>","executed_session_id":"<uuid>","athlete_id":"<uuid>","status":"reviewed","comment":"Good pacing; keep the recovery easy.","visible_to_athlete":true},"review_id":"<uuid>"}
+```
+
+`save-review` has no `capabilities` field. Error responses use `{ "error": "..." }` and appropriate HTTP status codes (for example 401 missing/invalid authentication, 403 insufficient athlete/role/consent permission, 404 unknown session, 422 unavailable timeseries window).
+
 ## Descripción General
 
 El hub centralizado (`hub.asciende.pro`) actúa como servidor de integración para los satélites de planificación (Endurance Planner, Nutrition Planner, etc.). Los satélites pueden leer datos del atleta y enviar planes generados de vuelta al hub usando tokens de API.

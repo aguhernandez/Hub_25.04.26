@@ -169,7 +169,9 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-    } else if (authHeader) {
+    }
+
+    if (authHeader) {
       const supabase = createClient(
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_ANON_KEY")!,
@@ -183,7 +185,9 @@ Deno.serve(async (req: Request) => {
         });
       }
       userId = user.id;
-    } else {
+    }
+
+    if (!plannerTokenHeader && !authHeader) {
       return new Response(JSON.stringify({ error: "Missing authentication. Use Authorization header (JWT) or X-Planner-Token header." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1097,6 +1101,51 @@ Deno.serve(async (req: Request) => {
       const actionAthleteId = body.athlete_id || athleteId;
       const json = (data: any, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
+      const sessionActions = new Set(["get-session-analysis", "get-session-timeseries", "list-review-inbox", "save-review"]);
+      let actorProfile: any = null;
+      if (sessionActions.has(action)) {
+        if (!plannerInfo || !plannerTokenHeader) return json({ error: "X-Planner-Token is required for session actions" }, 401);
+        if (!userId || !authHeader) return json({ error: "Authorization: Bearer <Hub session JWT> is also required for session actions" }, 401);
+        if (plannerInfo.planner_type !== "endurance") return json({ error: "This planner token is not authorized for endurance session actions" }, 403);
+        const { data, error } = await serviceSupabase.from("profiles").select("id, role, full_name, assigned_trainer_id").eq("id", userId).maybeSingle();
+        if (error) throw error;
+        if (!data) return json({ error: "Hub user profile not found" }, 403);
+        actorProfile = data;
+      }
+
+      const canActorReadAthlete = async (targetAthleteId: string) => {
+        if (!actorProfile || !userId) return false;
+        if (actorProfile.role === "admin" || targetAthleteId === userId) return true;
+        if (!["trainer", "head_coach"].includes(actorProfile.role)) return false;
+        const { data, error } = await serviceSupabase.from("profiles").select("id").eq("id", targetAthleteId).eq("assigned_trainer_id", userId).maybeSingle();
+        if (error) throw error;
+        return !!data;
+      };
+
+      const recordWearableAccess = async (targetAthleteId: string, section: string) => {
+        if (!userId || targetAthleteId === userId) return;
+        const { error } = await serviceSupabase.from("wearable_access_log").insert({
+          viewer_user_id: userId,
+          athlete_user_id: targetAthleteId,
+          section,
+        });
+        if (error) throw error;
+      };
+
+      const callOpenWearables = async (forwardedAction: string, payload: Record<string, unknown>) => {
+        const baseUrl = Deno.env.get("SUPABASE_URL")!;
+        const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+        const response = await fetch(`${baseUrl.replace(/\/+$/, "")}/functions/v1/open-wearables`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "apikey": anonKey, "Authorization": authHeader! },
+          body: JSON.stringify({ action: forwardedAction, ...payload }),
+        });
+        const text = await response.text();
+        let data: any;
+        try { data = text ? JSON.parse(text) : null; } catch { data = { error: text || "Open Wearables returned an invalid response" }; }
+        return { data, status: response.status };
+      };
+
       // ── get-session-analysis ──
       if (action === "get-session-analysis") {
         const { executed_session_id, external_activity_id } = body;
@@ -1104,66 +1153,150 @@ Deno.serve(async (req: Request) => {
 
         let sessionRow: any = null;
         let sessionId: string | null = null;
-
+        let athleteId: string | null = null;
+        let rawForCapabilities: any = null;
         if (executed_session_id) {
-          const { data } = await serviceSupabase.from("executed_sessions").select("*").eq("id", executed_session_id).eq("athlete_id", actionAthleteId).maybeSingle();
-          sessionRow = data;
-          sessionId = executed_session_id;
-        } else if (external_activity_id) {
-          const { data: ea } = await serviceSupabase.from("external_activities").select("*").eq("external_id", external_activity_id).eq("user_id", actionAthleteId).maybeSingle();
-          if (ea) {
-            sessionRow = { id: ea.id, athlete_id: ea.user_id, ow_event_id: ea.external_id, provider: ea.source, sport_raw: ea.sport_type, sport_category: null, start_time: ea.start_time, end_time: null, duration_seconds: ea.duration_seconds, distance_m: ea.distance_meters, avg_hr: ea.average_heartrate, max_hr: ea.max_heartrate, calories: ea.calories, raw: ea.raw_data };
-            sessionId = ea.id;
+          const { data, error } = await serviceSupabase.from("executed_sessions")
+            .select("id, athlete_id, ow_event_id, provider, sport_raw, sport_category, start_time, end_time, duration_seconds, distance_m, avg_hr, max_hr, calories, raw")
+            .eq("id", executed_session_id).maybeSingle();
+          if (error) throw error;
+          if (!data) return json({ error: "Executed session not found" }, 404);
+          athleteId = data.athlete_id;
+          if (!await canActorReadAthlete(athleteId)) return json({ error: "Athlete access denied" }, 403);
+          if (body.athlete_id && body.athlete_id !== athleteId) return json({ error: "athlete_id does not match the session owner" }, 403);
+          await recordWearableAccess(athleteId, "planner_session_analysis");
+          const forwarded = await callOpenWearables("get-session-analysis", { executed_session_id });
+          if (forwarded.status < 200 || forwarded.status >= 300) return json(forwarded.data, forwarded.status);
+          return json({
+            session: forwarded.data?.completion || null,
+            metrics: forwarded.data?.metrics || null,
+            match: forwarded.data?.match || null,
+            planned_workout: forwarded.data?.planned || null,
+            planned_zone_time: forwarded.data?.planned_zone_time || null,
+            zones_used: forwarded.data?.zones_used || null,
+            biological_passport_date: forwarded.data?.biological_passport_date || null,
+            capabilities: forwarded.data?.capabilities || { hr: false, power: false, gps: false, altitude: false, cadence: false, laps: false },
+            coach_comment: forwarded.data?.coach_comment || null,
+            diagnostics: forwarded.data?.diagnostics || [],
+          });
+        } else {
+          const { data: candidates, error } = await serviceSupabase.from("external_activities")
+            .select("*").eq("external_id", external_activity_id).limit(100);
+          if (error) throw error;
+          for (const ea of candidates || []) {
+            if (await canActorReadAthlete(ea.user_id)) {
+              athleteId = ea.user_id;
+              sessionRow = { id: ea.id, athlete_id: ea.user_id, ow_event_id: ea.external_id, provider: ea.source, sport_raw: ea.sport_type, sport_category: null, start_time: ea.start_time, end_time: null, duration_seconds: ea.duration_seconds, distance_m: ea.distance_meters, avg_hr: ea.average_heartrate, max_hr: ea.max_heartrate, calories: ea.calories };
+              rawForCapabilities = ea.raw_data;
+              sessionId = ea.id;
+              break;
+            }
           }
+          if (!sessionRow) return json({ error: candidates?.length ? "Athlete access denied" : "External activity not found" }, candidates?.length ? 403 : 404);
+          if (body.athlete_id && body.athlete_id !== athleteId) return json({ error: "athlete_id does not match the activity owner" }, 403);
         }
+        if (!athleteId) return json({ error: "Could not resolve the activity owner" }, 404);
+        await recordWearableAccess(athleteId, "planner_session_analysis");
 
         let metrics: any = null;
         if (sessionId) {
-          const { data: m } = await serviceSupabase.from("executed_session_metrics").select("*").eq("executed_session_id", sessionId).maybeSingle();
-          metrics = m;
+          const { data, error } = await serviceSupabase.from("executed_session_metrics").select("*").eq("executed_session_id", sessionId).maybeSingle();
+          if (error) throw error;
+          metrics = data;
         }
-
         let matchRow: any = null;
         if (sessionId) {
-          const { data: sm } = await serviceSupabase.from("session_matches").select("*").eq("executed_session_id", sessionId).maybeSingle();
-          matchRow = sm;
+          const { data, error } = await serviceSupabase.from("session_matches").select("*").eq("executed_session_id", sessionId).maybeSingle();
+          if (error) throw error;
+          matchRow = data;
         }
-
         let plannedWorkout: any = null;
         if (matchRow?.planned_workout_id) {
-          const { data: pw } = await serviceSupabase.from("external_endurance_workouts").select("*").eq("id", matchRow.planned_workout_id).maybeSingle();
-          plannedWorkout = pw;
+          const { data, error } = await serviceSupabase.from("external_endurance_workouts").select("id, athlete_id, scheduled_date, scheduled_time, sport, sub_discipline, estimated_duration_minutes, intensity_basis, steps, workout_data").eq("id", matchRow.planned_workout_id).eq("athlete_id", athleteId).maybeSingle();
+          if (error) throw error;
+          plannedWorkout = data;
         }
-
-        return json({
-          session: sessionRow,
-          metrics: metrics || null,
-          match: matchRow || null,
-          planned_workout: plannedWorkout || null,
-        });
+        const objectHasData = (value: any, patterns: RegExp[]) => {
+          if (!value || typeof value !== "object") return false;
+          const stack = [value];
+          while (stack.length) {
+            const current = stack.pop();
+            if (!current || typeof current !== "object") continue;
+            for (const [key, nested] of Object.entries(current)) {
+              if (patterns.some(pattern => pattern.test(key)) && Array.isArray(nested) && nested.length > 0) return true;
+              if (nested && typeof nested === "object") stack.push(nested);
+            }
+          }
+          return false;
+        };
+        const capabilities = {
+          hr: !!metrics?.has_hr || sessionRow.avg_hr != null,
+          power: !!metrics?.has_power,
+          gps: objectHasData(rawForCapabilities, [/route|lat.?lng|gps/i]),
+          altitude: objectHasData(rawForCapabilities, [/altitude|elevation/i]),
+          cadence: objectHasData(rawForCapabilities, [/cadence/i]),
+          laps: objectHasData(rawForCapabilities, [/laps?|splits/i]),
+          zones: !!metrics?.hr_zone_seconds || !!metrics?.power_zone_seconds || objectHasData(rawForCapabilities, [/zones?/i]),
+        };
+        delete sessionRow.raw;
+        return json({ session: sessionRow, metrics: metrics || null, match: matchRow || null, planned_workout: plannedWorkout, capabilities });
       }
 
       // ── get-session-timeseries ──
       if (action === "get-session-timeseries") {
         const { executed_session_id, external_activity_id } = body;
-        if (!executed_session_id && !external_activity_id) return json({ error: "executed_session_id or external_activity_id required" }, 400);
+        const plannedWorkoutId = typeof body.planned_workout_id === "string" ? body.planned_workout_id : null;
+        if (!executed_session_id && !external_activity_id && !plannedWorkoutId) return json({ error: "executed_session_id, planned_workout_id or external_activity_id required" }, 400);
 
-        let activityId: string | null = null;
-        if (executed_session_id) {
-          const { data: s } = await serviceSupabase.from("executed_sessions").select("ow_event_id").eq("id", executed_session_id).eq("athlete_id", actionAthleteId).maybeSingle();
-          if (s?.ow_event_id) {
-            const { data: ea } = await serviceSupabase.from("external_activities").select("id").eq("external_id", s.ow_event_id).eq("user_id", actionAthleteId).maybeSingle();
-            activityId = ea?.id || null;
+        if (executed_session_id || plannedWorkoutId) {
+          let targetAthleteId: string | null = null;
+          if (executed_session_id) {
+            const { data, error } = await serviceSupabase.from("executed_sessions").select("id, athlete_id").eq("id", executed_session_id).maybeSingle();
+            if (error) throw error;
+            if (!data) return json({ error: "Executed session not found" }, 404);
+            targetAthleteId = data.athlete_id;
           }
-        } else if (external_activity_id) {
-          const { data: ea } = await serviceSupabase.from("external_activities").select("id").eq("external_id", external_activity_id).eq("user_id", actionAthleteId).maybeSingle();
-          activityId = ea?.id || null;
+          if (plannedWorkoutId) {
+            const weeklyMatch = plannedWorkoutId.match(/^endurance-plan-([0-9a-f-]{36})-(\d+)$/i);
+            let planAthleteId: string | null = null;
+            if (weeklyMatch) {
+              const { data, error } = await serviceSupabase.from("external_endurance_plans").select("athlete_id, plan_data").eq("id", weeklyMatch[1]).maybeSingle();
+              if (error) throw error;
+              if ((data?.plan_data as any)?.days?.[Number(weeklyMatch[2])]) planAthleteId = data?.athlete_id || null;
+            } else {
+              const { data, error } = await serviceSupabase.from("external_endurance_workouts").select("athlete_id").eq("id", plannedWorkoutId).maybeSingle();
+              if (error) throw error;
+              planAthleteId = data?.athlete_id || null;
+            }
+            if (!planAthleteId) return json({ error: "Planned workout not found" }, 404);
+            if (targetAthleteId && targetAthleteId !== planAthleteId) return json({ error: "Session and plan belong to different athletes" }, 400);
+            targetAthleteId = planAthleteId;
+          }
+          if (!targetAthleteId || !await canActorReadAthlete(targetAthleteId)) return json({ error: "Athlete access denied" }, 403);
+          if (body.athlete_id && body.athlete_id !== targetAthleteId) return json({ error: "athlete_id does not match the session or plan owner" }, 403);
+          await recordWearableAccess(targetAthleteId, "planner_session_timeseries");
+          const forwarded = await callOpenWearables("get-session-timeseries", {
+            ...(executed_session_id ? { executed_session_id } : {}),
+            ...(plannedWorkoutId ? { planned_workout_id: plannedWorkoutId } : {}),
+            ...(Array.isArray(body.types) ? { types: body.types } : {}),
+          });
+          return json(forwarded.data, forwarded.status);
         }
 
-        if (!activityId) return json({ timeseries: [], note: "No matching external activity found" });
+        const { data: candidates, error: activityError } = await serviceSupabase.from("external_activities").select("id, user_id").eq("external_id", external_activity_id).limit(100);
+        if (activityError) throw activityError;
+        let activityId: string | null = null;
+        let targetAthleteId: string | null = null;
+        for (const row of candidates || []) {
+          if (await canActorReadAthlete(row.user_id)) { activityId = row.id; targetAthleteId = row.user_id; break; }
+        }
+        if (!activityId || !targetAthleteId) return json({ error: candidates?.length ? "Athlete access denied" : "External activity not found" }, candidates?.length ? 403 : 404);
+        if (body.athlete_id && body.athlete_id !== targetAthleteId) return json({ error: "athlete_id does not match the activity owner" }, 403);
+        await recordWearableAccess(targetAthleteId, "planner_session_timeseries");
 
-        const { data: streams } = await serviceSupabase.from("activity_streams").select("*").eq("activity_id", activityId).maybeSingle();
-        if (!streams) return json({ timeseries: [], note: "No streams available" });
+        const { data: streams, error: streamError } = await serviceSupabase.from("activity_streams").select("heartrate_stream, watts_stream, cadence_stream, velocity_smooth_stream, altitude_stream, distance_stream, time_stream, latlng_stream").eq("activity_id", activityId).maybeSingle();
+        if (streamError) throw streamError;
+        if (!streams) return json({ activity_id: activityId, timeseries: {}, capabilities: { hr: false, power: false, cadence: false, speed: false, altitude: false, gps: false }, note: "No streams available" });
 
         const series: Record<string, any[]> = {};
         const fields: Array<{ key: string; col: string }> = [
@@ -1181,48 +1314,80 @@ Deno.serve(async (req: Request) => {
           if (Array.isArray(arr) && arr.length > 0) series[f.key] = arr;
         }
 
-        return json({ activity_id: activityId, timeseries: series });
+        return json({ activity_id: activityId, timeseries: series, capabilities: { hr: !!series.heartrate, power: !!series.power, cadence: !!series.cadence, speed: !!series.speed, altitude: !!series.altitude, gps: !!series.latlng } });
       }
 
       // ── list-review-inbox ──
       if (action === "list-review-inbox") {
         const df = body.date_from || new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
         const dt = body.date_to || new Date().toISOString().split("T")[0];
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(df) || !/^\d{4}-\d{2}-\d{2}$/.test(dt) || df > dt) return json({ error: "date_from and date_to must be valid YYYY-MM-DD dates with date_from <= date_to" }, 400);
 
-        // Executed sessions for athlete in date range
-        const { data: sessions } = await serviceSupabase
+        let athleteQuery = serviceSupabase.from("profiles").select("id, full_name, assigned_trainer_id").limit(1000);
+        if (actorProfile.role === "trainer" || actorProfile.role === "head_coach") athleteQuery = athleteQuery.eq("assigned_trainer_id", userId);
+        else if (actorProfile.role !== "admin") athleteQuery = athleteQuery.eq("id", userId);
+        const { data: visibleProfiles, error: profilesError } = await athleteQuery;
+        if (profilesError) throw profilesError;
+        let visibleAthletes = (visibleProfiles || []).map((row: any) => row.id as string);
+        if (body.athlete_id) {
+          if (!visibleAthletes.includes(body.athlete_id)) return json({ error: "Athlete access denied" }, 403);
+          visibleAthletes = [body.athlete_id];
+        }
+        if (!visibleAthletes.length) return json({ inbox: [], count: 0, date_from: df, date_to: dt });
+
+        const { data: consentedLinks, error: linksError } = await serviceSupabase.from("wearable_links")
+          .select("asciende_user_id").in("asciende_user_id", visibleAthletes).not("consent_at", "is", null).not("consent_version", "is", null);
+        if (linksError) throw linksError;
+        const consentedAthletes = [...new Set((consentedLinks || []).map((row: any) => row.asciende_user_id as string))];
+        if (!consentedAthletes.length) return json({ inbox: [], count: 0, date_from: df, date_to: dt });
+
+        const { data: sessions, error: sessionsError } = await serviceSupabase
           .from("executed_sessions")
-          .select("id, ow_event_id, provider, sport_raw, sport_category, start_time, end_time, duration_seconds, distance_m, avg_hr, max_hr, calories, ingested_at")
-          .eq("athlete_id", actionAthleteId)
-          .gte("start_time", df + "T00:00:00")
-          .lte("start_time", dt + "T23:59:59")
+          .select("id, athlete_id, ow_event_id, provider, sport_raw, sport_category, start_time, end_time, duration_seconds, distance_m, avg_hr, max_hr, calories, ingested_at")
+          .in("athlete_id", consentedAthletes)
+          .gte("start_time", df + "T00:00:00Z")
+          .lte("start_time", dt + "T23:59:59.999Z")
           .order("start_time", { ascending: false })
-          .limit(100);
+          .limit(500);
+        if (sessionsError) throw sessionsError;
 
-        if (!sessions || sessions.length === 0) return json({ inbox: [] });
+        if (!sessions || sessions.length === 0) return json({ inbox: [], count: 0, date_from: df, date_to: dt });
 
         // Matches for these sessions
         const sessionIds = sessions.map((s: any) => s.id);
-        const { data: matches } = await serviceSupabase.from("session_matches").select("*").in("executed_session_id", sessionIds);
+        const { data: matches, error: matchesError } = await serviceSupabase.from("session_matches").select("*").in("executed_session_id", sessionIds);
+        if (matchesError) throw matchesError;
         const matchMap = new Map((matches || []).map((m: any) => [m.executed_session_id, m]));
 
         // Reviews for these sessions
-        const { data: reviews } = await serviceSupabase.from("session_reviews").select("*").in("executed_session_id", sessionIds);
+        const { data: reviews, error: reviewsError } = await serviceSupabase.from("session_reviews").select("*").in("executed_session_id", sessionIds);
+        if (reviewsError) throw reviewsError;
         const reviewMap = new Map((reviews || []).map((r: any) => [r.executed_session_id, r]));
+
+        const { data: metrics, error: metricsError } = await serviceSupabase.from("executed_session_metrics")
+          .select("executed_session_id, has_hr, has_power, sample_count, coverage_pct, hr_zone_seconds, power_zone_seconds")
+          .in("executed_session_id", sessionIds);
+        if (metricsError) throw metricsError;
+        const metricsMap = new Map((metrics || []).map((row: any) => [row.executed_session_id, row]));
 
         // Planned workout names
         const plannedIds = (matches || []).map((m: any) => m.planned_workout_id).filter(Boolean);
         let plannedMap: Record<string, any> = {};
         if (plannedIds.length > 0) {
-          const { data: planned } = await serviceSupabase.from("external_endurance_workouts").select("id, scheduled_date, workout_data").in("id", plannedIds);
+          const { data: planned, error: plannedError } = await serviceSupabase.from("external_endurance_workouts").select("id, scheduled_date, workout_data").in("id", plannedIds);
+          if (plannedError) throw plannedError;
           for (const p of (planned || [])) plannedMap[(p as any).id] = p;
         }
 
+        const athleteNames = new Map((visibleProfiles || []).map((row: any) => [row.id, row.full_name]));
         const inbox = sessions.map((s: any) => {
           const match = matchMap.get(s.id);
           const review = reviewMap.get(s.id);
+          const metrics = metricsMap.get(s.id);
           const planned = match?.planned_workout_id ? plannedMap[match.planned_workout_id] : null;
           return {
+            athlete_id: s.athlete_id,
+            athlete_name: athleteNames.get(s.athlete_id) || null,
             executed_session_id: s.id,
             ow_event_id: s.ow_event_id,
             provider: s.provider,
@@ -1240,37 +1405,50 @@ Deno.serve(async (req: Request) => {
             review_status: review?.status || null,
             review_comment: review?.comment || null,
             review_id: review?.id || null,
+            capabilities: { hr: !!metrics?.has_hr || s.avg_hr != null, power: !!metrics?.has_power, zones: !!metrics?.hr_zone_seconds || !!metrics?.power_zone_seconds, gps: false, altitude: false, cadence: false, laps: false },
           };
         });
 
-        return json({ inbox });
+        for (const athleteId of new Set(sessions.map((s: any) => s.athlete_id))) await recordWearableAccess(athleteId as string, "planner_review_inbox");
+        return json({ inbox, count: inbox.length, date_from: df, date_to: dt });
       }
 
       // ── save-review ──
       if (action === "save-review") {
         const { executed_session_id, planned_workout_id, comment, status, visible_to_athlete } = body;
+        if (!["trainer", "head_coach", "admin"].includes(actorProfile.role)) return json({ error: "Coach or admin role is required to save a review" }, 403);
         if (!executed_session_id && !planned_workout_id) return json({ error: "executed_session_id or planned_workout_id required" }, 400);
         if (!comment || typeof comment !== "string") return json({ error: "comment is required" }, 400);
-        const reviewStatus = status || "reviewed";
-
-        // If planner token auth, use plannerInfo.id as reviewer; else use userId
-        const reviewerId = plannerInfo?.id === "admin-config" ? userId : (userId || plannerInfo?.id || null);
-        if (!reviewerId) return json({ error: "Could not determine reviewer identity" }, 400);
-
-        const insertRow: any = {
-          athlete_id: actionAthleteId,
-          reviewer_id: reviewerId,
-          status: reviewStatus,
-          comment,
+        const sessionId = typeof executed_session_id === "string" ? executed_session_id : null;
+        const plannedId = typeof planned_workout_id === "string" ? planned_workout_id : null;
+        let targetAthleteId: string | null = null;
+        if (sessionId) {
+          const { data, error } = await serviceSupabase.from("executed_sessions").select("athlete_id").eq("id", sessionId).maybeSingle();
+          if (error) throw error;
+          if (!data) return json({ error: "Executed session not found" }, 404);
+          targetAthleteId = data.athlete_id;
+        }
+        if (plannedId) {
+          if (/^endurance-plan-/i.test(plannedId)) return json({ error: "save-review requires an external_endurance_workouts id, not a weekly-plan day id" }, 400);
+          const { data, error } = await serviceSupabase.from("external_endurance_workouts").select("athlete_id").eq("id", plannedId).maybeSingle();
+          if (error) throw error;
+          if (!data) return json({ error: "Planned workout not found" }, 404);
+          if (targetAthleteId && targetAthleteId !== data.athlete_id) return json({ error: "Session and planned workout belong to different athletes" }, 400);
+          targetAthleteId = data.athlete_id;
+        }
+        if (!targetAthleteId || !await canActorReadAthlete(targetAthleteId)) return json({ error: "Athlete access denied" }, 403);
+        if (body.athlete_id && body.athlete_id !== targetAthleteId) return json({ error: "athlete_id does not match the session or plan owner" }, 403);
+        await recordWearableAccess(targetAthleteId, "planner_save_review");
+        const forwarded = await callOpenWearables("save-review", {
+          athlete_id: targetAthleteId,
+          ...(sessionId ? { executed_session_id: sessionId } : {}),
+          ...(plannedId ? { planned_workout_id: plannedId } : {}),
+          comment: comment.trim(),
+          status: status === "pending" ? "pending" : "reviewed",
           visible_to_athlete: visible_to_athlete !== false,
-        };
-        if (executed_session_id) insertRow.executed_session_id = executed_session_id;
-        if (planned_workout_id) insertRow.planned_workout_id = planned_workout_id;
-
-        const { data, error: insertError } = await serviceSupabase.from("session_reviews").insert(insertRow).select("id").single();
-        if (insertError) throw insertError;
-
-        return json({ success: true, review_id: data.id });
+        });
+        if (forwarded.status < 200 || forwarded.status >= 300) return json(forwarded.data, forwarded.status);
+        return json({ success: true, review: forwarded.data?.review || null, review_id: forwarded.data?.review?.id || null });
       }
 
       // ── capabilities (discovery) ──
@@ -1283,7 +1461,8 @@ Deno.serve(async (req: Request) => {
             "save-review",
             "capabilities",
           ],
-          auth: "X-Planner-Token",
+          auth: ["X-Planner-Token", "Authorization: Bearer <Hub access_token>"],
+          user_identity: "Authorization session JWT",
           version: "1.0",
         });
       }
