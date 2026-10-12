@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   ChevronLeft, ChevronRight, Dumbbell, Activity, MoreVertical,
   Copy, Trash2, Plus, CreditCard as Edit, Bike, PersonStanding, Waves,
-  ChevronDown, Heart, CheckCircle2, Flag, Sofa, StickyNote
+  ChevronDown, Heart, CheckCircle2, Flag, Sofa, StickyNote, Clock, MapPin, Zap
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -112,24 +112,6 @@ function getWorkoutDotColor(workout: any): string {
   return getSessionDotColor(workout);
 }
 
-function getEnduranceCardStyle(workout: any): { borderColor: string; bgLight: string; bgDark: string; textLight: string; textDark: string } {
-  const color = getWorkoutDotColor(workout);
-  const map: Record<string, { bgLight: string; bgDark: string; textLight: string; textDark: string }> = {
-    '#10B981': { bgLight: 'bg-emerald-100', bgDark: 'dark:bg-emerald-900/20', textLight: 'text-emerald-800', textDark: 'dark:text-emerald-300' },
-    '#3B82F6': { bgLight: 'bg-blue-100', bgDark: 'dark:bg-blue-900/20', textLight: 'text-blue-800', textDark: 'dark:text-blue-300' },
-    '#F59E0B': { bgLight: 'bg-amber-100', bgDark: 'dark:bg-amber-900/20', textLight: 'text-amber-800', textDark: 'dark:text-amber-300' },
-    '#F97316': { bgLight: 'bg-orange-100', bgDark: 'dark:bg-orange-900/20', textLight: 'text-orange-800', textDark: 'dark:text-orange-300' },
-    '#EF4444': { bgLight: 'bg-red-100', bgDark: 'dark:bg-red-900/20', textLight: 'text-red-800', textDark: 'dark:text-red-300' },
-    '#F43F5E': { bgLight: 'bg-rose-100', bgDark: 'dark:bg-rose-900/20', textLight: 'text-rose-800', textDark: 'dark:text-rose-300' },
-    '#9CA3AF': { bgLight: 'bg-gray-100', bgDark: 'dark:bg-gray-700/40', textLight: 'text-gray-700', textDark: 'dark:text-gray-300' },
-    '#8B5CF6': { bgLight: 'bg-violet-100', bgDark: 'dark:bg-violet-900/20', textLight: 'text-violet-800', textDark: 'dark:text-violet-300' },
-    '#EAB308': { bgLight: 'bg-yellow-100', bgDark: 'dark:bg-yellow-900/20', textLight: 'text-yellow-800', textDark: 'dark:text-yellow-300' },
-    '#06B6D4': { bgLight: 'bg-cyan-100', bgDark: 'dark:bg-cyan-900/20', textLight: 'text-cyan-800', textDark: 'dark:text-cyan-300' },
-  };
-  const styles = map[color] || map['#06B6D4'];
-  return { borderColor: color, ...styles };
-}
-
 function SportIcon({ sport, className }: { sport?: string; className?: string }) {
   const cls = className || 'w-4 h-4';
   if (!sport) return <Activity className={cls} />;
@@ -154,10 +136,30 @@ function StepIntensityChart({ steps }: { steps: any[] }) {
   if (!steps || steps.length === 0) return null;
 
   const expanded: { type: string; duration: number }[] = [];
+  const repeatGroups = new Map<string, any[]>();
+  steps.forEach(step => {
+    if (step.repeat_group_id) {
+      const group = repeatGroups.get(step.repeat_group_id) || [];
+      group.push(step);
+      repeatGroups.set(step.repeat_group_id, group);
+    }
+  });
+  const emittedGroups = new Set<string>();
   for (const step of steps) {
-    const repeats = step.repeat_times || 1;
-    for (let r = 0; r < repeats; r++) {
-      expanded.push({ type: step.step_type || 'steady', duration: step.duration_value || 60 });
+    const groupId = step.repeat_group_id;
+    if (groupId) {
+      if (emittedGroups.has(groupId)) continue;
+      emittedGroups.add(groupId);
+      const group = repeatGroups.get(groupId) || [step];
+      const repeatCount = Math.max(1, Number(group.find(item => Number(item.repeat_times) > 1)?.repeat_times) || 1);
+      for (let repeat = 0; repeat < repeatCount; repeat++) {
+        for (const item of group) expanded.push({ type: item.step_type || 'steady', duration: Number(item.duration_value) || 60 });
+      }
+      continue;
+    }
+    const repeats = Math.max(1, Number(step.repeat_times) || 1);
+    for (let repeat = 0; repeat < repeats; repeat++) {
+      expanded.push({ type: step.step_type || 'steady', duration: Number(step.duration_value) || 60 });
     }
   }
 
@@ -191,6 +193,74 @@ function StepIntensityChart({ steps }: { steps: any[] }) {
   );
 }
 
+function MonthWorkoutCard({
+  workout, language, onClick, onMenuClick,
+}: { workout: any; language: string; onClick: () => void; onMenuClick?: () => void }) {
+  const t = (es: string, en: string) => language === 'es' ? es : en;
+  const details = workout.endurance_workout_data || {};
+  const raw = workout.raw_data || {};
+  const steps = workout.steps || workout.parsed_steps || details.steps || [];
+  const isCompleted = workout.status === 'completed';
+  const isSkipped = workout.status === 'skipped';
+  const background = isCompleted
+    ? 'bg-emerald-50 dark:bg-emerald-950/35'
+    : isSkipped
+      ? 'bg-gray-50 dark:bg-gray-800/70'
+      : 'bg-amber-50 dark:bg-amber-950/25';
+  const borderColor = isCompleted ? '#10B981' : isSkipped ? '#9CA3AF' : getWorkoutDotColor(workout);
+
+  const seconds = Number(workout.duration_seconds ?? raw.duration_seconds ?? workout.wearable_match?.session?.duration_seconds);
+  const durationMinutes = Number(workout.estimated_duration_minutes ?? details.estimated_duration_minutes ?? details.planned_duration_minutes ?? details.duration_min);
+  const durationText = Number.isFinite(seconds) && seconds > 0
+    ? `${Math.floor(seconds / 3600)}:${String(Math.floor((seconds % 3600) / 60)).padStart(2, '0')}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
+    : durationMinutes > 0
+      ? formatMinutes(durationMinutes)
+      : (workout.duration || null);
+
+  const rawDistance = workout.distance_km ?? details.distance_km ?? details.planned_distance_km;
+  const distanceMeters = workout.distance_m ?? raw.distance_meters ?? workout.wearable_match?.session?.distance_m;
+  const distanceKm = rawDistance != null ? Number(rawDistance) : distanceMeters != null ? Number(distanceMeters) / 1000 : (workout.distance != null ? Number(workout.distance) : null);
+  const load = Number(workout.estimated_impulse ?? details.planned_tss ?? details.tss ?? raw.tss);
+  const exerciseCount = Number(workout.exerciseCount ?? workout.exercises?.length ?? 0);
+  const sport = workout.sport || details.sport || workout.type;
+  const name = workout.name || workout.external_title || details.name || t('Entrenamiento', 'Workout');
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={event => { event.stopPropagation(); onClick(); }}
+        className={`w-full min-w-0 rounded-xl border border-gray-200/80 dark:border-gray-700/80 p-2.5 text-left shadow-sm transition hover:shadow-md active:scale-[0.99] ${background}`}
+        style={{ borderLeft: `3px solid ${borderColor}` }}
+        title={name}
+      >
+        <div className={`flex items-start gap-1.5 ${onMenuClick ? 'pr-5' : ''}`}>
+          <SportIcon sport={sport} className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-gray-600 dark:text-gray-300" />
+          <span className="min-w-0 flex-1 line-clamp-2 text-[11px] font-semibold leading-tight text-gray-900 dark:text-white">{name}</span>
+          {isCompleted && <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600 dark:text-emerald-400" />}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] font-medium text-gray-700 dark:text-gray-200">
+          {durationText && <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3 text-gray-500" />{durationText}</span>}
+          {distanceKm != null && Number.isFinite(distanceKm) && distanceKm > 0 && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3 text-gray-500" />{distanceKm.toFixed(1)} km</span>}
+          {Number.isFinite(load) && load > 0 && <span className="inline-flex items-center gap-1"><Zap className="h-3 w-3 text-amber-500" />{Math.round(load)} TSS</span>}
+          {exerciseCount > 0 && <span>{exerciseCount} {t('ejercicios', 'exercises')}</span>}
+        </div>
+        {steps.length > 0 && <StepIntensityChart steps={steps} />}
+      </button>
+      {onMenuClick && (
+        <button
+          type="button"
+          aria-label={t('Opciones del entrenamiento', 'Workout options')}
+          onClick={event => { event.stopPropagation(); onMenuClick(); }}
+          className="absolute right-1 top-1 rounded p-0.5 text-gray-500 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/10"
+        >
+          <MoreVertical className="h-3.5 w-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 function cleanDescription(text?: string): string {
   if (!text) return '';
   return text
@@ -206,9 +276,9 @@ function isGymWorkout(workout: any): boolean {
 
 function isEnduranceType(workout: any): boolean {
   const sport = (workout.sport || '').toLowerCase();
-  return workout.type === 'endurance_plan' || workout.type === 'external' ||
+  return workout.type === 'endurance_plan' || workout.type === 'external' || workout.type === 'wearable_executed' ||
     workout.source === 'strava' || workout.source === 'asciende_gps' ||
-    ['run', 'trail_run', 'road_bike', 'mountain_bike', 'gravel_bike', 'cycling', 'swim', 'hike'].some(s => sport.includes(s));
+    ['run', 'trail_run', 'road_bike', 'mountain_bike', 'gravel_bike', 'cycling', 'swim', 'hike', 'walk'].some(s => sport.includes(s));
 }
 
 function WorkoutDetailCard({
@@ -226,9 +296,10 @@ function WorkoutDetailCard({
 
   const renderMetrics = () => {
     if (isCompleted && isEndurance) {
-      const raw = workout.raw_data;
-      const distKm = workout.distance || (raw?.distance_meters ? (raw.distance_meters / 1000).toFixed(2) : null);
-      const durationSec = raw?.duration_seconds;
+      const raw = workout.raw_data || workout;
+      const distanceMeters = workout.distance_m ?? raw?.distance_meters;
+      const distKm = workout.distance || (distanceMeters != null ? (Number(distanceMeters) / 1000).toFixed(2) : null);
+      const durationSec = workout.duration_seconds ?? raw?.duration_seconds;
       const elevGain = raw?.elevation_gain_meters;
       const paceStr = (distKm && durationSec && distKm > 0)
         ? (() => { const minPerKm = (durationSec / 60) / distKm; return `${Math.floor(minPerKm)}:${String(Math.round((minPerKm - Math.floor(minPerKm)) * 60)).padStart(2, '0')}/km`; })()
@@ -243,6 +314,9 @@ function WorkoutDetailCard({
           {distKm && <span className="font-semibold text-gray-800 dark:text-gray-200">{distKm} km</span>}
           {paceStr && <span>{paceStr}</span>}
           {elevGain != null && elevGain > 0 && <span>+{Math.round(elevGain)}m</span>}
+          {workout.avg_hr != null && <span>♥ {Math.round(Number(workout.avg_hr))} bpm</span>}
+          {workout.max_hr != null && <span>{t('Máx.', 'Max')} {Math.round(Number(workout.max_hr))} bpm</span>}
+          {workout.calories != null && <span>{Math.round(Number(workout.calories))} kcal</span>}
           {wellnessScore != null && (
             <span className={`font-semibold ${getWellnessColor(wellnessScore).text}`}>
               <Heart className="w-3 h-3 inline mr-0.5" />{Math.round(wellnessScore)}
@@ -274,12 +348,16 @@ function WorkoutDetailCard({
 
     // Planned endurance
     if (!isCompleted && isEndurance) {
-      const duration = workout.estimated_duration_minutes;
+      const duration = workout.estimated_duration_minutes || workout.endurance_workout_data?.estimated_duration_minutes || workout.endurance_workout_data?.planned_duration_minutes || workout.endurance_workout_data?.duration_min;
+      const distance = workout.endurance_workout_data?.distance_km || workout.endurance_workout_data?.planned_distance_km || workout.distance_km;
+      const load = workout.estimated_impulse || workout.endurance_workout_data?.planned_tss || workout.endurance_workout_data?.tss;
       return (
-        <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+        <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
           <span className="font-mono font-semibold text-gray-800 dark:text-gray-200">
             {duration ? formatMinutes(duration) : '--:--:--'}
           </span>
+          {distance != null && Number(distance) > 0 && <span>{Number(distance).toFixed(1)} km</span>}
+          {load != null && Number(load) > 0 && <span>{Math.round(Number(load))} TSS</span>}
         </div>
       );
     }
@@ -631,6 +709,8 @@ export default function TrainingCalendar({
 
       {/* ── DESKTOP full grid (md and above) ── */}
       <div className="hidden md:block p-4">
+        <div className="overflow-x-auto pb-2">
+        <div className="min-w-[1225px]">
         <div className="grid grid-cols-7 gap-2 mb-2">
           {dayNames.map((day) => (
             <div key={day} className="text-center text-sm font-semibold text-gray-600 dark:text-gray-400 py-2">
@@ -658,7 +738,7 @@ export default function TrainingCalendar({
                 }}
                 onClick={() => onDaySelect(day.date)}
                 className={`
-                  relative min-h-[120px] rounded-lg transition-all p-2 cursor-pointer group/day
+                  relative min-h-[210px] rounded-xl transition-all p-2 cursor-pointer group/day
                   ${draggedWorkout && day.isCurrentMonth ? 'ring-2 ring-[#fdda36]' : ''}
                   ${day.isCurrentMonth ? 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750' : 'bg-gray-50 dark:bg-gray-900'}
                   ${isSelected ? 'ring-2 ring-[#514163]' : 'border border-gray-200 dark:border-gray-700'}
@@ -724,7 +804,7 @@ export default function TrainingCalendar({
                   )}
                 </div>
 
-                <div className="space-y-1 overflow-y-auto max-h-[90px]">
+                <div className="space-y-1.5 overflow-y-auto max-h-[168px] pr-0.5">
                   {(() => {
                     const we = wellnessEntries.find(e => e.checkin_date === dateStr);
                     if (!we) return null;
@@ -741,10 +821,6 @@ export default function TrainingCalendar({
                     );
                   })()}
                   {dayWorkouts.map((workout, idx) => {
-                    const statusColor = workout.status === 'completed' ? 'bg-teal-500'
-                      : workout.status === 'skipped' ? 'bg-neutral-400'
-                      : 'bg-[#fdda36]';
-
                     if (workout.type === 'rest_day') {
                       return (
                         <div
@@ -804,38 +880,18 @@ export default function TrainingCalendar({
                     }
 
                     if (workout.type === 'endurance_plan') {
-                      const cs = getEnduranceCardStyle(workout);
                       return (
-                        <div
-                          key={workout.id || idx}
-                          onClick={(e) => { e.stopPropagation(); if (onWorkoutClick) onWorkoutClick(workout); }}
-                          className={`text-xs p-1.5 rounded ${cs.bgLight} ${cs.bgDark} border-l-2 cursor-pointer transition-colors`}
-                          style={{ borderLeftColor: cs.borderColor }}
-                        >
-                          <div className="flex items-center gap-1">
-                            <SportIcon sport={workout.sport} className={`w-3 h-3 flex-shrink-0 ${cs.textLight} ${cs.textDark}`} />
-                            <span className={`font-medium ${cs.textLight} ${cs.textDark} truncate text-[10px]`}>{workout.name}</span>
-                          </div>
-                          {workout.wearable_match && <div className="mt-1 flex flex-wrap items-center gap-1 text-[9px]">
-                            <span className="rounded bg-white/70 px-1 py-0.5 text-gray-700 dark:bg-black/20 dark:text-gray-200">{language === 'es' ? 'Fuente' : 'Source'}: {workout.wearable_match.source === 'watch' ? (language === 'es' ? 'Reloj' : 'Watch') : workout.wearable_match.source === 'gps' ? 'GPS' : (language === 'es' ? 'Manual' : 'Manual')}{workout.wearable_match.session?.duration_seconds != null && workout.endurance_workout_data?.estimated_duration_minutes != null ? ` · ${Math.round(workout.wearable_match.session.duration_seconds / 60 - workout.endurance_workout_data.estimated_duration_minutes)} min` : ''}</span>
-                            {workout.wearable_match.status === 'suggested' && <button onClick={event => { event.stopPropagation(); onWearableMatchAction?.(workout.wearable_match.session.id, 'manual_matched', workout.endurance_workout_data?.id); }} className="rounded bg-white px-1 py-0.5 font-semibold text-cyan-800 dark:bg-gray-800 dark:text-cyan-200">{language === 'es' ? 'Confirmar' : 'Confirm'}</button>}
-                          </div>}
-                          {!workout.wearable_match && workout.status !== 'completed' && workout.scheduled_date < new Date().toISOString().slice(0, 10) && <span className="mt-1 inline-block rounded bg-gray-200/80 px-1 py-0.5 text-[9px] text-gray-600 dark:bg-gray-700 dark:text-gray-300">{language === 'es' ? 'Sin ejecutar' : 'Not completed'}</span>}
+                        <div key={workout.id || idx}>
+                          <MonthWorkoutCard workout={workout} language={language} onClick={() => onWorkoutClick?.(workout)} />
+                          {workout.wearable_match?.status === 'suggested' && (
+                            <button
+                              onClick={event => { event.stopPropagation(); onWearableMatchAction?.(workout.wearable_match.session.id, 'manual_matched', workout.endurance_workout_data?.id); }}
+                              className="mt-1 w-full rounded-lg bg-white/80 px-2 py-1 text-[10px] font-semibold text-cyan-800 dark:bg-gray-800 dark:text-cyan-200"
+                            >{language === 'es' ? 'Confirmar actividad' : 'Confirm activity'}</button>
+                          )}
                         </div>
                       );
                     }
-
-                    const sourceIcon = workout.source === 'trainingpeaks'
-                      ? <Activity className="w-3 h-3 text-blue-500" />
-                      : workout.source === 'open_wearables'
-                      ? <Activity className="w-3 h-3 text-violet-500" />
-                      : workout.source === 'asciende_gps'
-                      ? <Activity className="w-3 h-3 text-teal-500" />
-                      : workout.source === 'strava'
-                      ? <Activity className="w-3 h-3 text-red-500" />
-                      : workout.type === 'extra'
-                      ? <Dumbbell className="w-3 h-3 text-orange-500" />
-                      : null;
 
                     return (
                       <div
@@ -846,37 +902,17 @@ export default function TrainingCalendar({
                           if (workout.source !== 'open_wearables' && workout.id) { setDraggedWorkout(workout.id); e.dataTransfer.effectAllowed = 'move'; }
                         }}
                         onDragEnd={() => setDraggedWorkout(null)}
-                        onClick={(e) => { e.stopPropagation(); if (onWorkoutClick) onWorkoutClick(workout); }}
                         className="relative group"
                       >
-                        <div className={`
-                          text-xs p-1.5 rounded cursor-move
-                          ${statusColor === 'bg-teal-500' ? 'bg-teal-100 dark:bg-teal-900/30 border-l-2 border-teal-500' :
-                            statusColor === 'bg-neutral-400' ? 'bg-neutral-100 dark:bg-neutral-700/40 border-l-2 border-neutral-400' :
-                            'bg-yellow-100 dark:bg-yellow-900/30 border-l-2 border-[#fdda36]'}
-                          hover:shadow-md transition-shadow
-                        `}>
-                          <div className="flex items-start justify-between gap-1">
-                            <div className="flex items-center gap-1 flex-1 min-w-0">
-                              {sourceIcon}
-                              <span className="font-medium text-gray-900 dark:text-white truncate text-[10px]">
-                                {workout.name || workout.external_title || 'Workout'}
-                              </span>
-                            </div>
-                            {workout.status === 'completed' && (
-                              <CheckCircle2 className="w-3 h-3 text-teal-500 dark:text-teal-400 flex-shrink-0" />
-                            )}
-                            {workout.id && (onWorkoutEdit || onWorkoutDuplicate || onWorkoutDelete) && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setContextMenuWorkout(contextMenuWorkout === workout.id ? null : workout.id); }}
-                                className="p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                              >
-                                <MoreVertical className="w-3 h-3 text-gray-600 dark:text-gray-400" />
-                              </button>
-                            )}
-                          </div>
-                          {workout.type === 'wearable_executed' && <p className="mt-1 text-[9px] text-violet-700 dark:text-violet-300">{language === 'es' ? `Sesión sin plan · ${workout.completion_source === 'watch' ? 'Reloj' : workout.completion_source === 'gps' ? 'GPS' : 'Manual'}` : `Unplanned session · ${workout.completion_source === 'watch' ? 'Watch' : workout.completion_source === 'gps' ? 'GPS' : 'Manual'}`}</p>}
-                        </div>
+                        <MonthWorkoutCard
+                          workout={workout}
+                          language={language}
+                          onClick={() => onWorkoutClick?.(workout)}
+                          onMenuClick={workout.id && (onWorkoutEdit || onWorkoutDuplicate || onWorkoutDelete)
+                            ? () => setContextMenuWorkout(contextMenuWorkout === workout.id ? null : workout.id)
+                            : undefined}
+                        />
+                        {workout.type === 'wearable_executed' && <p className="mt-1 px-1 text-[9px] text-violet-700 dark:text-violet-300">{language === 'es' ? `Sesión sin plan · ${workout.completion_source === 'watch' ? 'Reloj' : workout.completion_source === 'gps' ? 'GPS' : 'Manual'}` : `Unplanned session · ${workout.completion_source === 'watch' ? 'Watch' : workout.completion_source === 'gps' ? 'GPS' : 'Manual'}`}</p>}
                       </div>
                     );
                   })}
@@ -884,6 +920,8 @@ export default function TrainingCalendar({
               </div>
             );
           })}
+        </div>
+        </div>
         </div>
 
         {/* Desktop legend */}
