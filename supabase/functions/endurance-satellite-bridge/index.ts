@@ -288,6 +288,29 @@ Deno.serve(async (req: Request) => {
         .order("scheduled_date", { ascending: false });
       if (ecError) throw ecError;
 
+      // 6. Get executed_sessions (Open Wearables / Polar)
+      const { data: executedSessions, error: esError } = await serviceSupabase
+        .from("executed_sessions")
+        .select("id, athlete_id, ow_event_id, provider, sport_raw, sport_category, start_time, end_time, duration_seconds, distance_m, avg_hr, max_hr, calories, ingested_at")
+        .eq("athlete_id", athleteId)
+        .gte("start_time", df + "T00:00:00Z")
+        .lte("start_time", dt + "T23:59:59.999Z")
+        .order("start_time", { ascending: false })
+        .limit(200);
+      if (esError) throw esError;
+
+      // 7. Get session_matches for executed sessions
+      let executedMatchMap: Map<string, any> = new Map();
+      if (executedSessions && executedSessions.length > 0) {
+        const executedSessionIds = executedSessions.map((s: any) => s.id);
+        const { data: esMatches, error: esmError } = await serviceSupabase
+          .from("session_matches")
+          .select("*")
+          .in("executed_session_id", executedSessionIds);
+        if (esmError) throw esmError;
+        executedMatchMap = new Map((esMatches || []).map((m: any) => [m.executed_session_id, m]));
+      }
+
       // Build enriched schedule
       const schedule: any[] = [];
 
@@ -425,6 +448,64 @@ Deno.serve(async (req: Request) => {
             }
           }
         }
+      }
+
+      // Process executed_sessions (Open Wearables / Polar)
+      for (const es of (executedSessions || [])) {
+        const match = executedMatchMap.get((es as any).id);
+        const startDate = (es as any).start_time ? new Date((es as any).start_time).toISOString().split("T")[0] : null;
+        const sport = (es as any).sport_raw || (es as any).sport_category || null;
+        const durationSeconds = (es as any).duration_seconds ? Number((es as any).duration_seconds) : null;
+        const distanceM = (es as any).distance_m ? Number((es as any).distance_m) : null;
+        const sessionLabel = sport ? `${sport} (Open Wearables)` : "Open Wearables Session";
+        schedule.push({
+          id: (es as any).id,
+          scheduled_date: startDate,
+          status: "completed",
+          workout: {
+            id: null,
+            name: sessionLabel,
+            workout_type: sport || "wearable_session",
+            duration_minutes: durationSeconds ? Math.round(durationSeconds / 60) : null,
+            description: null,
+          },
+          name: sessionLabel,
+          sport,
+          planned_duration_minutes: null,
+          planned_impulse: null,
+          session_type: null,
+          target_zones: null,
+          intensity_basis: null,
+          planner_source: "open_wearables",
+          workout_source: "open_wearables",
+          intensity_color: null,
+          intensity_label: null,
+          start_time: (es as any).start_time,
+          provider: (es as any).provider || null,
+          ow_event_id: (es as any).ow_event_id || null,
+          match_status: match?.status || "unplanned",
+          match_score: match?.score || null,
+          planned_workout_id: match?.planned_workout_id || null,
+          actual_duration_minutes: durationSeconds ? Math.round(durationSeconds / 60) : null,
+          actual_distance_km: distanceM ? distanceM / 1000 : null,
+          actual_avg_hr: (es as any).avg_hr ? Number((es as any).avg_hr) : null,
+          actual_max_hr: (es as any).max_hr ? Number((es as any).max_hr) : null,
+          actual_calories: (es as any).calories ? Number((es as any).calories) : null,
+          actual_avg_power_watts: null,
+          actual_max_power_watts: null,
+          actual_avg_cadence: null,
+          actual_avg_speed_kmh: null,
+          actual_elevation_gain_m: null,
+          actual_tss: null,
+          actual_impulse: null,
+          rpe: null,
+          compliance_percent: null,
+          athlete_notes: null,
+          athlete_feedback: null,
+          athlete_feeling: null,
+          coach_notes: null,
+          training_log_id: null,
+        });
       }
 
       return new Response(JSON.stringify({ schedule }), {
