@@ -45,3 +45,6 @@ verify_jwt = true
 
 [functions.push-notification-trigger]
 verify_jwt = false
+
+[functions.sync-trainingpeaks-ics]
+verify_jwt = true

@@ -167,11 +167,46 @@ export default function TrainingPage() {
   const [wearableCalendarActive, setWearableCalendarActive] = useState(false);
   const [selectedSessionAnalysis, setSelectedSessionAnalysis] = useState<any | null>(null);
   const [showRequestQuestionnaire, setShowRequestQuestionnaire] = useState(false);
+  const [tpSyncing, setTpSyncing] = useState(false);
 
   const updateWearableMatch = async (sessionId: string, status: 'manual_matched' | 'dismissed' | 'unplanned', plannedWorkoutId?: string) => {
     const { error: invokeError } = await supabase.functions.invoke('open-wearables', { body: { action: 'analysis-update-match', executed_session_id: sessionId, status, planned_workout_id: plannedWorkoutId } });
     if (invokeError) { showToast(language === 'es' ? 'No se pudo actualizar el vínculo.' : 'Could not update session match.', 'error'); return; }
     await loadWorkouts();
+  };
+
+  const handleTrainingPeaksSync = async () => {
+    if (!effectiveAthleteId) return;
+    setTpSyncing(true);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('sync-trainingpeaks-ics', {
+        body: { action: 'sync', athlete_id: effectiveAthleteId },
+      });
+      if (fnError) throw fnError;
+      success(language === 'es'
+        ? `✅ Sincronizado: ${data?.synced ?? 0} entrenamientos importados de ${data?.total ?? 0} eventos.`
+        : `✅ Synced: ${data?.synced ?? 0} workouts imported from ${data?.total ?? 0} events.`);
+      await loadWorkouts();
+    } catch (err: any) {
+      let serverError = '';
+      try {
+        const ctx = err?.context;
+        if (ctx && typeof ctx.json === 'function') {
+          const body = await ctx.json();
+          serverError = body?.error || '';
+        }
+      } catch { /* keep the client error message */ }
+      const combined = `${serverError} ${err?.message || String(err)}`;
+      if (combined.includes('No TrainingPeaks connection')) {
+        warning(language === 'es'
+          ? `${selectedAthleteName || 'El atleta'} no tiene conexión con TrainingPeaks.`
+          : `${selectedAthleteName || 'This athlete'} has no TrainingPeaks connection.`);
+      } else {
+        error(language === 'es' ? `Error al sincronizar TrainingPeaks: ${combined}` : `TrainingPeaks sync error: ${combined}`);
+      }
+    } finally {
+      setTpSyncing(false);
+    }
   };
 
   useEffect(() => {
@@ -2489,6 +2524,19 @@ export default function TrainingPage() {
           >
             <RotateCw className="w-4 h-4" />
             Strava
+          </button>
+          <button
+            onClick={handleTrainingPeaksSync}
+            disabled={tpSyncing}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeTab === 'calendar'
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+            }`}
+            title={language === 'es' ? 'Sincronizar TrainingPeaks del atleta' : 'Sync athlete TrainingPeaks'}
+          >
+            <RotateCw className={`w-4 h-4 ${tpSyncing ? 'animate-spin' : ''}`} />
+            TrainingPeaks
           </button>
         </div>
       </div>

@@ -43,7 +43,7 @@ Deno.serve(async (req: Request) => {
       .single();
 
     const isOwnProfile = targetAthleteId === user.id;
-    const isTrainerOrAdmin = profile?.role === "trainer" || profile?.role === "admin";
+    const isTrainerOrAdmin = ["trainer", "admin", "head_coach", "nutritionist"].includes(profile?.role || "");
 
     if (!isOwnProfile && !isTrainerOrAdmin) {
       throw new Error("Forbidden: Cannot sync other athlete's data");
