@@ -10,6 +10,7 @@ interface FoodDiaryEntry {
   meal_type: string;
   entry_method: string;
   food_description: string;
+  consumption_reason: string;
   estimated_calories: number;
   estimated_carbs_g: number;
   estimated_protein_g: number;
@@ -60,6 +61,7 @@ export default function FoodDiary24h({ isOpen, onClose, logDate, existingSession
     meal_type: 'breakfast',
     entry_method: 'manual',
     food_description: '',
+    consumption_reason: '',
     estimated_calories: 0,
     estimated_carbs_g: 0,
     estimated_protein_g: 0,
@@ -147,6 +149,7 @@ export default function FoodDiary24h({ isOpen, onClose, logDate, existingSession
             meal_type: formData.meal_type,
             entry_method: formData.entry_method,
             food_description: formData.food_description,
+            consumption_reason: formData.consumption_reason,
             estimated_calories: formData.estimated_calories,
             estimated_carbs_g: formData.estimated_carbs_g,
             estimated_protein_g: formData.estimated_protein_g,
@@ -343,6 +346,7 @@ export default function FoodDiary24h({ isOpen, onClose, logDate, existingSession
       meal_type: 'breakfast',
       entry_method: 'manual',
       food_description: '',
+      consumption_reason: '',
       estimated_calories: 0,
       estimated_carbs_g: 0,
       estimated_protein_g: 0,
@@ -443,6 +447,12 @@ export default function FoodDiary24h({ isOpen, onClose, logDate, existingSession
                             <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line mb-2">
                               {entry.food_description}
                             </p>
+                            {entry.consumption_reason && (
+                              <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+                                <span className="font-medium">{es ? 'Motivo' : 'Reason'}:</span>{' '}
+                                {entry.consumption_reason}
+                              </p>
+                            )}
                             <div className="flex gap-4 text-xs text-gray-600 dark:text-gray-400">
                               <span>≈ {entry.estimated_calories} kcal</span>
                               <span>{entry.estimated_carbs_g}g CHO</span>
@@ -717,6 +727,22 @@ export default function FoodDiary24h({ isOpen, onClose, logDate, existingSession
                     placeholder={es
                       ? '2 tostadas integrales (60g)\n1 huevo revuelto (60g)\n...'
                       : '2 whole wheat toasts (60g)\n1 scrambled egg (60g)\n...'}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Consumption Reason */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {es ? 'Motivo de consumo' : 'Consumption reason'}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.consumption_reason}
+                    onChange={(e) => setFormData({ ...formData, consumption_reason: e.target.value })}
+                    placeholder={es
+                      ? 'Ej.: pre-entrenamiento, hambre, antojo, recuperación'
+                      : 'E.g.: pre-workout, hunger, craving, recovery'}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white"
                   />
                 </div>

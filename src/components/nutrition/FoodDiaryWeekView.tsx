@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { supabase } from '../../lib/supabase';
 import {
-  ChevronDown, ChevronUp, Plus, Edit, Trash2, CheckCircle,
+  ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Plus, Edit, Trash2, CheckCircle,
   Clock, Loader, CalendarDays, FileEdit
 } from 'lucide-react';
 import FoodDiary24h from './FoodDiary24h';
@@ -13,6 +13,7 @@ interface DiaryEntry {
   entry_time: string;
   meal_type: string;
   food_description: string;
+  consumption_reason: string;
   estimated_calories: number;
   estimated_carbs_g: number;
   estimated_protein_g: number;
@@ -176,7 +177,7 @@ export default function FoodDiaryWeekView({ onChanged }: Props) {
           className="p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
           aria-label={es ? 'Semana anterior' : 'Previous week'}
         >
-          <ChevronDown className="w-5 h-5 -rotate-90" />
+          <ChevronLeft className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-2">
           <CalendarDays className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
@@ -192,7 +193,7 @@ export default function FoodDiaryWeekView({ onChanged }: Props) {
           className="p-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition-colors"
           aria-label={es ? 'Semana siguiente' : 'Next week'}
         >
-          <ChevronUp className="w-5 h-5 -rotate-90" />
+          <ChevronRight className="w-5 h-5" />
         </button>
       </div>
 
@@ -347,7 +348,11 @@ export default function FoodDiaryWeekView({ onChanged }: Props) {
                                 {session.entries.map(e => (
                                   <div key={e.id} className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
                                     <span className="font-semibold text-emerald-600 dark:text-emerald-400 w-11 flex-shrink-0">{e.entry_time}</span>
-                                    <span className="truncate flex-1">{e.food_description.split('\n')[0]}</span>
+                                    <span className="truncate flex-1">
+                                      {e.consumption_reason
+                                        ? `${e.food_description.split('\n')[0]} — ${e.consumption_reason}`
+                                        : e.food_description.split('\n')[0]}
+                                    </span>
                                     <span className="flex-shrink-0 font-medium text-gray-500 dark:text-gray-400">{e.estimated_calories} kcal</span>
                                   </div>
                                 ))}
