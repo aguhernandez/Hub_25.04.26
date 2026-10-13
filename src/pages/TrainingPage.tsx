@@ -183,9 +183,18 @@ export default function TrainingPage() {
         body: { action: 'sync', athlete_id: effectiveAthleteId },
       });
       if (fnError) throw fnError;
-      success(language === 'es'
-        ? `✅ Sincronizado: ${data?.synced ?? 0} entrenamientos importados de ${data?.total ?? 0} eventos.`
-        : `✅ Synced: ${data?.synced ?? 0} workouts imported from ${data?.total ?? 0} events.`);
+      const synced = data?.synced ?? 0;
+      const updated = data?.updated ?? 0;
+      const total = data?.total ?? 0;
+      if (synced === 0 && updated > 0) {
+        success(language === 'es'
+          ? `✅ Todo al día: los ${total} entrenamientos ya estaban importados (se actualizaron los detalles).`
+          : `✅ Up to date: all ${total} workouts were already imported (details refreshed).`);
+      } else {
+        success(language === 'es'
+          ? `✅ Sincronizado: ${synced} entrenamientos nuevos importados de ${total} eventos.`
+          : `✅ Synced: ${synced} new workouts imported from ${total} events.`);
+      }
       await loadWorkouts();
     } catch (err: any) {
       let serverError = '';

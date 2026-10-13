@@ -48,3 +48,6 @@ verify_jwt = false
 
 [functions.sync-trainingpeaks-ics]
 verify_jwt = true
+
+[functions.auto-sync-trainingpeaks]
+verify_jwt = false

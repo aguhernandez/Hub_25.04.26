@@ -92,45 +92,50 @@ Deno.serve(async (req: Request) => {
     console.log(`Parsed ${events.length} events`);
 
     let syncedCount = 0;
+    let updatedCount = 0;
+    let skippedCount = 0;
     let errorCount = 0;
     const now = new Date().toISOString();
 
+    // Load all existing TrainingPeaks workouts once (avoids N queries per sync)
+    const { data: existingTp, error: tpFetchError } = await supabase
+      .from("athlete_workouts")
+      .select("id, external_id, external_title, scheduled_date")
+      .eq("athlete_id", targetAthleteId)
+      .eq("source", "trainingpeaks");
+
+    if (tpFetchError) {
+      console.error("Error loading existing TP workouts:", tpFetchError);
+    }
+
+    const byExternalId = new Map<string, any>();
+    const byDateTitle = new Map<string, any>();
+    (existingTp || []).forEach((w: any) => {
+      if (w.external_id) byExternalId.set(w.external_id, w);
+      byDateTitle.set(`${w.scheduled_date}::${(w.external_title || "").trim()}`, w);
+    });
+
     for (const event of events) {
       try {
-        console.log(`Processing: ${event.summary} (${event.dtstart.split("T")[0]})`);
+        const scheduledDate = event.dtstart.split("T")[0];
+        const title = (event.summary || "").trim();
 
-        const { data: existing, error: existingError } = await supabase
-          .from("athlete_workouts")
-          .select("id")
-          .eq("athlete_id", targetAthleteId)
-          .eq("external_id", event.uid)
-          .maybeSingle();
-
-        if (existingError) {
-          console.error(`Error checking existing event:`, existingError);
-          errorCount++;
-          continue;
-        }
-
-        const enhancedDescription = enhanceTPDescription(event.description || "");
-
-        const workoutData = {
-          athlete_id: targetAthleteId,
-          external_id: event.uid,
-          external_title: event.summary,
-          raw_description: enhancedDescription,
-          scheduled_date: event.dtstart.split("T")[0],
-          source: "trainingpeaks",
-          synced_at: now,
-          status: "pending",
-          notes: enhancedDescription ? `Synced from TrainingPeaks\n\n${enhancedDescription}` : "Synced from TrainingPeaks"
-        };
+        // Match by TP uid first, fall back to date+title (TP regenerates uids)
+        const existing = byExternalId.get(event.uid)
+          || byDateTitle.get(`${scheduledDate}::${title}`);
 
         if (existing) {
-          console.log(`Updating existing workout: ${existing.id}`);
+          // Already imported: only refresh the description, never duplicate
+          const enhancedDescription = enhanceTPDescription(event.description || "");
           const { error: updateError } = await supabase
             .from("athlete_workouts")
-            .update(workoutData)
+            .update({
+              external_id: event.uid,
+              external_title: title,
+              raw_description: enhancedDescription,
+              synced_at: now,
+              notes: enhancedDescription ? `Synced from TrainingPeaks\n\n${enhancedDescription}` : "Synced from TrainingPeaks"
+            })
             .eq("id", existing.id);
 
           if (updateError) {
@@ -138,19 +143,50 @@ Deno.serve(async (req: Request) => {
             errorCount++;
             continue;
           }
-        } else {
-          console.log(`Inserting new workout`);
-          const { error: insertError } = await supabase
-            .from("athlete_workouts")
-            .insert(workoutData);
 
-          if (insertError) {
-            console.error(`Insert error:`, insertError);
-            errorCount++;
-            continue;
-          }
+          byExternalId.set(event.uid, existing);
+          byDateTitle.set(`${scheduledDate}::${title}`, existing);
+          updatedCount++;
+          console.log(`✓ Refreshed existing workout ${existing.id}`);
+          continue;
         }
 
+        console.log(`Inserting new workout: ${title} (${scheduledDate})`);
+        const enhancedDescription = enhanceTPDescription(event.description || "");
+
+        const workoutData = {
+          athlete_id: targetAthleteId,
+          external_id: event.uid,
+          external_title: title,
+          raw_description: enhancedDescription,
+          scheduled_date: scheduledDate,
+          source: "trainingpeaks",
+          synced_at: now,
+          status: "pending",
+          notes: enhancedDescription ? `Synced from TrainingPeaks\n\n${enhancedDescription}` : "Synced from TrainingPeaks"
+        };
+
+        const { data: inserted, error: insertError } = await supabase
+          .from("athlete_workouts")
+          .insert(workoutData)
+          .select("id")
+          .single();
+
+        if (insertError) {
+          // Unique index may have caught a race: treat as already synced
+          if (String(insertError.message || "").includes("uniq_tp_workout_athlete_date_title")) {
+            skippedCount++;
+            continue;
+          }
+          console.error(`Insert error:`, insertError);
+          errorCount++;
+          continue;
+        }
+
+        if (inserted) {
+          byExternalId.set(event.uid, inserted);
+          byDateTitle.set(`${scheduledDate}::${title}`, inserted);
+        }
         syncedCount++;
         console.log(`✓ Synced successfully`);
       } catch (error) {
@@ -172,6 +208,8 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         success: true,
         synced: syncedCount,
+        updated: updatedCount,
+        skipped: skippedCount,
         errors: errorCount,
         total: events.length
       }),

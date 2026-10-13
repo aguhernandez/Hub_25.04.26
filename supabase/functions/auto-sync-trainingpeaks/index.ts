@@ -79,22 +79,36 @@ Deno.serve(async (req: Request) => {
         // Sync events
         const now = new Date().toISOString();
         let syncedCount = 0;
+        let skippedCount = 0;
+
+        // Load existing TrainingPeaks workouts once per athlete
+        const { data: existingTp } = await supabase
+          .from("athlete_workouts")
+          .select("id, external_id, external_title, scheduled_date")
+          .eq("athlete_id", connection.athlete_id)
+          .eq("source", "trainingpeaks");
+
+        const byExternalId = new Map<string, any>();
+        const byDateTitle = new Map<string, any>();
+        (existingTp || []).forEach((w: any) => {
+          if (w.external_id) byExternalId.set(w.external_id, w);
+          byDateTitle.set(`${w.scheduled_date}::${(w.external_title || "").trim()}`, w);
+        });
 
         for (const event of events) {
           try {
-            const { data: existing } = await supabase
-              .from("athlete_workouts")
-              .select("id")
-              .eq("athlete_id", connection.athlete_id)
-              .eq("external_id", event.uid)
-              .single();
+            const scheduledDate = event.dtstart.split("T")[0];
+            const title = (event.summary || "").trim();
+
+            const existing = byExternalId.get(event.uid)
+              || byDateTitle.get(`${scheduledDate}::${title}`);
 
             const workoutData = {
               athlete_id: connection.athlete_id,
               external_id: event.uid,
-              external_title: event.summary,
+              external_title: title,
               raw_description: event.description,
-              scheduled_date: event.dtstart.split("T")[0],
+              scheduled_date: scheduledDate,
               source: "trainingpeaks",
               synced_at: now,
               status: "pending",
@@ -104,14 +118,38 @@ Deno.serve(async (req: Request) => {
             if (existing) {
               await supabase
                 .from("athlete_workouts")
-                .update(workoutData)
+                .update({
+                  external_id: event.uid,
+                  external_title: title,
+                  raw_description: event.description,
+                  synced_at: now,
+                  notes: `Synced from TrainingPeaks\n\n${event.description}`
+                })
                 .eq("id", existing.id);
+              byExternalId.set(event.uid, existing);
+              byDateTitle.set(`${scheduledDate}::${title}`, existing);
             } else {
-              await supabase
+              const { data: inserted, error: insertError } = await supabase
                 .from("athlete_workouts")
-                .insert(workoutData);
+                .insert(workoutData)
+                .select("id")
+                .single();
+
+              if (insertError) {
+                if (String(insertError.message || "").includes("uniq_tp_workout_athlete_date_title")) {
+                  skippedCount++;
+                  continue;
+                }
+                console.error(`Insert error for event ${event.uid}:`, insertError);
+                continue;
+              }
+
+              if (inserted) {
+                byExternalId.set(event.uid, inserted);
+                byDateTitle.set(`${scheduledDate}::${title}`, inserted);
+              }
             }
-            
+
             syncedCount++;
           } catch (error) {
             console.error(`Error syncing event ${event.uid}:`, error);
