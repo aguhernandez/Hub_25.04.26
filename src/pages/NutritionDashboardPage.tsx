@@ -36,10 +36,10 @@ import {
 } from 'lucide-react';
 import NutritionAnamnesis from '../components/nutrition/NutritionAnamnesis';
 import FoodDiary24h from '../components/nutrition/FoodDiary24h';
-import FoodDiaryReviewPanel from '../components/nutrition/FoodDiaryReviewPanel';
+import ProNutritionView from '../components/nutrition/ProNutritionView';
 import InteractivePlate from '../components/nutrition/InteractivePlate';
 
-type Tab = 'dashboard' | 'diary' | 'review' | 'anamnesis' | 'plate' | 'coaching';
+type Tab = 'dashboard' | 'diary' | 'anamnesis' | 'plate' | 'coaching';
 
 interface PlanItem {
   item_type: 'food' | 'recipe' | 'supplement' | 'product';
@@ -184,7 +184,6 @@ export default function NutritionDashboardPage() {
   const [expandedMeal, setExpandedMeal] = useState<string | null>(null);
 
   const t = (en: string, es: string) => language === 'es' ? es : en;
-  const isCoach = profile?.role === 'trainer' || profile?.role === 'admin';
   const nutritionAccess = useProfessionalServiceAccess('nutrition');
 
   useEffect(() => {
@@ -201,6 +200,22 @@ export default function NutritionDashboardPage() {
       loadAnamnesisData();
     }
   }, [profile, activeTab]);
+
+  const isProfessional = profile?.role === 'trainer' || profile?.role === 'nutritionist' ||
+    profile?.role === 'head_coach' || profile?.role === 'admin';
+  if (isProfessional) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('Nutrition', 'Nutrición')}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            {t('Nutrition overview for your athletes', 'Vista nutricional de tus atletas')}
+          </p>
+        </div>
+        <ProNutritionView />
+      </div>
+    );
+  }
 
   const loadSatelliteData = async () => {
     if (!profile) return;
@@ -1088,12 +1103,6 @@ export default function NutritionDashboardPage() {
         );
       case 'diary':
         return renderDiaryTab();
-      case 'review':
-        return (
-          <div>
-            <FoodDiaryReviewPanel />
-          </div>
-        );
       case 'plate':
         return (
           <div>
@@ -1135,128 +1144,6 @@ export default function NutritionDashboardPage() {
       </div>
 
       {/* QUICK ACTIONS */}
-      {isCoach ? (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          {/* 1. Dashboard */}
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border transition-all p-6 text-left ${
-              activeTab === 'dashboard'
-                ? 'border-[#514163] dark:border-[#514163]'
-                : 'border-gray-200 dark:border-gray-700 hover:border-[#514163] dark:hover:border-[#514163]'
-            }`}
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-[#514163]/10 to-transparent dark:from-[#514163]/20 rounded-bl-full" />
-            <div className="relative">
-              <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform ${
-                activeTab === 'dashboard'
-                  ? 'bg-gradient-to-br from-[#514163] to-[#3a2f4a]'
-                  : 'bg-gradient-to-br from-[#514163] to-[#3a2f4a] dark:from-[#514163]/30 dark:to-[#3a2f4a]/20'
-              }`}>
-                <BarChart3 className="w-6 h-6 text-white dark:text-[#fdda36]" />
-              </div>
-              <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
-                {t('Dashboard', 'Panel')}
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {t('Targets & adherence', 'Objetivos y adherencia')}
-              </p>
-            </div>
-          </button>
-
-          {/* 2. 24-48h Diary */}
-          <button
-            onClick={() => setActiveTab('diary')}
-            className={`group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border transition-all p-6 text-left ${
-              activeTab === 'diary'
-                ? 'border-emerald-500 dark:border-emerald-500'
-                : 'border-gray-200 dark:border-gray-700 hover:border-emerald-500 dark:hover:border-emerald-500'
-            }`}
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-emerald-500/10 to-transparent dark:from-emerald-400/10 rounded-bl-full" />
-            <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 dark:from-emerald-900/40 dark:to-emerald-800/30 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <BookOpen className="w-6 h-6 text-white dark:text-emerald-400" />
-              </div>
-              <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
-                {t('24-48h Diary', 'Diario 24-48h')}
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {t('Log food with AI', 'Registra con IA')}
-              </p>
-            </div>
-          </button>
-
-          {/* 3. Anamnesis */}
-          <button
-            onClick={() => setActiveTab('anamnesis')}
-            className={`group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border transition-all p-6 text-left ${
-              activeTab === 'anamnesis'
-                ? 'border-blue-500 dark:border-blue-500'
-                : 'border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-500'
-            }`}
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-transparent dark:from-blue-400/10 rounded-bl-full" />
-            <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-900/40 dark:to-blue-800/30 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <ClipboardList className="w-6 h-6 text-white dark:text-blue-400" />
-              </div>
-              <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
-                {t('Anamnesis', 'Anamnesis')}
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {t('Nutritional assessment', 'Evaluación nutricional')}
-              </p>
-            </div>
-          </button>
-
-          {/* 4. Healthy Plate */}
-          <button
-            onClick={() => setActiveTab('plate')}
-            className={`group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border transition-all p-6 text-left ${
-              activeTab === 'plate'
-                ? 'border-amber-500 dark:border-amber-500'
-                : 'border-gray-200 dark:border-gray-700 hover:border-amber-500 dark:hover:border-amber-500'
-            }`}
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-amber-500/10 to-transparent dark:from-amber-400/10 rounded-bl-full" />
-            <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-br from-amber-500 to-amber-600 dark:from-amber-900/40 dark:to-amber-800/30 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <Utensils className="w-6 h-6 text-white dark:text-amber-400" />
-              </div>
-              <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
-                {t('Healthy Plate', 'Plato Saludable')}
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {t('Harvard plate guide', 'Modelo Harvard')}
-              </p>
-            </div>
-          </button>
-
-          {/* 5. Review (coach only) */}
-          <button
-            onClick={() => setActiveTab('review')}
-            className={`group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border transition-all p-6 text-left ${
-              activeTab === 'review'
-                ? 'border-[#ffd700] dark:border-[#ffd700]'
-                : 'border-2 border-[#ffd700] dark:border-[#ffd700] hover:border-[#ffed4e] dark:hover:border-[#ffed4e]'
-            }`}
-          >
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-[#fdda36]/20 to-transparent dark:from-[#fdda36]/30 rounded-bl-full" />
-            <div className="relative">
-              <div className="w-12 h-12 bg-gradient-to-br from-[#fdda36] to-[#f0c800] rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <Eye className="w-6 h-6 text-[#514163]" />
-              </div>
-              <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
-                {t('Review', 'Revisar')}
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {t('Athlete diaries', 'Diarios de atletas')}
-              </p>
-            </div>
-          </button>
-        </div>
-      ) : (
         /* Athlete quick actions — 4 buttons, no Dashboard, no New Diary */
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {/* 1. 24-48h Diary */}
@@ -1347,7 +1234,6 @@ export default function NutritionDashboardPage() {
             </div>
           </button>
         </div>
-      )}
 
       {renderContent()}
 
