@@ -51,7 +51,6 @@ export default function NutritionAnamnesis({ onSaveComplete }: Props) {
     stress_management: '',
     alcohol_frequency: '',
     smoking_frequency: '',
-    recreational_drugs: '',
     sport: '',
     training_frequency: '4-5x',
     training_hours_weekly: 5,
