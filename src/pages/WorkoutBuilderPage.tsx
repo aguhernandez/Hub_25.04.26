@@ -383,26 +383,54 @@ export default function WorkoutBuilderPage() {
       setWorkoutName(workout.name);
       setWorkoutDescription(workout.description || '');
 
-      const groupedExercises: { [key: string]: any } = {};
+      const exercisesArray: any[] = [];
+      const groupByKey = new Map<string, any>();
+      const blockKeyTitle = new Map<string, string>();
+      let prevKey: string | null = null;
+      let prevTitle: string | null = null;
+      let legacyRun = 0;
+
       workout.workout_exercises
         .sort((a: any, b: any) => a.order_index - b.order_index)
         .forEach((we: any) => {
-          const key = `${we.exercise_id}-${we.superset_group || 'none'}-${we.block_instance_id || 'no-block'}`;
-          if (!groupedExercises[key]) {
-            groupedExercises[key] = {
+          const title: string | null = we.section_title || null;
+          let key: string;
+          if (we.block_instance_id) {
+            key = we.block_instance_id;
+          } else if (title) {
+            // Legacy rows (no block id): a repeated title after a different section starts a new block
+            if (prevKey && prevKey.startsWith('legacy_') && prevTitle === title) {
+              key = prevKey;
+            } else {
+              key = `legacy_${legacyRun++}_${title}`;
+            }
+          } else {
+            // Set-line continuation rows inherit the block of the previous row
+            key = prevKey || '_default';
+          }
+          if (title && !blockKeyTitle.has(key)) blockKeyTitle.set(key, title);
+
+          const gkey = `${we.exercise_id}-${we.superset_group || 'none'}-${key}`;
+          let group = groupByKey.get(gkey);
+          if (!group) {
+            group = {
               exercise_id: we.exercise_id,
               exercise_name: getExerciseName(we.exercises, language),
               exercise_link: we.exercises.link,
               superset_group: we.superset_group,
               order_index: we.order_index,
               notes: we.notes || '',
-              section_title: we.section_title,
+              section_title: blockKeyTitle.get(key) || null,
+              block_instance_id: key === '_default' ? undefined : key,
               primary_metric: we.primary_metric || 'reps',
               secondary_metric: we.secondary_metric || null,
               set_lines: []
             };
+            groupByKey.set(gkey, group);
+            exercisesArray.push(group);
           }
-          groupedExercises[key].set_lines.push({
+          if (title && !group.section_title) group.section_title = title;
+          group.set_lines.push({
             sets: we.sets,
             reps: we.reps,
             primary_value: we.primary_value ?? we.reps,
@@ -410,14 +438,14 @@ export default function WorkoutBuilderPage() {
             rest_seconds: we.rest_seconds,
             working_set: we.working_set ?? false
           });
+          prevKey = key;
+          prevTitle = title;
         });
 
-      const exercisesArray = Object.values(groupedExercises);
-
-      // Reconstruct blocks preserving duplicates: group by block_instance_id (or section_title for legacy)
+      // Reconstruct blocks preserving duplicates: group by block_instance_id (or legacy run for old rows)
       const blockMap = new Map<string, { title: string; firstIndex: number }>();
       exercisesArray.forEach((ex: any, i: number) => {
-        const key = ex.block_instance_id || ex.section_title || '_default';
+        const key = ex.block_instance_id || '_default';
         if (!blockMap.has(key)) {
           blockMap.set(key, { title: ex.section_title || 'Main Work', firstIndex: i });
         }
@@ -437,7 +465,7 @@ export default function WorkoutBuilderPage() {
 
       const keyToInstanceId = new Map(reconstructedBlocks.map(b => [b.instanceId, b.instanceId]));
       exercisesArray.forEach((ex: any) => {
-        const key = ex.block_instance_id || ex.section_title || '_default';
+        const key = ex.block_instance_id || '_default';
         ex.block_instance_id = keyToInstanceId.get(key) || reconstructedBlocks[0]?.instanceId || 'default';
       });
 
