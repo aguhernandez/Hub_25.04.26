@@ -75,6 +75,9 @@ export default function NutritionContextSidebar({ athleteId, selectedDate, isOpe
         scheduled_date,
         status,
         notes,
+        source,
+        external_title,
+        raw_description,
         workouts (
           name,
           difficulty,
@@ -85,14 +88,19 @@ export default function NutritionContextSidebar({ athleteId, selectedDate, isOpe
       .eq('scheduled_date', date)
       .maybeSingle();
 
-    if (data && data.workouts) {
+    if (data && (data.workouts || data.source === 'trainingpeaks')) {
+      const isTp = data.source === 'trainingpeaks';
       setTrainingInfo({
-        workout_name: (data.workouts as any).name,
+        workout_name: isTp
+          ? (data.external_title || 'TrainingPeaks Workout')
+          : (data.workouts as any)?.name,
         scheduled_date: data.scheduled_date,
-        difficulty: (data.workouts as any).difficulty || 'moderate',
-        duration_minutes: (data.workouts as any).duration_minutes || 0,
+        difficulty: (data.workouts as any)?.difficulty || (isTp ? 'moderate' : 'moderate'),
+        duration_minutes: (data.workouts as any)?.duration_minutes || 0,
         status: data.status,
-        notes: data.notes || ''
+        notes: isTp
+          ? (data.raw_description || data.notes || '')
+          : (data.notes || '')
       });
     } else {
       setTrainingInfo(null);
