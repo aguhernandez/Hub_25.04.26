@@ -201,22 +201,6 @@ export default function NutritionDashboardPage() {
     }
   }, [profile, activeTab]);
 
-  const isProfessional = profile?.role === 'trainer' || profile?.role === 'nutritionist' ||
-    profile?.role === 'head_coach' || profile?.role === 'admin';
-  if (isProfessional) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('Nutrition', 'Nutrición')}</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            {t('Nutrition overview for your athletes', 'Vista nutricional de tus atletas')}
-          </p>
-        </div>
-        <ProNutritionView />
-      </div>
-    );
-  }
-
   const loadSatelliteData = async () => {
     if (!profile) return;
     setSatelliteLoading(true);
@@ -1132,6 +1116,22 @@ export default function NutritionDashboardPage() {
     }
   };
 
+  const isProfessional = profile?.role === 'trainer' || profile?.role === 'nutritionist' ||
+    profile?.role === 'head_coach' || profile?.role === 'admin';
+  if (isProfessional) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('Nutrition', 'Nutrición')}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            {t('Nutrition overview for your athletes', 'Vista nutricional de tus atletas')}
+          </p>
+        </div>
+        <ProNutritionView />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -1143,9 +1143,8 @@ export default function NutritionDashboardPage() {
         </p>
       </div>
 
-      {/* QUICK ACTIONS */}
-        /* Athlete quick actions — 4 buttons, no Dashboard, no New Diary */
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Athlete quick actions — 4 buttons, no Dashboard, no New Diary */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {/* 1. 24-48h Diary */}
           <button
             onClick={() => setActiveTab('diary')}
