@@ -1001,46 +1001,64 @@ function SelectedAthleteAnamnesis({ data, loading, language, t }: {
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
         {t('Última actualización', 'Last updated')}: {dateFmt(language, data.updated_at.slice(0, 10))}
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {[
-          { label: t('Edad', 'Age'), value: data.age ? `${data.age} ${t('años', 'years')}` : null },
-          { label: t('Sexo', 'Sex'), value: data.sex ? (data.sex === 'male' ? t('Masculino', 'Male') : t('Femenino', 'Female')) : null },
-          { label: t('Altura', 'Height'), value: data.height_cm ? `${data.height_cm} cm` : null },
-          { label: t('Peso', 'Weight'), value: data.weight_kg ? `${data.weight_kg} kg` : null },
-          { label: t('Deporte', 'Sport'), value: data.sport || null },
-          { label: t('Frecuencia de Entrenamiento', 'Training Frequency'), value: data.training_frequency || null },
-          { label: t('Nivel de Actividad', 'Activity Level'), value: data.activity_level || null },
-          { label: t('Objetivo Principal', 'Main Goal'), value: data.main_goal ? data.main_goal.replace(/_/g, ' ') : null },
-          { label: t('Patrón Dietético', 'Dietary Pattern'), value: data.dietary_preferences || null },
-        ].filter(item => item.value).map(item => (
-          <div key={item.label} className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{item.label}</p>
-            <p className="text-sm font-semibold text-gray-900 dark:text-white capitalize">{item.value}</p>
-          </div>
-        ))}
-      </div>
-      {(data.allergies_intolerances || data.medical_conditions) && (
-        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {data.allergies_intolerances && (
-            <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('Alergias/Intolerancias', 'Allergies/Intolerances')}</p>
-              <p className="text-sm text-gray-700 dark:text-gray-300">{data.allergies_intolerances}</p>
-            </div>
-          )}
-          {data.medical_conditions && (
-            <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('Condiciones Médicas', 'Medical Conditions')}</p>
-              <p className="text-sm text-gray-700 dark:text-gray-300">{data.medical_conditions}</p>
-            </div>
-          )}
-        </div>
-      )}
-      {data.nutrition_goals && (
-        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('Objetivos Nutricionales', 'Nutrition Goals')}</p>
-          <p className="text-sm text-gray-700 dark:text-gray-300">{data.nutrition_goals}</p>
-        </div>
-      )}
+      <AnamnesisSection title={t('Sección 1 · Salud Básica', 'Section 1 · Basic Health')} icon="🩺">
+        <AnaField label={t('Edad', 'Age')} value={data.age ? `${data.age} ${t('años', 'years')}` : null} />
+        <AnaField label={t('Sexo', 'Sex')} value={data.sex ? (data.sex === 'male' ? t('Masculino', 'Male') : t('Femenino', 'Female')) : null} />
+        <AnaField label={t('Altura', 'Height')} value={data.height_cm ? `${data.height_cm} cm` : null} />
+        <AnaField label={t('Peso', 'Weight')} value={data.weight_kg ? `${data.weight_kg} kg` : null} />
+        <AnaField label={t('Ocupación', 'Occupation')} value={data.occupation} />
+        <AnaField label={t('Nivel de Actividad', 'Activity Level')} value={data.activity_level} />
+        <AnaField label={t('Horas de Trabajo', 'Work Hours')} value={data.work_hours} />
+        <AnaField label={t('Condiciones Médicas', 'Medical Conditions')} value={data.medical_conditions} />
+        <AnaField label={t('Medicamentos / Suplementos', 'Medications / Supplements')} value={data.medications_supplements} />
+        <AnaField label={t('Alergias / Intolerancias', 'Allergies / Intolerances')} value={data.allergies_intolerances} />
+        <AnaField label={t('Horas de Sueño', 'Sleep Hours')} value={data.sleep_hours ? `${data.sleep_hours} h` : null} />
+        <AnaField label={t('Calidad del Sueño', 'Sleep Quality')} value={data.sleep_quality} />
+        <AnaField label={t('Niveles de Energía', 'Energy Levels')} value={data.energy_levels} />
+        <AnaField label={t('Duración de Baja Energía', 'Low Energy Duration')} value={data.low_energy_duration} />
+        <AnaField label={t('Momentos de Baja Energía', 'Low Energy Times')} value={data.low_energy_times} />
+        <AnaField label={t('Nivel de Estrés (1-10)', 'Stress Level (1-10)')} value={data.stress_level} />
+        <AnaField label={t('Manejo del Estrés', 'Stress Management')} value={data.stress_management} />
+        <AnaField label={t('Frecuencia de Alcohol', 'Alcohol Frequency')} value={data.alcohol_frequency} />
+        <AnaField label={t('Frecuencia de Tabaquismo', 'Smoking Frequency')} value={data.smoking_frequency} />
+      </AnamnesisSection>
+
+      <AnamnesisSection title={t('Sección 2 · Entrenamiento', 'Section 2 · Training')} icon="🏋️">
+        <AnaField label={t('Deporte', 'Sport')} value={data.sport} />
+        <AnaField label={t('Frecuencia de Entrenamiento', 'Training Frequency')} value={data.training_frequency} />
+        <AnaField label={t('Horas de Entrenamiento por Semana', 'Weekly Training Hours')} value={data.training_hours_weekly ? `${data.training_hours_weekly} h` : null} />
+        <AnaField label={t('Horario de Entrenamiento', 'Training Time')} value={data.training_time} />
+        <AnaField label={t('Nutrición Pre-Entreno', 'Pre-Workout Nutrition')} value={data.pre_workout_nutrition} />
+        <AnaField label={t('Nutrición Durante el Entreno', 'During-Workout Nutrition')} value={data.during_workout_nutrition} />
+        <AnaField label={t('Nutrición Post-Entreno', 'Post-Workout Nutrition')} value={data.post_workout_nutrition} />
+      </AnamnesisSection>
+
+      <AnamnesisSection title={t('Sección 3 · Nutrición', 'Section 3 · Nutrition')} icon="🥗">
+        <AnaField label={t('Patrón de Alimentación', 'Eating Pattern')} value={data.eating_pattern} />
+        <AnaField label={t('Preferencias Dietéticas', 'Dietary Preferences')} value={data.dietary_preferences} />
+        <AnaField label={t('Restricciones Dietéticas', 'Dietary Restrictions')} value={data.dietary_restrictions} />
+        <AnaField label={t('Desayuno', 'Breakfast')} value={data.breakfast_description} />
+        <AnaField label={t('Almuerzo', 'Lunch')} value={data.lunch_description} />
+        <AnaField label={t('Cena', 'Dinner')} value={data.dinner_description} />
+        <AnaField label={t('Snacks', 'Snacks')} value={data.snacks_description} />
+        <AnaField label={t('Bebidas', 'Beverages')} value={data.beverages_description} />
+        <AnaField label={t('Alimentos que le Gustan', 'Food Likes')} value={data.food_likes} />
+        <AnaField label={t('Alimentos que No le Gustan', 'Food Dislikes')} value={data.food_dislikes} />
+        <AnaField label={t('Alergias Alimentarias', 'Food Allergies')} value={data.food_allergies} />
+        <AnaField label={t('Frecuencia de Cocinar', 'Cooking Frequency')} value={data.cooking_frequency} />
+        <AnaField label={t('Frecuencia de Comida Fuera', 'Eating Out Frequency')} value={data.eating_out_frequency} />
+        <AnaField label={t('Cambios de Apetito', 'Appetite Changes')} value={data.appetite_changes} />
+        <AnaField label={t('Relación con la Comida', 'Relationship with Food')} value={data.relationship_with_food} />
+        <AnaField label={t('Notas sobre la Relación con la Comida', 'Relationship with Food Notes')} value={data.relationship_food_notes} />
+      </AnamnesisSection>
+
+      <AnamnesisSection title={t('Sección 4 · Objetivos', 'Section 4 · Goals')} icon="🎯">
+        <AnaField label={t('Objetivo Principal', 'Main Goal')} value={data.main_goal ? data.main_goal.replace(/_/g, ' ') : null} />
+        <AnaField label={t('Objetivos Nutricionales', 'Nutrition Goals')} value={data.nutrition_goals} />
+        <AnaField label={t('Expectativas de Rendimiento', 'Performance Expectations')} value={data.performance_expectations} />
+        <AnaField label={t('Próximos Eventos', 'Upcoming Events')} value={data.upcoming_events} />
+        <AnaField label={t('Notas Adicionales', 'Additional Notes')} value={data.additional_notes} />
+      </AnamnesisSection>
       {!data.is_complete && (
         <div className="mt-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-xl p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
@@ -1049,6 +1067,37 @@ function SelectedAthleteAnamnesis({ data, loading, language, t }: {
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+function AnamnesisSection({ title, icon, children }: {
+  title: string;
+  icon: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mb-6">
+      <h3 className="flex items-center gap-2 text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wide mb-3">
+        <span>{icon}</span>
+        {title}
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function AnaField({ label, value }: {
+  label: string;
+  value: string | number | null;
+}) {
+  if (value === null || value === undefined || value === '') return null;
+  return (
+    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
+      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{label}</p>
+      <p className="text-sm font-semibold text-gray-900 dark:text-white capitalize">{String(value)}</p>
     </div>
   );
 }
