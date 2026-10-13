@@ -4,7 +4,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { supabase } from '../../lib/supabase';
 import {
   Search, User, Users, BarChart3, BookOpen, ClipboardList, CheckCircle,
-  Clock, AlertCircle, X, ChevronRight, ChevronLeft, Eye, RefreshCw,
+  Clock, AlertCircle, X, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Eye, RefreshCw, Loader2,
 } from 'lucide-react';
 
 type Tab = 'dashboard' | 'diary' | 'anamnesis';
@@ -40,6 +40,7 @@ interface DiaryEntry {
   entry_time: string;
   meal_type: string;
   food_description: string;
+  consumption_reason: string;
   estimated_calories: number;
   estimated_carbs_g: number;
   estimated_protein_g: number;
@@ -113,6 +114,12 @@ export default function ProNutritionView() {
   const [entriesLoading, setEntriesLoading] = useState(false);
   const [anamnesisData, setAnamnesisData] = useState<any>(null);
   const [anamnesisLoading, setAnamnesisLoading] = useState(false);
+
+  // Global diary tab: inline accordion expansion + per-session entry cache
+  const [expandedDiaryId, setExpandedDiaryId] = useState<string | null>(null);
+  const [entriesBySession, setEntriesBySession] = useState<Record<string, DiaryEntry[]>>({});
+  const [entryLoadingId, setEntryLoadingId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadRoster();
@@ -344,16 +351,48 @@ export default function ProNutritionView() {
     loadAnamnesis(id);
   };
 
-  const openForAthlete = (session: DiarySession) => {
-    if (selectedAthleteId !== session.athlete_id) {
-      setSelectedAthleteId(session.athlete_id);
-      setSessions([]);
-      setAnamnesisData(null);
-      loadAthleteSessions(session.athlete_id);
-      loadAnamnesis(session.athlete_id);
+  const toggleDiaryRow = async (session: DiarySession) => {
+    if (expandedDiaryId === session.id) {
+      setExpandedDiaryId(null);
+      return;
     }
-    setActiveTab('diary');
-    setSelectedSession(session);
+    setExpandedDiaryId(session.id);
+    if (entriesBySession[session.id]) return;
+    setEntryLoadingId(session.id);
+    try {
+      const { data } = await supabase
+        .from('food_diary_entries')
+        .select('*')
+        .eq('session_id', session.id)
+        .order('entry_time', { ascending: true });
+      setEntriesBySession(prev => ({ ...prev, [session.id]: (data || []) as DiaryEntry[] }));
+    } finally {
+      setEntryLoadingId(null);
+    }
+  };
+
+  const confirmDiaryReview = async (session: DiarySession) => {
+    if (!profile || confirmingId) return;
+    setConfirmingId(session.id);
+    try {
+      const { error } = await supabase
+        .from('food_diary_sessions')
+        .update({ reviewed_by: profile.id, reviewed_at: new Date().toISOString() })
+        .eq('id', session.id);
+      if (!error) {
+        setAllSessions(prev => prev.map(s =>
+          s.id === session.id ? { ...s, reviewed_by: profile.id, reviewed_at: new Date().toISOString() } : s
+        ));
+        if (selectedSession?.id === session.id) {
+          setSelectedSession(prev => prev ? { ...prev, reviewed_by: profile.id, reviewed_at: new Date().toISOString() } : prev);
+        }
+        setSessions(prev => prev.map(s =>
+          s.id === session.id ? { ...s, reviewed_by: profile.id, reviewed_at: new Date().toISOString() } : s
+        ));
+      }
+    } finally {
+      setConfirmingId(null);
+    }
   };
 
   const clearAthlete = () => {
@@ -576,35 +615,127 @@ export default function ProNutritionView() {
         </div>
       ) : (
         <div className="space-y-2">
-          {filteredDiaryList.map(session => (
-            <button
-              key={session.id}
-              onClick={() => openForAthlete(session)}
-              className="w-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-emerald-400 dark:hover:border-emerald-600 p-3.5 text-left transition-all group"
-            >
-              <div className="flex items-center gap-3">
-                {renderAvatar(athleteAvatar(session.athlete_id), athleteName(session.athlete_id))}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-sm text-gray-900 dark:text-white truncate">{athleteName(session.athlete_id)}</p>
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${session.status === 'finalized' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}`}>
-                      {session.status === 'finalized' ? t('Completo', 'Complete') : t('Borrador', 'Draft')}
-                    </span>
-                    {session.reviewed_at && (
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">
-                        {t('Revisado', 'Reviewed')}{session.adherence_score ? ` ${session.adherence_score}/100` : ''}
-                      </span>
+          {filteredDiaryList.map(session => {
+            const isExpanded = expandedDiaryId === session.id;
+            const sessionEntriesList = entriesBySession[session.id];
+            return (
+              <div key={session.id} className="bg-white dark:bg-gray-800 rounded-xl border overflow-hidden transition-all" style={{ borderColor: isExpanded ? 'rgb(16,185,129)' : undefined }}>
+                <button
+                  onClick={() => toggleDiaryRow(session)}
+                  className={`w-full p-3.5 text-left transition-all group ${isExpanded ? 'bg-emerald-50/60 dark:bg-emerald-900/10' : 'hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    {renderAvatar(athleteAvatar(session.athlete_id), athleteName(session.athlete_id))}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-sm text-gray-900 dark:text-white truncate">{athleteName(session.athlete_id)}</p>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${session.status === 'finalized' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}`}>
+                          {session.status === 'finalized' ? t('Completo', 'Complete') : t('Borrador', 'Draft')}
+                        </span>
+                        {session.reviewed_at && (
+                          <span className="flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">
+                            <Eye className="w-3 h-3" /> {t('Revisado', 'Reviewed')}{session.adherence_score ? ` ${session.adherence_score}/100` : ''}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {dateFmt(language, session.start_date)}
+                        {session.status === 'finalized' && ` · ${session.total_calories} kcal · P ${session.total_protein_g}g · C ${session.total_carbs_g}g · G ${session.total_fat_g}g`}
+                      </p>
+                    </div>
+                    {isExpanded
+                      ? <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />}
+                  </div>
+                </button>
+
+                {isExpanded && (
+                  <div className="px-3.5 pb-3.5 space-y-3 border-t border-gray-100 dark:border-gray-700 pt-3">
+                    {session.status === 'finalized' && (
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          { label: 'kcal', value: session.total_calories, cls: 'text-orange-600 dark:text-orange-400' },
+                          { label: 'CHO', value: `${session.total_carbs_g}g`, cls: 'text-amber-600 dark:text-amber-400' },
+                          { label: 'PRO', value: `${session.total_protein_g}g`, cls: 'text-blue-600 dark:text-blue-400' },
+                          { label: 'FAT', value: `${session.total_fat_g}g`, cls: 'text-rose-600 dark:text-rose-400' },
+                        ].map(m => (
+                          <div key={m.label} className="bg-gray-50 dark:bg-gray-700/40 rounded-lg p-2 text-center">
+                            <p className={`text-base font-bold ${m.cls}`}>{m.value}</p>
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400">{m.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {entryLoadingId === session.id ? (
+                      <div className="flex items-center justify-center py-6">
+                        <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                      </div>
+                    ) : !sessionEntriesList || sessionEntriesList.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                        {t('Sin entradas en esta sesión', 'No entries in this session')}
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {sessionEntriesList.map(entry => (
+                          <div key={entry.id} className="bg-gray-50 dark:bg-gray-700/40 rounded-xl p-3.5">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{entry.entry_time}</span>
+                                <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs font-medium">
+                                  {mealTypeLabel(entry.meal_type)}
+                                </span>
+                              </div>
+                              <span className="text-xs font-semibold text-orange-600 dark:text-orange-400">≈ {entry.estimated_calories} kcal</span>
+                            </div>
+                            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{entry.food_description}</p>
+                            {entry.consumption_reason && (
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                                <span className="font-semibold">{t('Motivo de consumo', 'Consumption reason')}:</span> {entry.consumption_reason}
+                              </p>
+                            )}
+                            <div className="flex gap-3 mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                              <span>{entry.estimated_carbs_g}g CHO</span>
+                              <span>{entry.estimated_protein_g}g PRO</span>
+                              <span>{entry.estimated_fat_g}g FAT</span>
+                            </div>
+                            {entry.additional_notes && (
+                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 italic">{entry.additional_notes}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {session.status === 'finalized' && (
+                      session.reviewed_at ? (
+                        <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl">
+                          <Eye className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                          <span className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">
+                            {t('Registro visto', 'Log seen')}
+                            {session.reviewed_at && ` — ${dateFmt(language, session.reviewed_at.slice(0, 10))}`}
+                          </span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => confirmDiaryReview(session)}
+                          disabled={confirmingId === session.id}
+                          className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-white rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2"
+                        >
+                          {confirmingId === session.id
+                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                            : <Eye className="w-4 h-4" />}
+                          {confirmingId === session.id
+                            ? t('Confirmando...', 'Confirming...')
+                            : t('Confirmar que vi este registro', 'Confirm I have seen this log')}
+                        </button>
+                      )
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    {dateFmt(language, session.start_date)}
-                    {session.status === 'finalized' && ` · ${session.total_calories} kcal · P ${session.total_protein_g}g · C ${session.total_carbs_g}g · G ${session.total_fat_g}g`}
-                  </p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-emerald-500 transition-colors flex-shrink-0" />
+                )}
               </div>
-            </button>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -676,7 +807,14 @@ export default function ProNutritionView() {
                             </div>
                             <span className="text-xs font-semibold text-orange-600 dark:text-orange-400">≈ {entry.estimated_calories} kcal</span>
                           </div>
-                          <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{entry.food_description}</p>
+                          {entry.food_description && (
+                            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">{entry.food_description}</p>
+                          )}
+                          {entry.consumption_reason && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                              <span className="font-semibold">{t('Motivo de consumo', 'Consumption reason')}:</span> {entry.consumption_reason}
+                            </p>
+                          )}
                           <div className="flex gap-3 mt-2 text-xs text-gray-500 dark:text-gray-400">
                             <span>{entry.estimated_carbs_g}g CHO</span>
                             <span>{entry.estimated_protein_g}g PRO</span>

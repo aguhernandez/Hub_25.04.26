@@ -4,7 +4,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { supabase } from '../../lib/supabase';
 import {
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Plus, Edit, Trash2, CheckCircle,
-  Clock, Loader, CalendarDays, FileEdit
+  Clock, Loader, CalendarDays, FileEdit, Eye
 } from 'lucide-react';
 import FoodDiary24h from './FoodDiary24h';
 
@@ -30,6 +30,7 @@ interface DiarySession {
   total_carbs_g: number | null;
   total_protein_g: number | null;
   total_fat_g: number | null;
+  reviewed_at: string | null;
   entries?: DiaryEntry[];
 }
 
@@ -322,6 +323,11 @@ export default function FoodDiaryWeekView({ onChanged }: Props) {
                                           : (es ? 'Enviado' : 'Sent'))
                                       : (es ? 'Borrador — sin enviar' : 'Draft — not sent')}
                                   </p>
+                                  {session.reviewed_at && (
+                                    <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+                                      <Eye className="w-3 h-3" /> {es ? 'Visto por tu profesional' : 'Seen by your professional'}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                               <div className="flex gap-1.5 flex-shrink-0">
