@@ -195,7 +195,7 @@ function StepIntensityChart({ steps }: { steps: any[] }) {
 
 function MonthWorkoutCard({
   workout, language, onClick, onMenuClick,
-}: { workout: any; language: string; onClick: () => void; onMenuClick?: () => void }) {
+}: { workout: any; language: string; onClick: () => void; onMenuClick?: (e: React.MouseEvent<HTMLButtonElement>) => void }) {
   const t = (es: string, en: string) => language === 'es' ? es : en;
   const details = workout.endurance_workout_data || {};
   const raw = workout.raw_data || {};
@@ -251,7 +251,7 @@ function MonthWorkoutCard({
         <button
           type="button"
           aria-label={t('Opciones del entrenamiento', 'Workout options')}
-          onClick={event => { event.stopPropagation(); onMenuClick(); }}
+          onClick={event => { event.stopPropagation(); onMenuClick(event); }}
           className="absolute right-1 top-1 rounded p-0.5 text-gray-500 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/10"
         >
           <MoreVertical className="h-3.5 w-3.5" />
@@ -433,17 +433,29 @@ export default function TrainingCalendar({
   const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
   const [draggedWorkout, setDraggedWorkout] = useState<string | null>(null);
   const [contextMenuWorkout, setContextMenuWorkout] = useState<string | null>(null);
+  const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [showAddMenuForDate, setShowAddMenuForDate] = useState<string | null>(null);
+  const closeContextMenu = () => { setContextMenuWorkout(null); setContextMenuPos(null); };
   const detailRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = () => {
-      if (contextMenuWorkout) setContextMenuWorkout(null);
+      if (contextMenuWorkout) closeContextMenu();
       if (showAddMenuForDate) setShowAddMenuForDate(null);
     };
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, [contextMenuWorkout, showAddMenuForDate]);
+
+  const openContextMenu = (workoutId: string, e: React.MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (contextMenuWorkout === workoutId) {
+      closeContextMenu();
+      return;
+    }
+    setContextMenuWorkout(workoutId);
+    setContextMenuPos({ x: rect.right, y: rect.bottom });
+  };
 
   const monthNames = language === 'es'
     ? ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
@@ -909,7 +921,7 @@ export default function TrainingCalendar({
                           language={language}
                           onClick={() => onWorkoutClick?.(workout)}
                           onMenuClick={workout.id && (onWorkoutEdit || onWorkoutDuplicate || onWorkoutDelete)
-                            ? () => setContextMenuWorkout(contextMenuWorkout === workout.id ? null : workout.id)
+                            ? (e: React.MouseEvent<HTMLButtonElement>) => openContextMenu(workout.id, e)
                             : undefined}
                         />
                         {workout.type === 'wearable_executed' && <p className="mt-1 px-1 text-[9px] text-violet-700 dark:text-violet-300">{language === 'es' ? `Sesión sin plan · ${workout.completion_source === 'watch' ? 'Reloj' : workout.completion_source === 'gps' ? 'GPS' : 'Manual'}` : `Unplanned session · ${workout.completion_source === 'watch' ? 'Watch' : workout.completion_source === 'gps' ? 'GPS' : 'Manual'}`}</p>}
@@ -977,22 +989,22 @@ export default function TrainingCalendar({
           <div className="fixed inset-0 z-[9999]" style={{ pointerEvents: 'none' }}>
             <div
               className="absolute bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 min-w-[140px]"
-              style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)', pointerEvents: 'auto' }}
+              style={{ top: (contextMenuPos?.y ?? 0) + 4, left: Math.max(8, Math.min((contextMenuPos?.x ?? 0), (typeof window !== 'undefined' ? window.innerWidth : 0) - 148)), pointerEvents: 'auto' }}
             >
               {onWorkoutEdit && (
-                <button onClick={(e) => { e.stopPropagation(); onWorkoutEdit(workout); setContextMenuWorkout(null); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors first:rounded-t-lg">
+                <button onClick={(e) => { e.stopPropagation(); onWorkoutEdit(workout); closeContextMenu(); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors first:rounded-t-lg">
                   <Edit className="w-4 h-4" />
                   {language === 'es' ? 'Editar' : 'Edit'}
                 </button>
               )}
               {onWorkoutDuplicate && (
-                <button onClick={(e) => { e.stopPropagation(); onWorkoutDuplicate(workout); setContextMenuWorkout(null); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                <button onClick={(e) => { e.stopPropagation(); onWorkoutDuplicate(workout); closeContextMenu(); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                   <Copy className="w-4 h-4" />
                   {language === 'es' ? 'Duplicar' : 'Duplicate'}
                 </button>
               )}
               {onWorkoutDelete && (
-                <button onClick={(e) => { e.stopPropagation(); onWorkoutDelete(workout.id); setContextMenuWorkout(null); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors last:rounded-b-lg">
+                <button onClick={(e) => { e.stopPropagation(); onWorkoutDelete(workout.id); closeContextMenu(); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors last:rounded-b-lg">
                   <Trash2 className="w-4 h-4" />
                   {language === 'es' ? 'Eliminar' : 'Delete'}
                 </button>
