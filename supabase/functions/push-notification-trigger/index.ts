@@ -372,7 +372,28 @@ Deno.serve(async (req: Request) => {
         break;
       }
 
-      case "digest_articles": {
+      case "scheduled_questionnaires": {
+      const qType: string = record.questionnaire_type || "";
+      const typeLabels: Record<string, { es: string; en: string }> = {
+        wellness: { es: "Cuestionario de Bienestar", en: "Wellness Check-in" },
+        food_diary_24h: { es: "Registro 24h de comidas", en: "24h Food Record" },
+        anamnesis: { es: "Anamnesis", en: "Anamnesis" },
+      };
+      const label = typeLabels[qType] || { es: "Cuestionario", en: "Questionnaire" };
+      const dateStr: string = record.scheduled_date || "";
+      return {
+        es: {
+          title: "Nuevo cuestionario programado",
+          body: `${label.es}: completar el ${dateStr}`,
+        },
+        en: {
+          title: "New scheduled questionnaire",
+          body: `${label.en}: complete it on ${dateStr}`,
+        },
+      };
+    }
+
+    case "digest_articles": {
         if (!record.is_published) break;
         const { data: athletes } = await supabase
           .from("profiles")
@@ -384,6 +405,15 @@ Deno.serve(async (req: Request) => {
         }
         category = "performance_pills";
         data = { page: "digest" };
+        break;
+      }
+
+      case "scheduled_questionnaires": {
+        const athleteId = record.athlete_id;
+        if (!athleteId) break;
+        targetUserIds = [athleteId];
+        category = "new_training_plan";
+        data = { page: "training" };
         break;
       }
 

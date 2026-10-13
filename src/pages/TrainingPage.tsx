@@ -9,6 +9,7 @@ import DailyWorkoutView from '../components/DailyWorkoutView';
 import DuplicateWorkoutModal from '../components/DuplicateWorkoutModal';
 import AddExtraTrainingModal from '../components/AddExtraTrainingModal';
 import CalendarEventModal, { type CalendarEventItem } from '../components/CalendarEventModal';
+import RequestQuestionnaireModal from '../components/RequestQuestionnaireModal';
 import { Sofa, StickyNote } from 'lucide-react';
 import StrengthEstimator from '../components/training/StrengthEstimator';
 import AIWorkoutGenerator from '../components/training/AIWorkoutGenerator';
@@ -30,7 +31,7 @@ import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 import { useMembership } from '../hooks/useMembership';
 import WorkoutTagsSection from '../components/tags/WorkoutTagsSection';
-import { Dumbbell, Calendar, Plus, Play, ChevronLeft, ChevronRight, TrendingUp, Clock, Weight, History, Copy, Activity, Clipboard, MoreVertical, GripVertical, Trash2, X, CreditCard as Edit, Calculator, RotateCw, Sparkles, Heart, Zap, BarChart2, Users, ChevronDown, BookOpen, CheckCircle2, Flag, Flame, Lock } from 'lucide-react';
+import { Dumbbell, Calendar, Plus, Play, ChevronLeft, ChevronRight, TrendingUp, Clock, Weight, History, Copy, Activity, Clipboard, ClipboardList, MoreVertical, GripVertical, Trash2, X, CreditCard as Edit, Calculator, RotateCw, Sparkles, Heart, Zap, BarChart2, Users, ChevronDown, BookOpen, CheckCircle2, Flag, Flame, Lock } from 'lucide-react';
 
 interface Exercise {
   id: string;
@@ -106,7 +107,8 @@ export default function TrainingPage() {
   const { t, language } = useLanguage();
   const { toast, showToast, hideToast, success, error } = useToast();
   const { selectedAthleteId, selectedAthleteName, clearSelectedAthlete } = useAthlete();
-  const effectiveAthleteId = profile?.role === 'trainer' && selectedAthleteId ? selectedAthleteId : profile?.id;
+  const effectiveAthleteId = (profile?.role === 'trainer' || profile?.role === 'admin' || profile?.role === 'head_coach' || profile?.role === 'nutritionist') && selectedAthleteId ? selectedAthleteId : profile?.id;
+  const isProfessional = profile?.role === 'trainer' || profile?.role === 'admin' || profile?.role === 'head_coach' || profile?.role === 'nutritionist';
   const { canAccessAIWorkouts, canAccessAssessments } = useMembership();
   const trainingAccess = useProfessionalServiceAccess('training');
   const [showTrainingAccessModal, setShowTrainingAccessModal] = useState(false);
@@ -164,6 +166,7 @@ export default function TrainingPage() {
   const [showChangeWearableMatch, setShowChangeWearableMatch] = useState(false);
   const [wearableCalendarActive, setWearableCalendarActive] = useState(false);
   const [selectedSessionAnalysis, setSelectedSessionAnalysis] = useState<any | null>(null);
+  const [showRequestQuestionnaire, setShowRequestQuestionnaire] = useState(false);
 
   const updateWearableMatch = async (sessionId: string, status: 'manual_matched' | 'dismissed' | 'unplanned', plannedWorkoutId?: string) => {
     const { error: invokeError } = await supabase.functions.invoke('open-wearables', { body: { action: 'analysis-update-match', executed_session_id: sessionId, status, planned_workout_id: plannedWorkoutId } });
@@ -877,6 +880,36 @@ export default function TrainingPage() {
         creator_role: ev.creator?.role || null,
       }));
 
+      // Load scheduled questionnaires (requested by a professional for this athlete)
+      const { data: scheduledQData } = await supabase
+        .from('scheduled_questionnaires')
+        .select(`id, athlete_id, professional_id, questionnaire_type, scheduled_date, status, note,
+          professional:professional_id (full_name)`)
+        .eq('athlete_id', effectiveAthleteId)
+        .gte('scheduled_date', startDateStr)
+        .lte('scheduled_date', endDateStr)
+        .order('scheduled_date', { ascending: true });
+
+      const questionnaireLabel = (qType: string) => ({
+        wellness: language === 'es' ? 'Cuestionario de Bienestar' : 'Wellness Check-in',
+        food_diary_24h: language === 'es' ? 'Registro 24h de comidas' : '24h Food Record',
+        anamnesis: language === 'es' ? 'Anamnesis' : 'Anamnesis',
+      }[qType] || qType);
+
+      const formattedScheduledQuestionnaires: any[] = (scheduledQData || []).map((sq: any) => ({
+        id: `sched-q-${sq.id}`,
+        scheduled_questionnaire_id: sq.id,
+        athlete_id: sq.athlete_id,
+        questionnaire_type: sq.questionnaire_type,
+        name: questionnaireLabel(sq.questionnaire_type),
+        description: [sq.professional?.full_name, sq.note].filter(Boolean).join(' · '),
+        scheduled_date: sq.scheduled_date,
+        status: sq.status === 'completed' ? 'completed' : 'planned',
+        source: 'scheduled_questionnaire',
+        type: 'scheduled_questionnaire',
+        exercises: [],
+      }));
+
       // Endurance completion sources are resolved server-side for consented athletes.
       // The result is kept separate from gym completion and training-log state.
       let wearableExecuted: any[] = [];
@@ -919,6 +952,7 @@ export default function TrainingPage() {
         ...formattedEndurancePlans,
         ...formattedRacePlans,
         ...formattedCalendarEvents,
+        ...formattedScheduledQuestionnaires,
         ...wearableExecuted,
       ].sort((a, b) => {
         return parseDateStr(a.scheduled_date).getTime() - parseDateStr(b.scheduled_date).getTime();
@@ -1411,6 +1445,27 @@ export default function TrainingPage() {
   };
 
   const openWorkoutModal = async (workout: Workout) => {
+    // Scheduled questionnaire — open the corresponding existing form for the athlete
+    if ((workout as any).type === 'scheduled_questionnaire') {
+      const sq = workout as any;
+      if (sq.athlete_id === profile?.id && sq.status !== 'completed' && sq.scheduled_questionnaire_id) {
+        supabase
+          .from('scheduled_questionnaires')
+          .update({ status: 'completed', completed_at: new Date().toISOString() })
+          .eq('id', sq.scheduled_questionnaire_id)
+          .then(() => loadWorkouts());
+      }
+      if (sq.questionnaire_type === 'wellness') {
+        setShowWellnessCheckin(true);
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('navigate', { detail: 'nutrition-dashboard' }));
+      window.dispatchEvent(new CustomEvent('open-nutrition-tab', {
+        detail: sq.questionnaire_type === 'anamnesis' ? 'anamnesis' : 'diary',
+      }));
+      return;
+    }
+
     // Race plan items — load full plan and open GPS recorder with fuel alerts
     if ((workout as any).type === 'race_plan') {
       const planId = (workout as any).race_plan_id;
@@ -2046,7 +2101,28 @@ export default function TrainingPage() {
       {/* QUICK ACTIONS — Wellness · Assessment · Plan con IA · Coaching */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
 
-        {/* 1. Wellness */}
+        {/* 1. Wellness (athlete) / Solicitar Cuestionario (professional) */}
+        {isProfessional ? (
+          <button
+            onClick={() => setShowRequestQuestionnaire(true)}
+            className="group relative overflow-hidden rounded-xl shadow-lg border-2 border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 hover:border-blue-400 dark:hover:border-blue-500 transition-all p-6 text-left"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-transparent dark:from-blue-400/10 rounded-bl-full" />
+            <div className="relative">
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform bg-gradient-to-br from-blue-500 to-indigo-600">
+                <ClipboardList className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
+                {language === 'es' ? 'Solicitar Cuestionario' : 'Request Questionnaire'}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {language === 'es'
+                  ? `Programar para ${selectedAthleteName || 'tu atleta'}`
+                  : `Schedule for ${selectedAthleteName || 'your athlete'}`}
+              </p>
+            </div>
+          </button>
+        ) : (
         <button
           onClick={() => setShowWellnessCheckin(true)}
           className={`group relative overflow-hidden rounded-xl shadow-lg border-2 transition-all p-6 text-left ${
@@ -2090,6 +2166,7 @@ export default function TrainingPage() {
             </p>
           </div>
         </button>
+        )}
 
         {/* 2. Assessment */}
         <div className="relative flex flex-col">
@@ -3253,6 +3330,19 @@ export default function TrainingPage() {
             setWellnessChecked(true);
             loadWellnessEntries();
             success(language === 'es' ? `Bienestar registrado (${score.toFixed(0)}/100)` : `Wellness saved (${score.toFixed(0)}/100)`);
+          }}
+        />
+      )}
+
+      {showRequestQuestionnaire && (
+        <RequestQuestionnaireModal
+          isOpen={showRequestQuestionnaire}
+          onClose={() => setShowRequestQuestionnaire(false)}
+          athleteId={effectiveAthleteId || profile?.id || ''}
+          athleteName={selectedAthleteName || profile?.full_name || ''}
+          onScheduled={() => {
+            loadWorkouts();
+            success(language === 'es' ? 'Cuestionario programado para el atleta' : 'Questionnaire scheduled for the athlete');
           }}
         />
       )}

@@ -42,3 +42,6 @@ verify_jwt = false
 
 [functions.open-wearables]
 verify_jwt = true
+
+[functions.push-notification-trigger]
+verify_jwt = false

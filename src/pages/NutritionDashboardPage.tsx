@@ -197,6 +197,15 @@ export default function NutritionDashboardPage() {
     }
   }, [profile, activeTab]);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const tab = (e as CustomEvent).detail;
+      if (tab === 'diary' || tab === 'anamnesis') setActiveTab(tab);
+    };
+    window.addEventListener('open-nutrition-tab', handler);
+    return () => window.removeEventListener('open-nutrition-tab', handler);
+  }, []);
+
   const loadSatelliteData = async () => {
     if (!profile) return;
     setSatelliteLoading(true);
