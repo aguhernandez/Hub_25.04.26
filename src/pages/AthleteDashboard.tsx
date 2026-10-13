@@ -283,11 +283,12 @@ export default function AthleteDashboard({ onNavigate }: AthleteDashboardProps) 
           .eq('training_date', today),
         supabase
           .from('external_activities')
-          .select('*')
+          .select('id, name, sport_type, source, start_time, local_date, duration_seconds, distance_meters, user_notes')
           .eq('user_id', profile.id)
           .is('deleted_at', null)
           .gte('start_time', `${today}T00:00:00`)
-          .lte('start_time', `${today}T23:59:59`),
+          .lte('start_time', `${today}T23:59:59`)
+          .limit(100),
         supabase
           .from('extra_training_logs')
           .select('id', { count: 'exact', head: true })
@@ -860,11 +861,12 @@ export default function AthleteDashboard({ onNavigate }: AthleteDashboardProps) 
           .lte('training_date', endStr),
         supabase
           .from('external_activities')
-          .select('*')
+          .select('id, name, sport_type, source, start_time, local_date, duration_seconds, distance_meters, user_notes')
           .eq('user_id', profile.id)
           .is('deleted_at', null)
           .gte('start_time', `${startStr}T00:00:00`)
-          .lte('start_time', `${endStr}T23:59:59`),
+          .lte('start_time', `${endStr}T23:59:59`)
+          .limit(300),
         supabase
           .from('external_endurance_workouts')
           .select('id, name, sport, scheduled_date, estimated_duration_minutes, status')

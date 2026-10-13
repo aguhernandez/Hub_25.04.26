@@ -192,20 +192,20 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       .eq('athlete_id', effectiveAthleteId)
       .eq('training_date', dateStr);
 
-    // Load external activities (Strava, etc)
-    const { data: allExternalActivities, error: externalError } = await supabase
+    // External activities: only the shown day, needed columns, bounded
+    // (+/- 1 day buffer for timezone differences on start_time)
+    const fmtDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const dayStart = new Date(selectedDate); dayStart.setDate(dayStart.getDate() - 1);
+    const dayEnd = new Date(selectedDate); dayEnd.setDate(dayEnd.getDate() + 1);
+    const { data: externalActivities, error: externalError } = await supabase
       .from('external_activities')
-      .select('*')
+      .select('id, name, sport_type, source, start_time, local_date, duration_seconds, distance_meters, user_notes')
       .eq('user_id', effectiveAthleteId)
-      .order('start_time', { ascending: false });
-
-    // Filter external activities by date - prefer local_date field, fallback to string substring
-    const externalActivities = allExternalActivities?.filter((activity: any) => {
-      const activityDate = activity.local_date
-        ? String(activity.local_date).substring(0, 10)
-        : String(activity.start_time).substring(0, 10);
-      return activityDate === dateStr;
-    }) || [];
+      .gte('start_time', `${fmtDay(dayStart)}T00:00:00`)
+      .lte('start_time', `${fmtDay(dayEnd)}T23:59:59`)
+      .order('start_time', { ascending: false })
+      .limit(50);
+    if (externalError) console.error('Error loading external activities:', externalError);
 
     // Load completed workouts from training_logs
     const { data: completedLogsData, error: logsError } = await supabase
@@ -274,9 +274,14 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       });
     }
 
-    // Process external activities
+    // Process external activities (already date-filtered by the query, keep only the shown day)
     if (externalActivities && externalActivities.length > 0) {
-      externalActivities.forEach(ext => {
+      externalActivities.filter(ext => {
+        const activityDate = ext.local_date
+          ? String(ext.local_date).substring(0, 10)
+          : String(ext.start_time).substring(0, 10);
+        return activityDate === dateStr;
+      }).forEach(ext => {
         allActivities.push({
           id: `external-${ext.id}`,
           type: 'external',

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAthlete } from '../contexts/AthleteContext';
@@ -298,6 +298,25 @@ export default function TrainingPage() {
     setWorkouts(prev => prev.filter(w => (w as any).plan_week_id !== planWeekId));
   };
 
+  // Realtime debounce: coalesce change events into at most one reload per 30s
+  const loadWorkoutsRef = useRef<((options?: { realtime?: boolean }) => Promise<void>) | null>(null);
+  const realtimeRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastRealtimeRefreshRef = useRef(0);
+
+  useEffect(() => {
+    loadWorkoutsRef.current = loadWorkouts;
+  });
+
+  const scheduleRealtimeRefresh = () => {
+    if (realtimeRefreshTimerRef.current) return;
+    const wait = Math.max(0, 30000 - (Date.now() - lastRealtimeRefreshRef.current));
+    realtimeRefreshTimerRef.current = setTimeout(() => {
+      realtimeRefreshTimerRef.current = null;
+      lastRealtimeRefreshRef.current = Date.now();
+      loadWorkoutsRef.current?.({ realtime: true });
+    }, wait);
+  };
+
   // Realtime subscription: re-fetch workouts when external_endurance_workouts changes
   useEffect(() => {
     if (!effectiveAthleteId) return;
@@ -315,7 +334,7 @@ export default function TrainingPage() {
           filter: `athlete_id=eq.${effectiveAthleteId}`,
         },
         () => {
-          loadWorkouts();
+          scheduleRealtimeRefresh();
         }
       )
       .on(
@@ -338,7 +357,7 @@ export default function TrainingPage() {
               }, 1500);
             }
           } else {
-            loadWorkouts();
+            scheduleRealtimeRefresh();
           }
         }
       )
@@ -371,6 +390,7 @@ export default function TrainingPage() {
       .subscribe();
 
     return () => {
+      if (realtimeRefreshTimerRef.current) clearTimeout(realtimeRefreshTimerRef.current);
       supabase.removeChannel(channel);
     };
   }, [effectiveAthleteId]);
@@ -549,7 +569,7 @@ export default function TrainingPage() {
     }).filter(Boolean);
   };
 
-  const loadWorkouts = async () => {
+  const loadWorkouts = async (options?: { realtime?: boolean }) => {
     if (!profile?.id) {
       setLoading(false);
       return;
@@ -563,14 +583,23 @@ export default function TrainingPage() {
       let endDateStr: string;
 
       if (calendarView === 'month' || calendarView === 'pending') {
-        // Load from 2 years ago to 6 months in the future
-        const twoYearsAgo = new Date();
-        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-        const sixMonthsAhead = new Date();
-        sixMonthsAhead.setMonth(sixMonthsAhead.getMonth() + 6);
+        if (options?.realtime) {
+          // Realtime refresh: only the visible month grid (+/- one week buffer)
+          const gridStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1 - 7);
+          const gridEnd = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0);
+          gridEnd.setDate(gridEnd.getDate() + 7);
+          startDateStr = formatDateLocal(gridStart);
+          endDateStr = formatDateLocal(gridEnd);
+        } else {
+          // Manual navigation: full 2-year window to 6 months ahead
+          const twoYearsAgo = new Date();
+          twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+          const sixMonthsAhead = new Date();
+          sixMonthsAhead.setMonth(sixMonthsAhead.getMonth() + 6);
 
-        startDateStr = formatDateLocal(twoYearsAgo);
-        endDateStr = formatDateLocal(sixMonthsAhead);
+          startDateStr = formatDateLocal(twoYearsAgo);
+          endDateStr = formatDateLocal(sixMonthsAhead);
+        }
       } else {
         const startDate = getDateRangeStart();
         const endDate = getDateRangeEnd();
@@ -617,22 +646,20 @@ export default function TrainingPage() {
 
       if (extraError) throw extraError;
 
-      // Load external activities - load all, filter locally to avoid timezone issues
-      const { data: allExternalData, error: externalError } = await supabase
+      // External activities: only the visible range, needed columns, bounded
+      // (+/- 7 days buffer for timezone differences on start_time)
+      const extStart = parseDateStr(startDateStr); extStart.setDate(extStart.getDate() - 7);
+      const extEnd = parseDateStr(endDateStr); extEnd.setDate(extEnd.getDate() + 7);
+      const { data: externalData, error: externalError } = await supabase
         .from('external_activities')
-        .select('*')
+        .select('id, name, sport_type, source, start_time, local_date, duration_seconds, distance_meters, user_notes')
         .eq('user_id', effectiveAthleteId)
-        .order('start_time', { ascending: false });
+        .gte('start_time', `${formatDateLocal(extStart)}T00:00:00`)
+        .lte('start_time', `${formatDateLocal(extEnd)}T23:59:59`)
+        .order('start_time', { ascending: false })
+        .limit(500);
 
       if (externalError) throw externalError;
-
-      // Filter external activities by date range using local_date (plain date, no timezone)
-      const externalData = allExternalData?.filter((activity: any) => {
-        const activityDate = activity.local_date
-          ? String(activity.local_date).substring(0, 10)
-          : String(activity.start_time).substring(0, 10);
-        return activityDate >= startDateStr && activityDate <= endDateStr;
-      }) || [];
 
       // Load completed workouts from training_logs (gym sessions)
       const { data: completedLogsData, error: logsError } = await supabase
@@ -752,8 +779,13 @@ export default function TrainingPage() {
         type: 'extra'
       })) || [];
 
-      // Format external activities with correct local date
-      const formattedExternal = externalData?.map((ex: any) => ({
+      // Format external activities with correct local date, keeping only days inside the requested range
+      const formattedExternal = externalData?.filter((ex: any) => {
+        const activityDate = ex.local_date
+          ? String(ex.local_date).substring(0, 10)
+          : String(ex.start_time).substring(0, 10);
+        return activityDate >= startDateStr && activityDate <= endDateStr;
+      }).map((ex: any) => ({
         id: `external-${ex.id}`,
         external_activity_id: ex.id,
         name: ex.name || ex.sport_type || 'External Activity',

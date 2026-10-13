@@ -367,6 +367,8 @@ export class StravaClient {
     limit?: number;
     offset?: number;
     includeDeleted?: boolean;
+    from?: string;
+    to?: string;
   }): Promise<ExternalActivity[]> {
     let query = supabase
       .from('external_activities')
@@ -374,8 +376,10 @@ export class StravaClient {
       .order('start_time', { ascending: false });
 
     if (options?.source) query = query.eq('source', options.source);
+    if (options?.from) query = query.gte('start_time', `${options.from}T00:00:00`);
+    if (options?.to) query = query.lte('start_time', `${options.to}T23:59:59`);
     if (!options?.includeDeleted) query = query.is('deleted_at', null);
-    if (options?.limit) query = query.limit(options.limit);
+    query = query.limit(options?.limit ?? 200);
     if (options?.offset) {
       query = query.range(options.offset, options.offset + (options.limit || 50) - 1);
     }

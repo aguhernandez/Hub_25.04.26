@@ -15,22 +15,51 @@ interface ICSEvent {
   dtend: string;
 }
 
+const WINDOW_DAYS_BACK = 14;
+const WINDOW_DAYS_FORWARD = 90;
+const UPSERT_CHUNK_SIZE = 200;
+
+function dayOffsetStr(offsetDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().split("T")[0];
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Only the scheduler holding the shared secret may trigger the auto-sync
+    const cronSecret = Deno.env.get("CRON_SECRET");
+    const authHeader = req.headers.get("Authorization") || "";
+    const cronHeader = req.headers.get("x-cron-secret") || "";
+    if (!cronSecret || (authHeader !== `Bearer ${cronSecret}` && cronHeader !== cronSecret)) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: missing or invalid cron secret" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    console.log("Starting auto-sync for all TrainingPeaks connections...");
+    // Full 2-year load only when explicitly requested with body { "full": true }
+    let fullLoad = false;
+    try {
+      const body = await req.json();
+      fullLoad = body?.full === true;
+    } catch {
+      fullLoad = false;
+    }
 
-    // Get all active connections
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const runStartedAt = Date.now();
+
+    const windowStart = fullLoad ? "0000-01-01" : dayOffsetStr(-WINDOW_DAYS_BACK);
+    const windowEnd = fullLoad ? "9999-12-31" : dayOffsetStr(WINDOW_DAYS_FORWARD);
+
     const { data: connections, error: connError } = await supabase
       .from("tp_connections")
-      .select("*")
+      .select("id, athlete_id, ics_url")
       .eq("sync_enabled", true)
       .neq("status", "disconnected");
 
@@ -41,50 +70,52 @@ Deno.serve(async (req: Request) => {
     if (!connections || connections.length === 0) {
       console.log("No active connections to sync");
       return new Response(
-        JSON.stringify({ message: "No active connections", synced: 0 }),
+        JSON.stringify({ message: "No active connections", events_read: 0, inserted: 0, updated: 0 }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`Found ${connections.length} connections to sync`);
+    console.log(`Found ${connections.length} connections (window ${windowStart} → ${windowEnd}, full=${fullLoad})`);
 
-    let totalSynced = 0;
-    let totalErrors = 0;
+    let totalEventsRead = 0;
+    let totalInserted = 0;
+    let totalUpdated = 0;
+    let totalSkippedUnchanged = 0;
+    let totalOutOfWindow = 0;
+    let totalLinked = 0;
+    let totalWriteErrors = 0;
+    let totalConnectionErrors = 0;
 
-    // Sync each connection
     for (const connection of connections) {
+      const athleteStartedAt = Date.now();
       try {
-        console.log(`Syncing athlete ${connection.athlete_id}...`);
-
-        // Fetch ICS feed
         const icsResponse = await fetch(connection.ics_url);
-        
+
         if (!icsResponse.ok) {
           const errorMsg = `Failed to fetch ICS: ${icsResponse.status}`;
           console.error(`Error for athlete ${connection.athlete_id}: ${errorMsg}`);
-          
+
           await supabase
             .from("tp_connections")
             .update({ status: "error", last_error: errorMsg })
             .eq("id", connection.id);
-          
-          totalErrors++;
+
+          totalConnectionErrors++;
           continue;
         }
 
-        const icsText = await icsResponse.text();
-        const events = parseICS(icsText);
-        console.log(`Parsed ${events.length} events for athlete ${connection.athlete_id}`);
+        const events = parseICS(await icsResponse.text());
+        totalEventsRead += events.length;
 
-        // Sync events
-        const now = new Date().toISOString();
-        let syncedCount = 0;
-        let skippedCount = 0;
+        const inWindow = events.filter((event) => {
+          const date = event.dtstart.split("T")[0];
+          return date >= windowStart && date <= windowEnd;
+        });
+        totalOutOfWindow += events.length - inWindow.length;
 
-        // Load existing TrainingPeaks workouts once per athlete
         const { data: existingTp } = await supabase
           .from("athlete_workouts")
-          .select("id, external_id, external_title, scheduled_date")
+          .select("id, external_id, external_title, scheduled_date, status, raw_description")
           .eq("athlete_id", connection.athlete_id)
           .eq("source", "trainingpeaks");
 
@@ -95,83 +126,110 @@ Deno.serve(async (req: Request) => {
           byDateTitle.set(`${w.scheduled_date}::${(w.external_title || "").trim()}`, w);
         });
 
-        for (const event of events) {
-          try {
-            const scheduledDate = event.dtstart.split("T")[0];
-            const title = (event.summary || "").trim();
+        const syncedAt = new Date().toISOString();
+        let inserted = 0;
+        let updated = 0;
+        let skippedUnchanged = 0;
+        let linked = 0;
+        let writeErrors = 0;
+        const pendingUpserts: Record<string, unknown>[] = [];
 
-            const existing = byExternalId.get(event.uid)
-              || byDateTitle.get(`${scheduledDate}::${title}`);
+        for (const event of inWindow) {
+          const scheduledDate = event.dtstart.split("T")[0];
+          const title = (event.summary || "").trim();
+          const existingByUid = byExternalId.get(event.uid);
 
-            const workoutData = {
+          if (existingByUid) {
+            const unchanged =
+              (existingByUid.external_title || "").trim() === title &&
+              (existingByUid.raw_description || "") === event.description &&
+              String(existingByUid.scheduled_date).split("T")[0] === scheduledDate;
+            if (unchanged) {
+              skippedUnchanged++;
+              continue;
+            }
+            // Preserve the existing status (e.g. 'completed'); upsert matches on (athlete_id, external_id)
+            pendingUpserts.push({
               athlete_id: connection.athlete_id,
               external_id: event.uid,
               external_title: title,
               raw_description: event.description,
               scheduled_date: scheduledDate,
               source: "trainingpeaks",
-              synced_at: now,
-              status: "pending",
-              notes: `Synced from TrainingPeaks\n\n${event.description}`
-            };
-
-            if (existing) {
-              await supabase
-                .from("athlete_workouts")
-                .update({
-                  external_id: event.uid,
-                  external_title: title,
-                  raw_description: event.description,
-                  synced_at: now,
-                  notes: `Synced from TrainingPeaks\n\n${event.description}`
-                })
-                .eq("id", existing.id);
-              byExternalId.set(event.uid, existing);
-              byDateTitle.set(`${scheduledDate}::${title}`, existing);
-            } else {
-              const { data: inserted, error: insertError } = await supabase
-                .from("athlete_workouts")
-                .insert(workoutData)
-                .select("id")
-                .single();
-
-              if (insertError) {
-                if (String(insertError.message || "").includes("uniq_tp_workout_athlete_date_title")) {
-                  skippedCount++;
-                  continue;
-                }
-                console.error(`Insert error for event ${event.uid}:`, insertError);
-                continue;
-              }
-
-              if (inserted) {
-                byExternalId.set(event.uid, inserted);
-                byDateTitle.set(`${scheduledDate}::${title}`, inserted);
-              }
-            }
-
-            syncedCount++;
-          } catch (error) {
-            console.error(`Error syncing event ${event.uid}:`, error);
+              synced_at: syncedAt,
+              status: existingByUid.status || "pending",
+              notes: `Synced from TrainingPeaks\n\n${event.description}`,
+            });
+            continue;
           }
+
+          const legacyMatch = byDateTitle.get(`${scheduledDate}::${title}`);
+          if (legacyMatch) {
+            // Row created before UIDs were tracked: stamp the UID once
+            const { error: linkError } = await supabase
+              .from("athlete_workouts")
+              .update({ external_id: event.uid, synced_at: syncedAt })
+              .eq("id", legacyMatch.id);
+            if (linkError) {
+              console.error(`UID link error for event ${event.uid}:`, linkError);
+              writeErrors++;
+              continue;
+            }
+            byExternalId.set(event.uid, legacyMatch);
+            linked++;
+            continue;
+          }
+
+          pendingUpserts.push({
+            athlete_id: connection.athlete_id,
+            external_id: event.uid,
+            external_title: title,
+            raw_description: event.description,
+            scheduled_date: scheduledDate,
+            source: "trainingpeaks",
+            synced_at: syncedAt,
+            status: "pending",
+            notes: `Synced from TrainingPeaks\n\n${event.description}`,
+          });
         }
 
-        // Update connection status
+        for (let i = 0; i < pendingUpserts.length; i += UPSERT_CHUNK_SIZE) {
+          const chunk = pendingUpserts.slice(i, i + UPSERT_CHUNK_SIZE);
+          const { error: upsertError } = await supabase
+            .from("athlete_workouts")
+            .upsert(chunk, { onConflict: "athlete_id,external_id" });
+          if (upsertError) {
+            console.error(`Batch upsert error for athlete ${connection.athlete_id}:`, upsertError);
+            writeErrors += chunk.length;
+            continue;
+          }
+          inserted += chunk.length;
+        }
+
         await supabase
           .from("tp_connections")
           .update({
             status: "connected",
-            last_sync_at: now,
+            last_sync_at: syncedAt,
             last_error: null
           })
           .eq("id", connection.id);
 
-        totalSynced += syncedCount;
-        console.log(`Synced ${syncedCount} workouts for athlete ${connection.athlete_id}`);
+        totalInserted += inserted;
+        totalUpdated += updated;
+        totalSkippedUnchanged += skippedUnchanged;
+        totalLinked += linked;
+        totalWriteErrors += writeErrors;
+
+        console.log(
+          `Athlete ${connection.athlete_id}: read=${inWindow.length} upserted=${inserted} ` +
+          `skipped_unchanged=${skippedUnchanged} linked=${linked} out_of_window=${events.length - inWindow.length} ` +
+          `errors=${writeErrors} duration_ms=${Date.now() - athleteStartedAt}`
+        );
 
       } catch (error: any) {
         console.error(`Error syncing athlete ${connection.athlete_id}:`, error);
-        
+
         await supabase
           .from("tp_connections")
           .update({
@@ -179,19 +237,32 @@ Deno.serve(async (req: Request) => {
             last_error: error.message
           })
           .eq("id", connection.id);
-        
-        totalErrors++;
+
+        totalConnectionErrors++;
       }
     }
 
-    console.log(`Auto-sync completed: ${totalSynced} workouts synced, ${totalErrors} errors`);
+    const durationMs = Date.now() - runStartedAt;
+    console.log(
+      `Auto-sync completed in ${durationMs}ms: read=${totalEventsRead} upserted=${totalInserted} ` +
+      `skipped_unchanged=${totalSkippedUnchanged} out_of_window=${totalOutOfWindow} ` +
+      `linked=${totalLinked} write_errors=${totalWriteErrors} connection_errors=${totalConnectionErrors}`
+    );
 
     return new Response(
       JSON.stringify({
         success: true,
+        full: fullLoad,
+        window_start: windowStart,
+        window_end: windowEnd,
         connections: connections.length,
-        synced: totalSynced,
-        errors: totalErrors
+        events_read: totalEventsRead,
+        upserted: totalInserted,
+        skipped_unchanged: totalSkippedUnchanged,
+        out_of_window: totalOutOfWindow,
+        linked: totalLinked,
+        errors: totalWriteErrors + totalConnectionErrors,
+        duration_ms: durationMs
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -208,14 +279,14 @@ Deno.serve(async (req: Request) => {
 function parseICS(icsText: string): ICSEvent[] {
   const events: ICSEvent[] = [];
   const lines = icsText.split(/\r?\n/);
-  
+
   let currentEvent: Partial<ICSEvent> | null = null;
   let currentField = "";
   let currentValue = "";
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
-    
+
     if (line.startsWith(" ") || line.startsWith("\t")) {
       currentValue += line.substring(1);
       continue;
@@ -244,7 +315,7 @@ function parseICS(icsText: string): ICSEvent[] {
 
 function processField(event: Partial<ICSEvent>, field: string, value: string) {
   const baseField = field.split(";")[0];
-  
+
   switch (baseField) {
     case "UID":
       event.uid = value;
