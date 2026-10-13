@@ -87,7 +87,7 @@ export default function FoodDiaryReviewPanel() {
             avatar_url
           )
         `)
-        .eq('status', 'completed')
+        .eq('status', 'finalized')
         .order('completed_at', { ascending: false });
 
       // Filter by review status

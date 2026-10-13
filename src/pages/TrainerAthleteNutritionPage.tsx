@@ -767,7 +767,7 @@ export default function TrainerAthleteNutritionPage() {
             {lastDiary ? (
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  {lastDiary.status === 'completed'
+                  {lastDiary.status === 'finalized'
                     ? <CheckCircle className="w-4 h-4 text-emerald-500" />
                     : <Clock className="w-4 h-4 text-amber-500" />}
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">{lastDiary.status}</span>
@@ -794,7 +794,7 @@ export default function TrainerAthleteNutritionPage() {
   const renderDiaryTab = () => (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t('24-48h Food Diary', 'Diario Alimentario 24-48h')}</h2>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t('24h Food Diary', 'Diario Alimentario 24h')}</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{t('Diary sessions logged by the athlete', 'Sesiones de diario registradas por el atleta')}</p>
       </div>
 
@@ -823,9 +823,9 @@ export default function TrainerAthleteNutritionPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    session.status === 'completed' ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-amber-100 dark:bg-amber-900/30'
+                    session.status === 'finalized' ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-amber-100 dark:bg-amber-900/30'
                   }`}>
-                    {session.status === 'completed'
+                    {session.status === 'finalized'
                       ? <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                       : <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
                   </div>
@@ -837,8 +837,8 @@ export default function TrainerAthleteNutritionPage() {
                       )}
                     </p>
                     <div className="flex items-center gap-3 mt-1">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{session.period_hours}h {t('period', 'período')}</span>
-                      {session.status === 'completed' && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">24h</span>
+                      {session.status === 'finalized' && (
                         <>
                           <span className="text-gray-300 dark:text-gray-600">·</span>
                           <span className="text-xs font-medium text-orange-600 dark:text-orange-400">{session.total_calories} kcal</span>
@@ -880,7 +880,7 @@ export default function TrainerAthleteNutritionPage() {
                     )}
                   </h2>
                   <p className="text-green-100 text-sm mt-0.5">
-                    {selectedDiarySession.period_hours}h {t('period', 'período')} · {viewAthleteName}
+                    24h · {viewAthleteName}
                   </p>
                 </div>
                 <button onClick={() => setSelectedDiarySession(null)} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
@@ -889,7 +889,7 @@ export default function TrainerAthleteNutritionPage() {
               </div>
 
               <div className="p-5 space-y-5">
-                {selectedDiarySession.status === 'completed' && (
+                {selectedDiarySession.status === 'finalized' && (
                   <div className="grid grid-cols-4 gap-3">
                     {[
                       { label: 'kcal', value: selectedDiarySession.total_calories, bg: 'bg-orange-50 dark:bg-orange-900/20', text: 'text-orange-600 dark:text-orange-400' },
@@ -1142,7 +1142,7 @@ export default function TrainerAthleteNutritionPage() {
                   <BookOpen className="w-5 h-5 text-white dark:text-emerald-400" />
                 </div>
                 <h3 className="font-bold text-gray-900 dark:text-white text-sm mb-0.5">{t('Food Diary', 'Diario')}</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{t('24-48h sessions', 'Sesiones 24-48h')}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('24h logs', 'Registros 24h')}</p>
               </div>
             </button>
 

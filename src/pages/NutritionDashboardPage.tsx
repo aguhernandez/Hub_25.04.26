@@ -35,7 +35,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import NutritionAnamnesis from '../components/nutrition/NutritionAnamnesis';
-import FoodDiary24h from '../components/nutrition/FoodDiary24h';
+import FoodDiaryWeekView from '../components/nutrition/FoodDiaryWeekView';
 import ProNutritionView from '../components/nutrition/ProNutritionView';
 import InteractivePlate from '../components/nutrition/InteractivePlate';
 
@@ -167,16 +167,12 @@ export default function NutritionDashboardPage() {
   const { profile } = useAuth();
   const { language } = useLanguage();
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
-  const [showDiaryModal, setShowDiaryModal] = useState(false);
   const [satelliteData, setSatelliteData] = useState<SatelliteNutritionData | null>(null);
   const [satelliteLoading, setSatelliteLoading] = useState(false);
   const [satelliteError, setSatelliteError] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [diarySessions, setDiarySessions] = useState<DiarySession[]>([]);
   const [diaryLoading, setDiaryLoading] = useState(false);
-  const [selectedDiarySession, setSelectedDiarySession] = useState<DiarySession | null>(null);
-  const [selectedSessionEntries, setSelectedSessionEntries] = useState<DiaryEntry[]>([]);
-  const [entriesLoading, setEntriesLoading] = useState(false);
   const [anamnesisData, setAnamnesisData] = useState<any>(null);
   const [anamnesisLoading, setAnamnesisLoading] = useState(false);
   const [showAnamnesisForm, setShowAnamnesisForm] = useState(false);
@@ -240,26 +236,6 @@ export default function NutritionDashboardPage() {
     } finally {
       setDiaryLoading(false);
     }
-  };
-
-  const loadSessionEntries = async (sessionId: string) => {
-    setEntriesLoading(true);
-    try {
-      const { data } = await supabase
-        .from('food_diary_entries')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('entry_time', { ascending: true });
-      setSelectedSessionEntries(data || []);
-    } catch {
-    } finally {
-      setEntriesLoading(false);
-    }
-  };
-
-  const openSession = async (session: DiarySession) => {
-    setSelectedDiarySession(session);
-    await loadSessionEntries(session.id);
   };
 
   const loadAnamnesisData = async () => {
@@ -700,7 +676,7 @@ export default function NutritionDashboardPage() {
           {lastDiary ? (
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                {lastDiary.status === 'completed'
+                {lastDiary.status === 'finalized'
                   ? <CheckCircle className="w-4 h-4 text-emerald-500" />
                   : <Clock className="w-4 h-4 text-amber-500" />}
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
@@ -737,224 +713,15 @@ export default function NutritionDashboardPage() {
 
   const renderDiaryTab = () => (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-            {t('24-48h Food Diary', 'Diario Alimentario 24-48h')}
-          </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            {t('Your logged food diary sessions', 'Tus sesiones de diario alimentario registradas')}
-          </p>
-        </div>
-        <button
-          onClick={() => setShowDiaryModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          {t('New Diary', 'Nuevo Diario')}
-        </button>
+      <div>
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+          {t('24h Food Diary', 'Diario Alimentario 24h')}
+        </h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+          {t('Tap a day to view, add or edit your logs', 'Toca un día para ver, añadir o editar tus registros')}
+        </p>
       </div>
-
-      {diaryLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : diarySessions.length === 0 ? (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-12 text-center">
-          <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <BookOpen className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-            {t('No diaries yet', 'Sin diarios aún')}
-          </h3>
-          <p className="text-gray-500 dark:text-gray-400 text-sm max-w-sm mx-auto mb-6">
-            {t(
-              'Log everything you eat for 24 or 48 hours. Use AI photo analysis to automatically estimate foods and macros.',
-              'Registra todo lo que comes durante 24 o 48 horas. Usa el análisis de fotos con IA para estimar alimentos y macros automáticamente.'
-            )}
-          </p>
-          <button
-            onClick={() => setShowDiaryModal(true)}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold transition-colors"
-          >
-            <Apple className="w-5 h-5" />
-            {t('Start First Diary', 'Comenzar Primer Diario')}
-          </button>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {diarySessions.map(session => (
-            <button
-              key={session.id}
-              onClick={() => openSession(session)}
-              className="w-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-emerald-400 dark:hover:border-emerald-600 p-4 text-left transition-all group"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    session.status === 'completed'
-                      ? 'bg-emerald-100 dark:bg-emerald-900/30'
-                      : 'bg-amber-100 dark:bg-amber-900/30'
-                  }`}>
-                    {session.status === 'completed'
-                      ? <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                      : <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                    }
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-900 dark:text-white text-sm">
-                      {new Date(session.start_date + 'T12:00:00').toLocaleDateString(
-                        language === 'es' ? 'es-ES' : 'en-US',
-                        { weekday: 'long', day: 'numeric', month: 'long' }
-                      )}
-                      {session.day_of_week && (
-                        <span className="ml-2 text-gray-500 dark:text-gray-400 font-normal text-xs">
-                          {session.day_of_week}
-                        </span>
-                      )}
-                    </p>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {session.period_hours}h {t('period', 'período')}
-                      </span>
-                      {session.status === 'completed' && (
-                        <>
-                          <span className="text-gray-300 dark:text-gray-600">·</span>
-                          <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
-                            {session.total_calories} kcal
-                          </span>
-                          <span className="text-gray-300 dark:text-gray-600">·</span>
-                          <span className="text-xs text-blue-600 dark:text-blue-400">
-                            {session.total_protein_g}g P
-                          </span>
-                          <span className="text-xs text-amber-600 dark:text-amber-400">
-                            {session.total_carbs_g}g C
-                          </span>
-                          <span className="text-xs text-rose-600 dark:text-rose-400">
-                            {session.total_fat_g}g G
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {session.reviewed_at && (
-                    <span className="flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
-                      <CheckCircle className="w-3 h-3" />
-                      {t('Reviewed', 'Revisado')}
-                      {session.adherence_score && ` ${session.adherence_score}/100`}
-                    </span>
-                  )}
-                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-emerald-500 transition-colors" />
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {selectedDiarySession && (
-        <>
-          <div className="fixed inset-0 bg-black/50 z-50 backdrop-blur-sm" onClick={() => setSelectedDiarySession(null)} />
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="sticky top-0 bg-gradient-to-r from-emerald-500 to-green-600 text-white p-5 rounded-t-2xl flex items-center justify-between z-10">
-                <div>
-                  <h2 className="text-xl font-bold">
-                    {t('Food Diary', 'Diario Alimentario')} — {new Date(selectedDiarySession.start_date + 'T12:00:00').toLocaleDateString(
-                      language === 'es' ? 'es-ES' : 'en-US',
-                      { day: 'numeric', month: 'long', year: 'numeric' }
-                    )}
-                  </h2>
-                  <p className="text-green-100 text-sm mt-0.5">
-                    {selectedDiarySession.period_hours}h {t('period', 'período')} · {selectedDiarySession.day_of_week}
-                  </p>
-                </div>
-                <button onClick={() => setSelectedDiarySession(null)} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="p-5 space-y-5">
-                {selectedDiarySession.status === 'completed' && (
-                  <div className="grid grid-cols-4 gap-3">
-                    {[
-                      { label: 'kcal', value: selectedDiarySession.total_calories, bg: 'bg-orange-50 dark:bg-orange-900/20', text: 'text-orange-600 dark:text-orange-400' },
-                      { label: 'CHO', value: `${selectedDiarySession.total_carbs_g}g`, bg: 'bg-amber-50 dark:bg-amber-900/20', text: 'text-amber-600 dark:text-amber-400' },
-                      { label: 'PRO', value: `${selectedDiarySession.total_protein_g}g`, bg: 'bg-blue-50 dark:bg-blue-900/20', text: 'text-blue-600 dark:text-blue-400' },
-                      { label: 'FAT', value: `${selectedDiarySession.total_fat_g}g`, bg: 'bg-rose-50 dark:bg-rose-900/20', text: 'text-rose-600 dark:text-rose-400' },
-                    ].map(m => (
-                      <div key={m.label} className={`${m.bg} rounded-xl p-3 text-center`}>
-                        <p className={`text-xl font-bold ${m.text}`}>{m.value}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{m.label}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {selectedDiarySession.reviewed_at && (
-                  <div className="flex items-center gap-2 px-4 py-2.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl">
-                    <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
-                    <span className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">
-                      {t('Reviewed by coach', 'Revisado por el coach')}
-                      {selectedDiarySession.adherence_score && ` — ${t('Adherence', 'Adherencia')}: ${selectedDiarySession.adherence_score}/100`}
-                    </span>
-                  </div>
-                )}
-
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">
-                    {t('Logged Meals', 'Comidas Registradas')}
-                  </h3>
-                  {entriesLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  ) : selectedSessionEntries.length === 0 ? (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-6">
-                      {t('No entries in this session', 'Sin entradas en esta sesión')}
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {selectedSessionEntries.map(entry => (
-                        <div key={entry.id} className="bg-gray-50 dark:bg-gray-700/40 rounded-xl p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-                                {entry.entry_time}
-                              </span>
-                              <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded text-xs font-medium">
-                                {mealTypeLabel(entry.meal_type)}
-                              </span>
-                            </div>
-                            <span className="text-xs font-semibold text-orange-600 dark:text-orange-400">
-                              ≈ {entry.estimated_calories} kcal
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">
-                            {entry.food_description}
-                          </p>
-                          <div className="flex gap-3 mt-2 text-xs text-gray-500 dark:text-gray-400">
-                            <span>{entry.estimated_carbs_g}g CHO</span>
-                            <span>{entry.estimated_protein_g}g PRO</span>
-                            <span>{entry.estimated_fat_g}g FAT</span>
-                          </div>
-                          {entry.additional_notes && (
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 italic">
-                              {entry.additional_notes}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+      <FoodDiaryWeekView onChanged={() => { loadSatelliteData(); loadDiarySessions(); }} />
     </div>
   );
 
@@ -1145,7 +912,7 @@ export default function NutritionDashboardPage() {
 
       {/* Athlete quick actions — 4 buttons, no Dashboard, no New Diary */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* 1. 24-48h Diary */}
+          {/* 1. 24h Diary */}
           <button
             onClick={() => setActiveTab('diary')}
             className={`group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border transition-all p-6 text-left ${
@@ -1160,7 +927,7 @@ export default function NutritionDashboardPage() {
                 <BookOpen className="w-6 h-6 text-white dark:text-emerald-400" />
               </div>
               <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
-                {t('24-48h Diary', 'Diario 24-48h')}
+                {t('24h Diary', 'Diario 24h')}
               </h3>
               <p className="text-sm text-gray-600 dark:text-gray-400">
                 {t('Log food with AI', 'Registra con IA')}
@@ -1235,15 +1002,6 @@ export default function NutritionDashboardPage() {
         </div>
 
       {renderContent()}
-
-      <FoodDiary24h
-        isOpen={showDiaryModal}
-        onClose={() => {
-          setShowDiaryModal(false);
-          loadSatelliteData();
-          if (activeTab === 'diary') loadDiarySessions();
-        }}
-      />
     </div>
   );
 }

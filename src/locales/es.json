@@ -3,7 +3,7 @@
     "nutrition": {
       "anamnesis": "Anamnesis",
       "anamnesisDesc": "Evaluación nutricional",
-      "diary": "Diario 24-48h",
+      "diary": "Diario 24h",
       "diaryDesc": "Registro con IA",
       "createPlan": "Crear Plan",
       "createPlanDesc": "Plan nutricional",

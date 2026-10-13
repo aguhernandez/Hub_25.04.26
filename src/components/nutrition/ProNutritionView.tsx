@@ -218,7 +218,7 @@ export default function ProNutritionView() {
     const tasks: PendingTask[] = [];
     const now = new Date().toISOString().slice(0, 10);
     for (const session of allSessions) {
-      if (session.status !== 'completed') {
+      if (session.status === 'finalized') {
         tasks.push({
           id: `diary-${session.id}`,
           type: 'diary',
@@ -226,8 +226,8 @@ export default function ProNutritionView() {
           athleteName: athleteName(session.athlete_id),
           avatarUrl: athleteAvatar(session.athlete_id),
           date: session.start_date,
-          label: t('Diario 24-48h sin completar', 'Incomplete 24-48h diary'),
-          detail: `${session.period_hours}h · ${t('iniciado', 'started')} ${dateFmt(language, session.start_date, { day: 'numeric', month: 'short' })}`,
+          label: t('Diario 24h sin completar', 'Incomplete 24h diary'),
+          detail: `${t('iniciado', 'started')} ${dateFmt(language, session.start_date, { day: 'numeric', month: 'short' })}`,
         });
       }
     }
@@ -253,7 +253,7 @@ export default function ProNutritionView() {
 
   const recentActivity = useMemo(() => {
     const items: RecentActivity[] = [];
-    for (const session of allSessions.filter(s => s.status === 'completed')) {
+    for (const session of allSessions.filter(s => s.status === 'finalized')) {
       items.push({
         id: session.id,
         athleteId: session.athlete_id,
@@ -396,7 +396,7 @@ export default function ProNutritionView() {
 
   const tabs: { key: Tab; label: string; icon: typeof BarChart3; activeCls: string }[] = [
     { key: 'dashboard', label: t('Panel', 'Dashboard'), icon: BarChart3, activeCls: 'border-[#514163] dark:border-[#514163]' },
-    { key: 'diary', label: t('24-48h', '24-48h'), icon: BookOpen, activeCls: 'border-emerald-500 dark:border-emerald-500' },
+    { key: 'diary', label: t('24h', '24h'), icon: BookOpen, activeCls: 'border-emerald-500 dark:border-emerald-500' },
     { key: 'anamnesis', label: t('Anamnesis', 'Anamnesis'), icon: ClipboardList, activeCls: 'border-blue-500 dark:border-blue-500' },
   ];
 
@@ -446,8 +446,8 @@ export default function ProNutritionView() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { value: pendingTasks.length, label: t('Pendientes', 'Pending'), cls: 'text-amber-600 dark:text-amber-400' },
-          { value: allSessions.filter(s => s.status === 'completed' && !s.reviewed_at).length, label: t('Sin revisar', 'Unreviewed diaries'), cls: 'text-[#fdda36]' },
-          { value: allSessions.filter(s => s.status === 'completed').length, label: t('Diarios completos', 'Completed diaries'), cls: 'text-emerald-600 dark:text-emerald-400' },
+          { value: allSessions.filter(s => s.status === 'finalized' && !s.reviewed_at).length, label: t('Sin revisar', 'Unreviewed diaries'), cls: 'text-[#fdda36]' },
+          { value: allSessions.filter(s => s.status === 'finalized').length, label: t('Diarios completos', 'Completed diaries'), cls: 'text-emerald-600 dark:text-emerald-400' },
           { value: athletes.filter(a => latestAnamnesisByAthlete.get(a.id)?.is_complete).length + '/' + athletes.length, label: t('Anamnesis completas', 'Anamnesis complete'), cls: 'text-blue-600 dark:text-blue-400' },
         ].map(stat => (
           <div key={stat.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
@@ -587,8 +587,8 @@ export default function ProNutritionView() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-semibold text-sm text-gray-900 dark:text-white truncate">{athleteName(session.athlete_id)}</p>
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${session.status === 'completed' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}`}>
-                      {session.status === 'completed' ? t('Completo', 'Complete') : t('En curso', 'In progress')}
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${session.status === 'finalized' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'}`}>
+                      {session.status === 'finalized' ? t('Completo', 'Complete') : t('Borrador', 'Draft')}
                     </span>
                     {session.reviewed_at && (
                       <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400">
@@ -597,8 +597,8 @@ export default function ProNutritionView() {
                     )}
                   </div>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    {dateFmt(language, session.start_date)} · {session.period_hours}h
-                    {session.status === 'completed' && ` · ${session.total_calories} kcal · P ${session.total_protein_g}g · C ${session.total_carbs_g}g · G ${session.total_fat_g}g`}
+                    {dateFmt(language, session.start_date)}
+                    {session.status === 'finalized' && ` · ${session.total_calories} kcal · P ${session.total_protein_g}g · C ${session.total_carbs_g}g · G ${session.total_fat_g}g`}
                   </p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-emerald-500 transition-colors flex-shrink-0" />
@@ -619,7 +619,7 @@ export default function ProNutritionView() {
                     {t('Diario Alimentario', 'Food Diary')} — {dateFmt(language, selectedSession.start_date)}
                   </h2>
                   <p className="text-green-100 text-sm mt-0.5">
-                    {selectedSession.period_hours}h · {athleteName(selectedSession.athlete_id)}
+                    {athleteName(selectedSession.athlete_id)}
                   </p>
                 </div>
                 <button onClick={() => setSelectedSession(null)} className="p-2 hover:bg-white/20 rounded-lg transition-colors">
@@ -627,7 +627,7 @@ export default function ProNutritionView() {
                 </button>
               </div>
               <div className="p-5 space-y-5">
-                {selectedSession.status === 'completed' && (
+                {selectedSession.status === 'finalized' && (
                   <div className="grid grid-cols-4 gap-3">
                     {[
                       { label: 'kcal', value: selectedSession.total_calories, bg: 'bg-orange-50 dark:bg-orange-900/20', text: 'text-orange-600 dark:text-orange-400' },
@@ -818,14 +818,13 @@ export default function ProNutritionView() {
                 className="w-full bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-emerald-400 p-3.5 text-left transition-all group"
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${session.status === 'completed' ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-amber-100 dark:bg-amber-900/30'}`}>
-                    {session.status === 'completed' ? <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /> : <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${session.status === 'finalized' ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-amber-100 dark:bg-amber-900/30'}`}>
+                    {session.status === 'finalized' ? <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" /> : <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-sm text-gray-900 dark:text-white">{dateFmt(language, session.start_date, { weekday: 'long', day: 'numeric', month: 'long' })}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {session.period_hours}h
-                      {session.status === 'completed' && ` · ${session.total_calories} kcal · P ${session.total_protein_g}g · C ${session.total_carbs_g}g · G ${session.total_fat_g}g`}
+                      {session.status === 'finalized' && ` · ${session.total_calories} kcal · P ${session.total_protein_g}g · C ${session.total_carbs_g}g · G ${session.total_fat_g}g`}
                     </p>
                   </div>
                   {session.reviewed_at && (
@@ -922,7 +921,7 @@ function SelectedAthleteSummary({ sessions, sessionsLoading, anamnesisData, anam
 }) {
   const { language } = useLanguage();
   const t = (es: string, en: string) => language === 'es' ? es : en;
-  const completed = sessions.filter(s => s.status === 'completed');
+  const completed = sessions.filter(s => s.status === 'finalized');
   const avg = (fn: (s: DiarySession) => number) => completed.length ? Math.round(completed.reduce((acc, s) => acc + fn(s), 0) / completed.length) : null;
 
   return (
@@ -946,7 +945,7 @@ function SelectedAthleteSummary({ sessions, sessionsLoading, anamnesisData, anam
               </div>
             ))}
           </div>
-          {sessions.filter(s => s.status === 'completed').slice(0, 5).map(session => (
+          {sessions.filter(s => s.status === 'finalized').slice(0, 5).map(session => (
             <div key={session.id} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-3.5 flex items-center gap-3">
               <CheckCircle className="w-5 h-5 text-emerald-500 flex-shrink-0" />
               <div className="flex-1 min-w-0">
