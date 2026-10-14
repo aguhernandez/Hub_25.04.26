@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
+import { getPaidAccessStatus, invalidatePaidAccessStatus } from '../services/paidAccessStatus';
 import { CreditCard, AlertCircle, Loader2, LogOut } from 'lucide-react';
 
 const STRIPE_LINKS: Record<'monthly' | 'yearly', string> = {
@@ -23,6 +24,21 @@ export default function ProfessionalPaywall() {
     trialEnd: null,
     loading: true,
   });
+  const [accessRefreshKey, setAccessRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const refreshAfterPayment = () => {
+      if (sessionStorage.getItem('professional-payment-user') !== user.id) return;
+      sessionStorage.removeItem('professional-payment-user');
+      invalidatePaidAccessStatus(user.id);
+      setAccessRefreshKey((key) => key + 1);
+    };
+
+    window.addEventListener('focus', refreshAfterPayment);
+    return () => window.removeEventListener('focus', refreshAfterPayment);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!user) return;
@@ -35,7 +51,12 @@ export default function ProfessionalPaywall() {
 
     (async () => {
       // Check both paid subscription and complimentary access in one call
-      const { data: accessData } = await supabase.rpc('get_my_paid_access_status').maybeSingle();
+      let accessData = null;
+      try {
+        accessData = await getPaidAccessStatus(user.id);
+      } catch (error) {
+        console.error('Error checking paid access:', error);
+      }
 
       if (!mounted) return;
 
@@ -73,7 +94,7 @@ export default function ProfessionalPaywall() {
     })();
 
     return () => { mounted = false; };
-  }, [user, profile]);
+  }, [user, profile, accessRefreshKey]);
 
   if (!user || subState.loading) {
     return (
@@ -92,6 +113,7 @@ export default function ProfessionalPaywall() {
 
   const handlePay = (cycle: 'monthly' | 'yearly') => {
     if (!user) return;
+    sessionStorage.setItem('professional-payment-user', user.id);
     const link = STRIPE_LINKS[cycle];
     window.location.href = `${link}?client_reference_id=${user.id}`;
   };

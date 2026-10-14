@@ -266,7 +266,7 @@ function App() {
         const listener = await CapApp.addListener('appUrlOpen', async ({ url }) => {
           // Strava finishes on the hosted callback page, which returns to the
           // app through this registered URL scheme. Close the in-app browser;
-          // StravaSection refreshes the saved connection when the app resumes.
+          // StravaSection refreshes the saved connection on this explicit return event.
           if (url.includes('strava=')) {
             const status = new URL(url).searchParams.get('strava');
             window.dispatchEvent(new CustomEvent('strava-oauth-return', { detail: status }));

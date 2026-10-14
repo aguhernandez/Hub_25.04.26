@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Clock, Check, X, DollarSign, User, MessageSquare, Calendar } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -25,27 +25,7 @@ export default function DeclaredSupportsManager({ projectId }: DeclaredSupportsM
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadSupports();
-
-    const subscription = supabase
-      .channel('declared_supports_changes')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'declared_supports',
-        filter: `project_id=eq.${projectId}`
-      }, () => {
-        loadSupports();
-      })
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [projectId]);
-
-  const loadSupports = async () => {
+  const loadSupports = useCallback(async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -61,7 +41,15 @@ export default function DeclaredSupportsManager({ projectId }: DeclaredSupportsM
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    void loadSupports();
+
+    const refreshWhenFocused = () => void loadSupports();
+    window.addEventListener('focus', refreshWhenFocused);
+    return () => window.removeEventListener('focus', refreshWhenFocused);
+  }, [loadSupports]);
 
   const handleApprove = async (supportId: string) => {
     setActionLoading(supportId);

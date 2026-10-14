@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
@@ -23,35 +23,7 @@ export default function NotificationCenter() {
   const [filter, setFilter] = useState<'all' | 'chat' | 'comment' | 'system'>('all');
   const [unreadCount, setUnreadCount] = useState(0);
 
-  useEffect(() => {
-    if (!profile?.id) return;
-
-    loadNotifications();
-
-    const channelName = `realtime:notifications:${profile.id}:${Math.random()}`;
-    const channel = supabase.channel(channelName);
-
-    channel.on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${profile.id}`,
-      },
-      () => {
-        loadNotifications();
-      }
-    );
-
-    channel.subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [profile?.id]);
-
-  const loadNotifications = async () => {
+  const loadNotifications = useCallback(async () => {
     if (!profile?.id) return;
 
     try {
@@ -69,7 +41,19 @@ export default function NotificationCenter() {
     } catch (error) {
       console.error('Error loading notifications:', error);
     }
-  };
+  }, [profile?.id]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const refreshWhenFocused = () => {
+      if (isOpen) void loadNotifications();
+    };
+
+    if (isOpen) void loadNotifications();
+    window.addEventListener('focus', refreshWhenFocused);
+    return () => window.removeEventListener('focus', refreshWhenFocused);
+  }, [profile?.id, isOpen, loadNotifications]);
 
   const handleMarkAsRead = async (notificationId: string) => {
     try {

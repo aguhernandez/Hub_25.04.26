@@ -202,12 +202,8 @@ export function StravaSection() {
       }, 0);
     });
 
-    let removeListener: (() => void) | null = null;
-
-    // When the user returns to the app after the Strava browser flow,
-    // re-check the connection status
+    // Refresh only after an explicit OAuth return signal, never on generic app focus.
     const refreshAfterReturn = () => {
-      if (document.visibilityState === 'hidden') return;
       void StravaClient.refreshConnectionAfterAuthorization((conn) => {
         if (conn) setConnection(conn);
       });
@@ -229,18 +225,11 @@ export function StravaSection() {
     const handleNativeReturn = (event: Event) => {
       handleOAuthReturn((event as CustomEvent<string | null>).detail);
     };
-    StravaClient.checkConnectionOnResume(refreshAfterReturn).then((remove) => { removeListener = remove; });
-    // Also cover web browsers, where Capacitor's appStateChange event may not fire.
-    window.addEventListener('focus', refreshAfterReturn);
-    document.addEventListener('visibilitychange', refreshAfterReturn);
     window.addEventListener('message', handlePopupMessage);
     window.addEventListener('strava-oauth-return', handleNativeReturn);
 
     return () => {
-      if (removeListener) removeListener();
       authListener.subscription.unsubscribe();
-      window.removeEventListener('focus', refreshAfterReturn);
-      document.removeEventListener('visibilitychange', refreshAfterReturn);
       window.removeEventListener('message', handlePopupMessage);
       window.removeEventListener('strava-oauth-return', handleNativeReturn);
     };

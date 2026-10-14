@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useRef, ReactNode } fro
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { initPushNotifications, silentReRegister } from '../services/pushNotificationService';
+import { invalidatePaidAccessStatus } from '../services/paidAccessStatus';
 import type { Database } from '../lib/database.types';
 import type { UserRole } from '../types/roles';
 
@@ -44,7 +45,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        invalidatePaidAccessStatus();
+      }
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {

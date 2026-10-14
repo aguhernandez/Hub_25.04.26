@@ -429,11 +429,12 @@ export default function ChatPage() {
 
   const subscribeToMessages = useCallback((convId: string) => {
     if (subscriptionRef.current) {
-      subscriptionRef.current.unsubscribe();
+      void supabase.removeChannel(subscriptionRef.current);
+      subscriptionRef.current = null;
     }
 
     const channel = supabase
-      .channel(`chat:${convId}:${Date.now()}`)
+      .channel(`chat:${convId}:${crypto.randomUUID()}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -487,7 +488,10 @@ export default function ChatPage() {
       .subscribe();
 
     subscriptionRef.current = channel;
-    return () => channel.unsubscribe();
+    return () => {
+      if (subscriptionRef.current === channel) subscriptionRef.current = null;
+      void supabase.removeChannel(channel);
+    };
   }, [user]);
 
   const markAsRead = async (convId: string) => {
