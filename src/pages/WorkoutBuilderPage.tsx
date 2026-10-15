@@ -17,7 +17,7 @@ import { getExerciseName, getExerciseNameForLanguage, bilingualExerciseMatch } f
 import TagSelector from '../components/tags/TagSelector';
 import MyDraftsPanel from '../components/training/MyDraftsPanel';
 import { createDraft, deleteDraft, updateDraft, type DraftPayload, type WorkoutDraft } from '../utils/workoutDrafts';
-import { getYouTubeEmbedUrl as ytEmbedUrl, getYouTubeThumbnail, isNativePlatform, openYouTubeExternally } from '../utils/youtubeNative';
+import { getYouTubeEmbedUrl as ytEmbedUrl } from '../utils/youtubeNative';
 
 interface Exercise {
   id: string;
@@ -1326,39 +1326,20 @@ export default function WorkoutBuilderPage() {
                       </label>
                       <div className="rounded-lg overflow-hidden border-2 border-[#fdda36]">
                         <div className="relative aspect-video bg-gray-900">
-                          {showVideoPreview && embedUrl && !isNativePlatform() ? (
+                          {showVideoPreview && embedUrl ? (
                             <div className="relative w-full h-full">
                               <iframe
                                 src={embedUrl}
                                 className="w-full h-full"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                title={language === 'es' ? 'Video del ejercicio' : 'Exercise video'}
+                                referrerPolicy="strict-origin-when-cross-origin"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                 allowFullScreen
                               />
                               <button
                                 onClick={() => setShowVideoPreview(false)}
                                 className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 text-white rounded-full transition-colors z-10"
                                 title={language === 'es' ? 'Cerrar video' : 'Close video'}
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ) : showVideoPreview && embedUrl && isNativePlatform() ? (
-                            <div
-                              onClick={() => openYouTubeExternally(exercise?.link || '')}
-                              className="relative w-full h-full cursor-pointer group"
-                            >
-                              <img
-                                src={getYouTubeThumbnail(exercise?.link || '') || ''}
-                                className="w-full h-full object-cover"
-                                alt="YouTube thumbnail"
-                              />
-                              <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/20 transition-colors">
-                                <Play className="w-12 h-12 text-white opacity-90 group-hover:scale-110 transition-transform" />
-                              </div>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setShowVideoPreview(false); }}
-                                className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black/90 text-white rounded-full transition-colors z-10"
-                                title={language === 'es' ? 'Cerrar' : 'Close'}
                               >
                                 <X className="w-3.5 h-3.5" />
                               </button>
