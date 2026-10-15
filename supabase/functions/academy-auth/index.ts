@@ -87,12 +87,28 @@ Deno.serve(async (req: Request) => {
     const membershipSlug = (membershipAccess?.memberships as any)?.slug || 'inicia';
     const membershipName = (membershipAccess?.memberships as any)?.name || 'Asciende Inicia';
 
+    // Coaches get their assigned athlete ids so satellites can scope requests
+    let assignedAthletes: string[] = [];
+    if (['trainer', 'head_coach', 'admin'].includes(role)) {
+      const { data: athleteRows, error: athletesError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('assigned_trainer_id', userId)
+        .eq('role', 'athlete')
+        .eq('is_active', true);
+      if (athletesError) {
+        console.error('Assigned athletes fetch error:', athletesError);
+      } else {
+        assignedAthletes = (athleteRows || []).map((row: any) => row.id as string);
+      }
+    }
+
     // Generate JWT token with 7-day expiration
     const secret = new TextEncoder().encode(jwtSecret);
     const issuedAt = Math.floor(Date.now() / 1000);
     const expiresAt = issuedAt + 7 * 24 * 60 * 60;
 
-    const jwtPayload = {
+    const jwtPayload: Record<string, unknown> = {
       user_id: userId,
       email: authData.user.email,
       role: role,
@@ -101,6 +117,9 @@ Deno.serve(async (req: Request) => {
       iat: issuedAt,
       exp: expiresAt,
     };
+    if (assignedAthletes.length > 0) {
+      jwtPayload.assigned_athletes = assignedAthletes;
+    }
 
     const token = await new jose.SignJWT(jwtPayload)
       .setProtectedHeader({ alg: 'HS256' })

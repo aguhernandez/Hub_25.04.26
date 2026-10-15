@@ -202,6 +202,39 @@ Deno.serve(async (req: Request) => {
     const dateTo = url.searchParams.get("date_to");
     const logId = url.searchParams.get("log_id");
 
+    // ════════════════════════════════════════════════════════════════
+    // GET /endurance-satellite-bridge/coach-athletes?coach_id=...
+    // Athletes assigned to a coach via profiles.assigned_trainer_id.
+    // Must run before athlete_id resolution since it is coach-scoped.
+    // ════════════════════════════════════════════════════════════════
+    if (endpoint === "coach-athletes") {
+      const coachId = url.searchParams.get("coach_id") || userId || "";
+      if (!coachId) {
+        return new Response(JSON.stringify({ error: "coach_id is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const { data: rows, error: caError } = await serviceSupabase
+        .from("profiles")
+        .select("id, email, full_name, sport, role, is_active")
+        .eq("assigned_trainer_id", coachId)
+        .eq("role", "athlete")
+        .eq("is_active", true)
+        .order("full_name", { ascending: true });
+      if (caError) throw caError;
+      const athletes = (rows || []).map((r: any) => ({
+        id: r.id,
+        email: r.email,
+        full_name: r.full_name,
+        sport: r.sport,
+        role: "athlete",
+      }));
+      return new Response(JSON.stringify({ athletes }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Resolve athlete ID
     let athleteId = athleteIdParam || userId || "";
 
@@ -817,7 +850,7 @@ Deno.serve(async (req: Request) => {
     if (endpoint === "athlete-profile") {
       const { data: profile, error: pError } = await serviceSupabase
         .from("profiles")
-        .select("id, full_name, email, sport, date_of_birth, gender, role, weight_kg, height_cm")
+        .select("id, full_name, email, sport, date_of_birth, gender, role")
         .eq("id", athleteId)
         .maybeSingle();
       if (pError) throw pError;
@@ -842,21 +875,27 @@ Deno.serve(async (req: Request) => {
         };
       }
 
+      // weight/height live on bioimpedance + nutrition_targets in Hub, not on profiles
+      let bodyWeightKg: number | null = bio?.weight ?? null;
+      let bodyHeightCm: number | null = bio?.height ?? null;
+
       let nutritionTargets = null;
-      const { data: tdee } = await serviceSupabase
-        .from("tdee_configs")
-        .select("*")
+      const { data: targetRow } = await serviceSupabase
+        .from("nutrition_targets")
+        .select("tdee, target_calories, protein_g, carbs_g, fat_g, weight_kg, height_cm, calculation_date")
         .eq("athlete_id", athleteId)
-        .order("created_at", { ascending: false })
+        .order("calculation_date", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (tdee) {
+      if (targetRow) {
+        bodyWeightKg = bodyWeightKg ?? targetRow.weight_kg ?? null;
+        bodyHeightCm = bodyHeightCm ?? targetRow.height_cm ?? null;
         nutritionTargets = {
-          tdee: tdee.tdee_value || tdee.tdee || null,
-          target_calories: tdee.target_calories || null,
-          protein_g: tdee.protein_g || null,
-          carbs_g: tdee.carbs_g || null,
-          fat_g: tdee.fat_g || null,
+          tdee: targetRow.tdee ?? null,
+          target_calories: targetRow.target_calories ?? null,
+          protein_g: targetRow.protein_g ?? null,
+          carbs_g: targetRow.carbs_g ?? null,
+          fat_g: targetRow.fat_g ?? null,
         };
       }
 
@@ -865,8 +904,8 @@ Deno.serve(async (req: Request) => {
           id: profile?.id,
           full_name: profile?.full_name,
           sport: profile?.sport,
-          weight_kg: profile?.weight_kg,
-          height_cm: profile?.height_cm,
+          weight_kg: bodyWeightKg,
+          height_cm: bodyHeightCm,
           birth_date: profile?.date_of_birth,
           gender: profile?.gender,
           role: profile?.role,
@@ -1159,10 +1198,10 @@ Deno.serve(async (req: Request) => {
     // ════════════════════════════════════════════════════════════════
     if (endpoint === "tdee") {
       const { data, error } = await serviceSupabase
-        .from("tdee_configs")
+        .from("nutrition_targets")
         .select("*")
         .eq("athlete_id", athleteId)
-        .order("created_at", { ascending: false })
+        .order("calculation_date", { ascending: false })
         .limit(1)
         .maybeSingle();
       if (error) throw error;
@@ -1552,7 +1591,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(JSON.stringify({
-      error: "Unknown endpoint. Available: training-schedule, activities, training-logs, training-log, athlete-profile, biological-passport, push-endurance-plan, push-training-log, push-tags, push-endurance-workout, push-endurance-workouts, delete-endurance-workout, endurance-workouts, endurance-data, wellness, athlete-habits, tdee, or POST { action, ...params }",
+      error: "Unknown endpoint. Available: training-schedule, activities, training-logs, training-log, coach-athletes, athlete-profile, biological-passport, push-endurance-plan, push-training-log, push-tags, push-endurance-workout, push-endurance-workouts, delete-endurance-workout, endurance-workouts, endurance-data, wellness, athlete-habits, tdee, or POST { action, ...params }",
     }), {
       status: 404,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
