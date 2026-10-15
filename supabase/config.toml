@@ -53,7 +53,7 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.academy-auth]
-verify_jwt = true
+verify_jwt = false
 
 [functions.satellite-login-widget]
 verify_jwt = false
