@@ -634,6 +634,8 @@ Deno.serve(async (req: Request) => {
         source: "lab",
         status: "active",
         sport_context: sport_context || null,
+        // Preserve the full incoming Lab contract so new modules are not discarded.
+        lab_payload: body,
       };
 
       const physMap: Record<string, string[]> = {

@@ -804,6 +804,10 @@ Deno.serve(async (req: Request) => {
         status: "active",
         notes: notes || null,
 
+        // Keep the complete Lab contract, including future/unknown extension fields.
+        // The flattened columns below remain available to existing Hub consumers.
+        lab_payload: body,
+
         vo2max: physiological.vo2max ?? null,
         lt1_power: physiological.lt1_power ?? null,
         lt2_power: physiological.lt2_power ?? null,
@@ -1015,6 +1019,7 @@ Deno.serve(async (req: Request) => {
           hr_zones_json,
           rpe_zones_json,
           training_zones,
+          lab_payload,
           vam,
           pam,
           height_cm,

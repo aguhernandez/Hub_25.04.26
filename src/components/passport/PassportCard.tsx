@@ -90,6 +90,114 @@ function parseJsonArray<T>(value: unknown): T[] {
   return [];
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasPopulatedValue(value: unknown): boolean {
+  if (value == null || value === '') return false;
+  if (Array.isArray(value)) return value.some(hasPopulatedValue);
+  if (isObject(value)) return Object.values(value).some(hasPopulatedValue);
+  return true;
+}
+
+function JsonValue({ value, depth = 0 }: { value: unknown; depth?: number }) {
+  if (value == null || value === '') return <span className="italic text-gray-400">No data</span>;
+  if (typeof value === 'boolean' || typeof value === 'number' || typeof value === 'string') {
+    return <span className="break-words">{String(value)}</span>;
+  }
+  if (depth >= 6) return <span className="text-gray-400">…</span>;
+  if (Array.isArray(value)) {
+    if (!value.length) return <span className="italic text-gray-400">No data</span>;
+    return (
+      <div className="space-y-2">
+        {value.map((item, index) => (
+          <div key={index} className="rounded-lg border border-gray-100 dark:border-gray-700 p-2">
+            <div className="text-[10px] uppercase text-gray-400 mb-1">{index + 1}</div>
+            <JsonValue value={item} depth={depth + 1} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (isObject(value)) {
+    const entries = Object.entries(value);
+    if (!entries.length) return <span className="italic text-gray-400">No data</span>;
+    return (
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {entries.map(([key, item]) => (
+          <div key={key} className="min-w-0 rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700 p-2">
+            <dt className="text-[11px] font-medium text-gray-500 dark:text-gray-400 break-words">{key}</dt>
+            <dd className="mt-1 text-xs text-gray-800 dark:text-gray-200 break-words">
+              <JsonValue value={item} depth={depth + 1} />
+            </dd>
+          </div>
+        ))}
+      </dl>
+    );
+  }
+  return <span className="break-words">{String(value)}</span>;
+}
+
+function ExtensionSection({ title, icon, value, color }: {
+  title: string;
+  icon: React.ReactNode;
+  value: unknown;
+  color: string;
+}) {
+  return (
+    <section>
+      <SectionHeader icon={icon} label={title} color={color} />
+      {hasPopulatedValue(value) ? (
+        <JsonValue value={value} />
+      ) : (
+        <p className="text-xs text-gray-400 dark:text-gray-500 italic">No data</p>
+      )}
+    </section>
+  );
+}
+
+function CompositionChart({ value }: { value: unknown }) {
+  if (!isObject(value) || !Array.isArray(value.components) || value.components.length === 0) {
+    return <p className="text-xs text-gray-400 dark:text-gray-500 italic">No data</p>;
+  }
+  const components = value.components.filter(isObject).map((component) => ({
+    name: String(component.name ?? '—'),
+    kg: typeof component.kg === 'number' ? component.kg : null,
+    percent: Number(component.percent),
+  })).filter(component => Number.isFinite(component.percent) && component.percent >= 0);
+  if (!components.length) return <p className="text-xs text-gray-400 dark:text-gray-500 italic">No data</p>;
+
+  const colors = ['#fdda36', '#38bdf8', '#34d399', '#fb7185', '#a78bfa', '#f97316', '#14b8a6'];
+  let cursor = 0;
+  const slices = components.map((component, index) => {
+    const start = cursor;
+    cursor += component.percent;
+    return `${colors[index % colors.length]} ${start}% ${cursor}%`;
+  });
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-[150px_1fr] gap-4 items-center">
+      <div className="mx-auto w-36 h-36 rounded-full border-4 border-white dark:border-gray-800 shadow"
+        role="img" aria-label="Body composition chart" style={{ background: `conic-gradient(${slices.join(', ')})` }} />
+      <div className="overflow-x-auto rounded-xl border border-gray-100 dark:border-gray-700">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400">
+            <tr><th className="text-left p-2">Component</th><th className="text-right p-2">kg</th><th className="text-right p-2">%</th></tr>
+          </thead>
+          <tbody>{components.map((component, index) => (
+            <tr key={`${component.name}-${index}`} className="border-t border-gray-100 dark:border-gray-700">
+              <td className="p-2 text-gray-700 dark:text-gray-300"><span className="inline-block w-2 h-2 rounded-full mr-2" style={{ backgroundColor: colors[index % colors.length] }} />{component.name}</td>
+              <td className="p-2 text-right text-gray-700 dark:text-gray-300">{component.kg ?? '—'}</td>
+              <td className="p-2 text-right text-gray-700 dark:text-gray-300">{component.percent}%</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function PassportCard({ passport, isActive, canEdit, onUpdateVisibility }: PassportCardProps) {
   const [expanded, setExpanded] = useState(isActive);
   const [showVisibility, setShowVisibility] = useState(false);
@@ -125,8 +233,8 @@ export default function PassportCard({ passport, isActive, canEdit, onUpdateVisi
     return tz as TrainingZones;
   })();
 
-  const hasZones5 = !!(trainingZones?.zones5?.hr?.length || trainingZones?.zones5?.power?.length);
-  const hasZones7 = !!(trainingZones?.zones7?.hr?.length || trainingZones?.zones7?.power?.length);
+  const hasZones5 = !!(trainingZones?.zones5?.hr?.length || trainingZones?.zones5?.power?.length || trainingZones?.zones5?.rpe?.length);
+  const hasZones7 = !!(trainingZones?.zones7?.hr?.length || trainingZones?.zones7?.power?.length || trainingZones?.zones7?.rpe?.length);
   const hasNewZones = hasZones5 || hasZones7;
 
   const defaultDisplay: '5' | '7' = trainingZones?.default_display === '7' ? '7' : '5';
@@ -145,6 +253,14 @@ export default function PassportCard({ passport, isActive, canEdit, onUpdateVisi
   const rpeZones = hasNewZones
     ? parseJsonArray<RPEZone>(activeZoneSet?.rpe)
     : parseJsonArray<RPEZone>(passport.rpe_zones_json);
+
+  const labPayload = passport.lab_payload ?? {};
+  const payloadObject = isObject(labPayload) ? labPayload : {};
+  const sourceData = isObject(payloadObject.data) ? payloadObject.data : isObject(payloadObject.payload) ? payloadObject.payload : payloadObject;
+  const physiologicalData = sourceData.physiological ?? null;
+  const anthropometryData = sourceData.anthropometry ?? null;
+  const moduleValue = (key: string, fallback: unknown) => sourceData[key] ?? fallback;
+  const compositionChart = isObject(anthropometryData) ? anthropometryData.composition_chart : null;
 
   return (
     <div className={`rounded-2xl border transition-all ${
@@ -317,6 +433,11 @@ export default function PassportCard({ passport, isActive, canEdit, onUpdateVisi
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
                 <BarChart3 className="w-3.5 h-3.5" />
                 Training Zones
+                {trainingZones?.source === 'manual_override' && (
+                  <span className="ml-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold normal-case tracking-normal">
+                    Manual override · official
+                  </span>
+                )}
                 {trainingZones?.base_method && (
                   <span className="ml-1 px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-xs font-medium normal-case tracking-normal">
                     {trainingZones.base_method.replace(/_/g, ' ')}
@@ -527,6 +648,20 @@ export default function PassportCard({ passport, isActive, canEdit, onUpdateVisi
               </div>
             </div>
           )}
+
+          {/* ── Notes ── */}
+          <ExtensionSection title="Laboratory physiological data" icon={<Wind className="w-3.5 h-3.5" />} value={physiologicalData} color="text-sky-600 dark:text-sky-400" />
+          <ExtensionSection title="Laboratory anthropometry data" icon={<User className="w-3.5 h-3.5" />} value={anthropometryData} color="text-emerald-600 dark:text-emerald-400" />
+          <section>
+            <SectionHeader icon={<User className="w-3.5 h-3.5" />} label="Body composition chart" color="text-emerald-600 dark:text-emerald-400" />
+            <CompositionChart value={compositionChart} />
+          </section>
+          <ExtensionSection title="Biochemical lab" icon={<FlaskConical className="w-3.5 h-3.5" />} value={moduleValue('biochemical_lab', null)} color="text-violet-600 dark:text-violet-400" />
+          <ExtensionSection title="Readiness" icon={<Activity className="w-3.5 h-3.5" />} value={moduleValue('readiness', null)} color="text-sky-600 dark:text-sky-400" />
+          <ExtensionSection title="Hydration data (profile, session, history)" icon={<Droplets className="w-3.5 h-3.5" />} value={moduleValue('hydration', passport.hydration)} color="text-blue-600 dark:text-blue-400" />
+          <ExtensionSection title="Heat adaptation data (profile, session, history)" icon={<Flame className="w-3.5 h-3.5" />} value={moduleValue('heat_adaptation', passport.heat_adaptation)} color="text-orange-600 dark:text-orange-400" />
+          <ExtensionSection title="Force-velocity data" icon={<Dumbbell className="w-3.5 h-3.5" />} value={moduleValue('force_velocity', passport.force_velocity)} color="text-red-600 dark:text-red-400" />
+          <ExtensionSection title="Neuromuscular lab" icon={<Activity className="w-3.5 h-3.5" />} value={moduleValue('neuromuscular_lab', null)} color="text-rose-600 dark:text-rose-400" />
 
           {/* ── Notes ── */}
           {passport.notes && (

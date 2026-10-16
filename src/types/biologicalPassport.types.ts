@@ -63,6 +63,7 @@ export interface ZoneSet {
 
 export interface TrainingZones {
   base_method?: string;
+  source?: string;
   zones5?: ZoneSet;
   zones7?: ZoneSet;
   default_display?: '5' | '7';
@@ -78,6 +79,8 @@ export interface BiologicalPassport {
   source_test_type?: string;
   measurement_date: string;
   lab_record_id?: string;
+  /** Complete source object from Lab, preserving unknown and future extension keys. */
+  lab_payload?: Record<string, unknown> | null;
   anthropometry_record_id?: string;
 
   // Physiological

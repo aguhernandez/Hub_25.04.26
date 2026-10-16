@@ -214,7 +214,13 @@ function mapLabToPassport(labData: Record<string, unknown>, athleteId: string): 
   // labData is the raw passport row from the lab's biological_passports table.
   // We pick only the fields we need and remap athlete_id to the hub's athlete.
 
-  const pick = (key: string) => labData[key] ?? null;
+  const physiological = labData.physiological && typeof labData.physiological === 'object'
+    ? labData.physiological as Record<string, unknown>
+    : {};
+  const anthropometry = labData.anthropometry && typeof labData.anthropometry === 'object'
+    ? labData.anthropometry as Record<string, unknown>
+    : {};
+  const pick = (key: string) => labData[key] ?? physiological[key] ?? anthropometry[key] ?? null;
 
   return {
     athlete_id: athleteId,
@@ -267,5 +273,7 @@ function mapLabToPassport(labData: Record<string, unknown>, athleteId: string): 
     force_velocity: pick('force_velocity'),
 
     notes: (pick('notes') as string) || null,
+    // Store the complete Lab row; nested modules and future keys remain available.
+    lab_payload: labData,
   };
 }
