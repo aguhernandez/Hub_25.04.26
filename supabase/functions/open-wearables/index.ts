@@ -313,7 +313,23 @@ function buildGpsRoute(samples: TimedSample[]) {
 }
 
 function providerGpsRoute(raw: unknown) {
-  const routeValue = workoutValue(raw, ['route', 'gps_route', 'gps_points', 'track_points', 'coordinates']);
+  const routeKeys = new Set(['route', 'gpsroute', 'gpspoints', 'trackpoints', 'coordinates']);
+  const findRoute = (value: unknown, depth: number): unknown => {
+    if (!value || typeof value !== 'object' || depth < 0) return null;
+    if (Array.isArray(value)) return value;
+    const object = value as Record<string, unknown>;
+    for (const [key, child] of Object.entries(object)) {
+      if (routeKeys.has(key.toLowerCase().replace(/[^a-z0-9]/g, '')) && child && typeof child === 'object') return child;
+    }
+    for (const child of Object.values(object)) {
+      if (child && typeof child === 'object') {
+        const found = findRoute(child, depth - 1);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+  const routeValue = findRoute(raw, 6);
   const rows = Array.isArray(routeValue) ? routeValue : routeValue && typeof routeValue === 'object'
     ? Object.values(routeValue as Record<string, unknown>).find(Array.isArray) as unknown[] | undefined || []
     : [];
