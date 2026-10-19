@@ -120,13 +120,13 @@ function workoutValue(event: unknown, aliases: string[]): unknown {
 function workoutFields(event: unknown, stored?: Record<string, unknown>) {
   const pick = (storedValue: unknown, aliases: string[]) => storedValue ?? workoutValue(event, aliases);
   const storedSport = stored?.sport_raw;
-  const nestedSport = workoutValue(event, ['subtype', 'sport_type', 'activity_type', 'workout_type', 'discipline', 'sport', 'name', 'type']);
+  const nestedSport = workoutValue(event, ['activity_type', 'sport_type', 'subtype', 'discipline', 'workout_type', 'type', 'name', 'sport']);
   const sport = storedSport != null && !['other', 'unknown'].includes(String(storedSport).trim().toLowerCase()) ? storedSport : (nestedSport ?? storedSport);
   return {
     sport_raw: sport,
     duration_seconds: numericValue(pick(stored?.duration_seconds, ['duration_seconds', 'moving_time_seconds', 'duration', 'moving_time'])),
     distance_m: numericValue(pick(stored?.distance_m, ['distance_meters', 'distance_m', 'total_distance_meters', 'total_distance', 'distance_in_meters', 'distance'])),
-    avg_hr: numericValue(pick(stored?.avg_hr, ['avg_hr', 'average_hr', 'avg_heart_rate', 'average_heart_rate', 'mean_heart_rate', 'average_heart_rate_bpm'])),
+    avg_hr: numericValue(pick(stored?.avg_hr, ['avg_hr', 'average_hr', 'avg_heart_rate', 'avg_heart_rate_bpm', 'average_heart_rate', 'mean_heart_rate', 'average_heart_rate_bpm'])),
     max_hr: numericValue(pick(stored?.max_hr, ['max_hr', 'max_heart_rate', 'maximum_heart_rate', 'max_heart_rate_bpm'])),
     calories: numericValue(pick(stored?.calories, ['calories', 'total_calories', 'active_calories', 'calories_burned', 'calories_kcal', 'energy_kcal'])),
   };
@@ -312,6 +312,43 @@ function buildGpsRoute(samples: TimedSample[]) {
   };
 }
 
+function providerGpsRoute(raw: unknown) {
+  const routeValue = workoutValue(raw, ['route', 'gps_route', 'gps_points', 'track_points', 'coordinates']);
+  const rows = Array.isArray(routeValue) ? routeValue : routeValue && typeof routeValue === 'object'
+    ? Object.values(routeValue as Record<string, unknown>).find(Array.isArray) as unknown[] | undefined || []
+    : [];
+  const points = rows.flatMap((item, index) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+    const point = item as Record<string, unknown>;
+    const latitude = numericValue(point.latitude ?? point.lat);
+    const longitude = numericValue(point.longitude ?? point.lon ?? point.lng);
+    if (latitude == null || longitude == null) return [];
+    const altitude = numericValue(point.altitude_m ?? point.altitude ?? point.elevation ?? point.elevation_m);
+    const timestamp = point.timestamp ?? point.time ?? point.recorded_at ?? point.date_time;
+    const timestampNumber = Number(timestamp);
+    const timestampIso = typeof timestamp === 'string' && Number.isFinite(Date.parse(timestamp))
+      ? new Date(timestamp).toISOString()
+      : Number.isFinite(timestampNumber) && timestamp !== null && timestamp !== ''
+        ? new Date(timestampNumber * (timestampNumber < 1e12 ? 1000 : 1)).toISOString()
+        : null;
+    return [{ latitude, longitude, altitude_m: altitude, timestamp: timestampIso, sequence: index }];
+  });
+  const altitudePoints = points.filter(point => point.altitude_m != null);
+  let elevationGain = 0;
+  let elevationLoss = 0;
+  for (let index = 1; index < altitudePoints.length; index++) {
+    const delta = Number(altitudePoints[index].altitude_m) - Number(altitudePoints[index - 1].altitude_m);
+    if (delta >= 3) elevationGain += delta;
+    else if (delta <= -3) elevationLoss += Math.abs(delta);
+  }
+  return {
+    route: points.length <= 2000 ? points.map(({ latitude, longitude, altitude_m, timestamp }) => ({ latitude, longitude, altitude_m, timestamp })) : Array.from({ length: 2000 }, (_, index) => points[Math.floor(index * (points.length - 1) / 1999)]).map(({ latitude, longitude, altitude_m, timestamp }) => ({ latitude, longitude, altitude_m, timestamp })),
+    elevation_gain_m: altitudePoints.length >= 2 ? Math.round(elevationGain) : null,
+    elevation_loss_m: altitudePoints.length >= 2 ? Math.round(elevationLoss) : null,
+    capabilities: { gps: points.length > 1, altitude: altitudePoints.length > 1 },
+  };
+}
+
 function workoutEventsContract(spec: Awaited<ReturnType<typeof getOpenApiSpec>>) {
   const candidates = Object.entries(spec.paths || {}).filter(([path, methods]) =>
     /\/users?\/\{[^}]+\}\/events\/workouts$/i.test(path) &&
@@ -355,6 +392,49 @@ function providerWorkoutRoutes(spec: Awaited<ReturnType<typeof getOpenApiSpec>>)
         limitName: qName(/^(limit|page_size)$/) || 'limit',
       };
     });
+}
+
+function providerWorkoutDetailRoute(spec: Awaited<ReturnType<typeof getOpenApiSpec>>) {
+  const match = Object.entries(spec.paths || {}).find(([path, methods]) =>
+    /\/providers?\/\{[^}]+\}\/users?\/\{[^}]+\}\/workouts\/\{[^}]+\}$/i.test(path) &&
+    Object.keys(methods || {}).some(method => method.toLowerCase() === 'get')
+  );
+  if (!match) return null;
+  const [template, methods] = match;
+  const operation = Object.entries(methods).find(([method]) => method.toLowerCase() === 'get')?.[1] as Record<string, unknown>;
+  const queries = ((operation?.parameters || []) as Array<Record<string, unknown>>).filter(parameter => parameter.in === 'query');
+  const parameter = (pattern: RegExp) => {
+    const found = queries.find(item => pattern.test(String(item.name)));
+    return found ? String(found.name) : null;
+  };
+  return {
+    template,
+    samplesName: parameter(/^samples$/i),
+    zonesName: parameter(/^zones$/i),
+    routeName: parameter(/^route$/i),
+  };
+}
+
+async function fetchProviderWorkoutDetail(
+  spec: Awaited<ReturnType<typeof getOpenApiSpec>>,
+  provider: string,
+  owUserId: string,
+  workoutId: string,
+) {
+  const contract = providerWorkoutDetailRoute(spec);
+  if (!contract) return null;
+  const path = contract.template.replace(/\{([^}]+)\}/g, (_match, name: string) => {
+    if (/provider/i.test(name)) return encodeURIComponent(provider);
+    if (/user/i.test(name)) return encodeURIComponent(owUserId);
+    if (/workout|event|activity|exercise|id/i.test(name)) return encodeURIComponent(workoutId);
+    return _match;
+  }).replace(/^\/api\/v1/i, '');
+  if (/[{}]/.test(path)) throw new Error(`Unsupported placeholder in Open Wearables workout detail route: ${contract.template}`);
+  const query = new URLSearchParams();
+  if (contract.samplesName) query.set(contract.samplesName, 'false');
+  if (contract.zonesName) query.set(contract.zonesName, 'true');
+  if (contract.routeName) query.set(contract.routeName, 'true');
+  return await ow(`${path}${query.size ? `?${query}` : ''}`);
 }
 
 function seriesRecords(raw: unknown, fallbackType: string): TimedSample[] {
@@ -564,7 +644,25 @@ Deno.serve(async (req) => {
         }
       }
       const ingestedAt = new Date().toISOString();
-      const rows = [...records.entries()].map(([eventId, event]) => {
+      const detailedRecords = new Map(records);
+      let detailFetchFailures = 0;
+      const recordEntries = [...records.entries()];
+      for (let offset = 0; offset < recordEntries.length; offset += 4) {
+        await Promise.all(recordEntries.slice(offset, offset + 4).map(async ([eventId, event]) => {
+          const provider = workoutValue(event, ['provider', 'source']);
+          if (typeof provider !== 'string' || !provider) return;
+          try {
+            const detail = await fetchProviderWorkoutDetail(spec, provider, link.ow_user_id, eventId);
+            if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+              detailedRecords.set(eventId, { ...event, ...(detail as Record<string, unknown>) });
+            }
+          } catch (error) {
+            detailFetchFailures++;
+            console.warn('Could not fetch Open Wearables workout detail', { eventId, provider, error: errorBody(error) });
+          }
+        }));
+      }
+      const rows = [...detailedRecords.entries()].map(([eventId, event]) => {
         const fields = workoutFields(event);
         const sportRaw = fields.sport_raw == null ? null : String(fields.sport_raw);
         return {
@@ -593,7 +691,7 @@ Deno.serve(async (req) => {
       ]);
       if (countError) throw countError;
       if (latestError) throw latestError;
-      return { linked: true, imported_count: rows.length, total_count: count || 0, last_import_at: ingestedAt || latest?.ingested_at || lastIngested?.ingested_at };
+      return { linked: true, imported_count: rows.length, detail_fetch_failures: detailFetchFailures, total_count: count || 0, last_import_at: ingestedAt || latest?.ingested_at || lastIngested?.ingested_at };
     };
     const logAccess = async (athleteId: string, section: string, start?: string | null, end?: string | null) => {
       if (athleteId === profile.id) return;
@@ -1001,6 +1099,14 @@ Deno.serve(async (req) => {
       const invalid = requested.filter((type: string) => !contract.allowedTypes.includes(type));
       if (invalid.length) return response({ error: 'Requested series type is not allowed by the instance OpenAPI', invalid_types: invalid, allowed_types: contract.allowedTypes }, 400);
       const samples = requested.length ? await readTimeseries(link.ow_user_id, startTime, endTime, [...new Set(requested)], contract) : [];
+      const providerSamples = seriesRecords(session.raw, 'unknown').filter(sample =>
+        contract.allowedTypes.includes(sample.type) && sample.timestamp >= Date.parse(startTime) && sample.timestamp <= Date.parse(endTime)
+      );
+      const sampleKeys = new Set(samples.map(sample => `${sample.type}:${sample.timestamp}:${sample.value}`));
+      for (const sample of providerSamples) {
+        const key = `${sample.type}:${sample.timestamp}:${sample.value}`;
+        if (!sampleKeys.has(key)) { samples.push(sample); sampleKeys.add(key); }
+      }
       const hr = samples.filter(sample => /heart.?rate|^hr(?:_|$)/i.test(sample.type));
       const power = samples.filter(sample => /power/i.test(sample.type) && !/heart/i.test(sample.type));
       const pace = samples.filter(sample => /pace|speed|velocity/i.test(sample.type));
@@ -1012,7 +1118,9 @@ Deno.serve(async (req) => {
         zones5: calculateZoneSeconds(series, passport.zones5[kind]),
         zones7: calculateZoneSeconds(series, passport.zones7[kind]),
       });
-      const gps = buildGpsRoute(samples);
+      const timeseriesGps = buildGpsRoute(samples);
+      const eventGps = providerGpsRoute(session.raw);
+      const gps = timeseriesGps.capabilities.gps || timeseriesGps.capabilities.altitude ? timeseriesGps : eventGps;
       const reduce = (rows: TimedSample[]) => {
         if (rows.length <= 2000) return rows;
         const sortedRows = [...rows].sort((a, b) => a.timestamp - b.timestamp);
