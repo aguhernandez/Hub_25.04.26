@@ -120,10 +120,10 @@ interface SatelliteNutritionData {
     status: string;
   } | null;
   nutrition_targets: {
-    target_kcal: number;
-    target_protein_g: number;
-    target_carbs_g: number;
-    target_fat_g: number;
+    target_calories: number;
+    protein_g: number;
+    carbs_g: number;
+    fat_g: number;
     updated_at: string;
   } | null;
   pushed_plan: PushedPlan | null;
@@ -411,7 +411,14 @@ export default function TrainerAthleteNutritionPage() {
     a.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const targets = satelliteData?.nutrition_targets || satelliteData?.active_plan;
+  const targets = satelliteData?.nutrition_targets
+    ? {
+        target_kcal: satelliteData.nutrition_targets.target_calories,
+        target_protein_g: satelliteData.nutrition_targets.protein_g,
+        target_carbs_g: satelliteData.nutrition_targets.carbs_g,
+        target_fat_g: satelliteData.nutrition_targets.fat_g,
+      }
+    : satelliteData?.active_plan;
   const adherence = satelliteData?.today_adherence;
   const lastDiary = satelliteData?.last_diary_session;
 
