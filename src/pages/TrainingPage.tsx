@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 50396)
+Total output lines: 3833
+
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -1784,9 +1787,33 @@ export default function TrainingPage() {
     if (exErr) throw exErr;
 
     if (originalExercises && originalExercises.length > 0) {
+      const copiedBlockIds = new Map<string, string>();
+      let previousBlockId: string | null = null;
+      let previousLegacyTitle: string | null = null;
+      const exercisesForCopy = originalExercises.map(ex => {
+        let blockInstanceId: string | null = null;
+        if (ex.block_instance_id) {
+          if (!copiedBlockIds.has(ex.block_instance_id)) {
+            copiedBlockIds.set(ex.block_instance_id, `block_${crypto.randomUUID()}`);
+          }
+          blockInstanceId = copiedBlockIds.get(ex.block_instance_id)!;
+          previousBlockId = blockInstanceId;
+          previousLegacyTitle = ex.section_title || null;
+        } else if (ex.section_title) {
+          if (!previousBlockId || previousLegacyTitle !== ex.section_title) {
+            previousBlockId = `block_${crypto.randomUUID()}`;
+          }
+          blockInstanceId = previousBlockId;
+          previousLegacyTitle = ex.section_title;
+        } else {
+          // Set-line continuation rows inherit the current section within this copied workout.
+          blockInstanceId = previousBlockId;
+        }
+        return { ...ex, workout_id: newWorkout.id, block_instance_id: blockInstanceId };
+      });
       const { error: insertExErr } = await supabase
         .from('workout_exercises')
-        .insert(originalExercises.map(ex => ({ ...ex, workout_id: newWorkout.id })));
+        .insert(exercisesForCopy);
       if (insertExErr) throw insertExErr;
     }
 
@@ -2122,37 +2149,7 @@ export default function TrainingPage() {
                   ? 'bg-gradient-to-br from-emerald-500 to-emerald-600'
                   : todayWellnessScore >= 45
                   ? 'bg-gradient-to-br from-amber-400 to-amber-500'
-                  : 'bg-gradient-to-br from-rose-500 to-rose-600'
-                : 'bg-gradient-to-br from-emerald-500 to-teal-600 dark:from-emerald-900/40 dark:to-teal-800/30'
-            }`}>
-              <Heart className="w-6 h-6 text-white" />
-            </div>
-            <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
-              {language === 'es' ? 'Bienestar' : 'Wellness'}
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {wellnessChecked && todayWellnessScore !== null
-                ? `${todayWellnessScore.toFixed(0)}/100 — ${
-                    todayWellnessScore >= 70
-                      ? language === 'es' ? 'Listo para entrenar' : 'Ready to train'
-                      : todayWellnessScore >= 45
-                      ? language === 'es' ? 'Moderado' : 'Moderate'
-                      : language === 'es' ? 'Recuperación recomendada' : 'Recovery recommended'
-                  }`
-                : language === 'es' ? 'Check-in diario de recuperación' : 'Daily recovery check-in'}
-            </p>
-          </div>
-        </button>
-        )}
-
-        {/* 2. Assessment */}
-        <div className="relative flex flex-col">
-          <button
-            onClick={() => setShowAssessmentMenu(!showAssessmentMenu)}
-            className={`flex-1 w-full group relative overflow-hidden rounded-xl shadow-lg border-2 transition-all p-6 text-left ${
-              showAssessmentMenu
-                ? 'bg-cyan-600 border-cyan-600'
-                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-cyan-500 dark:hover:border-cyan-500'
+                  : 'bg-gradient-to-br from-rose-500 …396 tokens truncated…0 dark:hover:border-cyan-500'
             }`}
           >
             <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br rounded-bl-full ${

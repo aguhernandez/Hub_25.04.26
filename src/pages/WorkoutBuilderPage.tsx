@@ -450,20 +450,21 @@ export default function WorkoutBuilderPage() {
           blockMap.set(key, { title: ex.section_title || 'Main Work', firstIndex: i });
         }
       });
+      const keyToInstanceId = new Map<string, string>();
       const reconstructedBlocks: BlockInstance[] = Array.from(blockMap.entries())
         .sort((a, b) => a[1].firstIndex - b[1].firstIndex)
         .map(([key, info]) => {
           const available = availableBlocks.find(b => b.name === info.title);
+          const instanceId = key.startsWith('block_') ? key : `block_${crypto.randomUUID()}`;
+          keyToInstanceId.set(key, instanceId);
           return {
-            instanceId: key.startsWith('block_') ? key : `block_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            instanceId,
             typeId: available?.id || 'custom',
             name: info.title,
             color: available?.color || 'blue',
           };
         });
       setOrderedBlocks(reconstructedBlocks);
-
-      const keyToInstanceId = new Map(reconstructedBlocks.map(b => [b.instanceId, b.instanceId]));
       exercisesArray.forEach((ex: any) => {
         const key = ex.block_instance_id || '_default';
         ex.block_instance_id = keyToInstanceId.get(key) || reconstructedBlocks[0]?.instanceId || 'default';
