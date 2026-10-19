@@ -334,7 +334,7 @@ Deno.serve(async (req: Request) => {
           .maybeSingle(),
         serviceSupabase
           .from("nutrition_targets")
-          .select("target_kcal, target_protein_g, target_carbs_g, target_fat_g, updated_at")
+          .select("target_calories, protein_g, carbs_g, fat_g, updated_at")
           .eq("athlete_id", athleteId)
           .maybeSingle(),
         serviceSupabase

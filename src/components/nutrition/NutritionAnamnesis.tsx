@@ -145,7 +145,7 @@ export default function NutritionAnamnesis({ onSaveComplete }: Props) {
       const dataToSave = {
         ...formData,
         athlete_id: selectedAthleteId,
-        trainer_id: profile.id,
+        trainer_id: isTrainerOrAdmin ? profile.id : null,
         section_progress: currentSection,
         is_complete: currentSection === 4,
         updated_at: new Date().toISOString()
