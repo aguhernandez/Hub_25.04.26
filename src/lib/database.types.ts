@@ -133,6 +133,9 @@ export type Database = {
           role: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach'
           country: string | null
           phone: string | null
+          sport: string | null
+          gender: string | null
+          date_of_birth: string | null
           avatar_url: string | null
           language: 'en' | 'es'
           theme: 'light' | 'dark'
@@ -163,6 +166,9 @@ export type Database = {
           role?: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach'
           country?: string | null
           phone?: string | null
+          sport?: string | null
+          gender?: string | null
+          date_of_birth?: string | null
           avatar_url?: string | null
           language?: 'en' | 'es'
           theme?: 'light' | 'dark'
@@ -190,6 +196,9 @@ export type Database = {
           role?: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach'
           country?: string | null
           phone?: string | null
+          sport?: string | null
+          gender?: string | null
+          date_of_birth?: string | null
           avatar_url?: string | null
           language?: 'en' | 'es'
           theme?: 'light' | 'dark'
@@ -201,6 +210,7 @@ export type Database = {
           assigned_nutritionist_id?: string | null
           timezone?: string | null
         }
+        Relationships: []
       }
       habits: {
         Row: {

@@ -23,7 +23,7 @@ interface AthleteSettings {
 }
 
 type EditableField = Exclude<keyof AthleteSettings, 'id' | 'email' | 'role'>;
-type AthleteDraft = Pick<AthleteSettings, EditableField>;
+type AthleteDraft = { [K in EditableField]: string };
 
 interface Props {
   athleteId: string;
@@ -90,8 +90,9 @@ export default function AthleteSettingsModal({ athleteId, onClose, onSaved }: Pr
     setError(null);
     setSaved(false);
     const fullName = [draft.first_name.trim(), draft.last_name.trim()].filter(Boolean).join(' ') || draft.full_name.trim();
-    const { data, error: saveError } = await supabase
-      .from('profiles')
+    // The generated Supabase table type currently resolves profiles.update() to never.
+    const profilesTable = supabase.from('profiles') as any;
+    const { data, error: saveError } = await profilesTable
       .update({
         first_name: draft.first_name.trim() || null,
         last_name: draft.last_name.trim() || null,
