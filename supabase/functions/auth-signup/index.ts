@@ -1,5 +1,4 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
-import * as jose from 'npm:jose@5.2.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,7 +13,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const body = await req.json();
-    const { email, password, full_name, role, username, phone, first_name, last_name, bio, tagline, country, terms_accepted } = body;
+    const { email, password, full_name, role, username, phone, first_name, last_name, date_of_birth, gender, bio, tagline, country, terms_accepted, sport, billing_cycle } = body;
     const allowedRoles = ['athlete', 'trainer', 'nutritionist', 'head_coach'] as const;
     const signupRole = role || 'athlete';
     console.log('🚀 AUTH-SIGNUP - Request for:', email, 'role:', signupRole);
@@ -52,7 +51,6 @@ Deno.serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const jwtSecret = Deno.env.get('JWT_SECRET');
 
     if (!supabaseUrl || !serviceKey) {
       console.error('❌ Missing environment variables');
@@ -93,8 +91,12 @@ Deno.serve(async (req: Request) => {
     const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
-      email_confirm: true,
-      user_metadata: { full_name: full_name || '', role: signupRole },
+      email_confirm: false,
+      user_metadata: {
+        full_name: full_name || '',
+        role: signupRole,
+        ...(billing_cycle === 'monthly' || billing_cycle === 'yearly' ? { billing_cycle } : {}),
+      },
     });
 
     if (authError) {
@@ -136,10 +138,21 @@ Deno.serve(async (req: Request) => {
 
     console.log('1b️⃣ Updating profile with role/username/phone...');
     const profileUpdates: Record<string, unknown> = { role: signupRole };
+    if (sport) profileUpdates.sport = sport;
     if (username) profileUpdates.username = username;
     if (phone) profileUpdates.phone = phone;
     if (first_name) profileUpdates.first_name = first_name;
     if (last_name) profileUpdates.last_name = last_name;
+    if (date_of_birth) {
+      profileUpdates.date_of_birth = date_of_birth;
+      const birthDate = new Date(date_of_birth);
+      const today = new Date();
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+      if (Number.isFinite(age) && age >= 0) profileUpdates.age = age;
+    }
+    if (gender) profileUpdates.gender = gender;
     if (bio) profileUpdates.bio = bio;
     if (tagline) profileUpdates.tagline = tagline;
     if (country) profileUpdates.country = country;
@@ -178,28 +191,12 @@ Deno.serve(async (req: Request) => {
       console.log('✅ Free membership assigned');
     }
 
-    let token = null;
-    if (jwtSecret) {
-      console.log('3️⃣ Generating JWT token...');
-      const secret = new TextEncoder().encode(jwtSecret);
-      token = await new jose.SignJWT({
-        user_id: userId,
-        email: email,
-        role: signupRole,
-        active_plan: [],
-      })
-        .setProtectedHeader({ alg: 'HS256' })
-        .setIssuedAt()
-        .setExpirationTime('7d')
-        .sign(secret);
-    }
-
     console.log('✅ Signup complete!');
 
     return new Response(
       JSON.stringify({
         success: true,
-        token: token,
+        confirmation_required: true,
         user: {
           id: userId,
           email: email,

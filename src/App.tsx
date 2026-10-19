@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import AuthPage from './pages/AuthPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
+import ConfirmEmailPage from './pages/ConfirmEmailPage';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import SplashScreen from './components/SplashScreen';
@@ -385,6 +387,14 @@ function App() {
       await removePushListeners();
     })();
   }, [user]);
+
+  // Keep recovery links on their own screen even when Supabase establishes a session.
+  if (location.pathname === '/reset-password') {
+    return <ResetPasswordPage />;
+  }
+  if (location.pathname === '/confirm-email' || location.pathname === '/auth/confirm') {
+    return <ConfirmEmailPage />;
+  }
 
   if (loading) {
     return <div className="fixed inset-0 bg-[#070A0F]" />;

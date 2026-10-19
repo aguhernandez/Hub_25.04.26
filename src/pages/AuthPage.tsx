@@ -176,6 +176,9 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
   const [otherSport, setOtherSport] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [signupConfirmationSent, setSignupConfirmationSent] = useState(false);
+  const [confirmationResent, setConfirmationResent] = useState(false);
+  const [confirmationEmailSent, setConfirmationEmailSent] = useState(false);
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState('');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -416,7 +419,7 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: 'https://hub.asciende.pro/reset-password',
       });
       if (error) setError(error.message);
       else setResetEmailSent(true);
@@ -465,12 +468,22 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ email, password, full_name: fullName, redirect_url: redirectUrl }),
+          body: JSON.stringify({ email, password, full_name: fullName, redirect_url: redirectUrl, sport: finalSports, first_name: firstName, last_name: lastName, date_of_birth: dateOfBirth || undefined, gender: gender || undefined, terms_accepted: true }),
         });
         const data = await response.json();
         if (!response.ok) {
           setError(data.error || 'Signup failed');
           setLoading(false);
+          return;
+        }
+        if (data.confirmation_required) {
+          try {
+            const { error: confirmationError } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: 'https://hub.asciende.pro/confirm-email' } });
+            setConfirmationEmailSent(!confirmationError);
+          } catch {
+            setConfirmationEmailSent(false);
+          }
+          setSignupConfirmationSent(true);
           return;
         }
         showToast(language === 'es' ? 'Cuenta creada! Redirigiendo...' : 'Account created! Redirecting...', 'success');
@@ -481,8 +494,19 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
         return;
       }
 
-      const { error, user } = await signUp(email, password, fullName, finalSports);
+      const { error, user, confirmationRequired, confirmationEmailSent: emailSent } = await signUp(email, password, fullName, finalSports, {
+        first_name: firstName,
+        last_name: lastName,
+        date_of_birth: dateOfBirth || undefined,
+        gender: gender || undefined,
+        terms_accepted: true,
+      });
       if (error) { setError(error.message); return; }
+      if (confirmationRequired) {
+        setConfirmationEmailSent(Boolean(emailSent));
+        setSignupConfirmationSent(true);
+        return;
+      }
       if (!user) { setError('Error creating account'); return; }
 
       const calculateAge = (bd: string) => {
@@ -537,6 +561,40 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
   };
 
   const currentSat = selectedSatellite ?? SATELLITES[0];
+
+  if (signupConfirmationSent) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-[#100D1B] px-4 py-10 text-white">
+        <section className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.04] p-7 text-center shadow-2xl sm:p-10">
+          <AsciendeLogo height={44} className="mx-auto mb-8" />
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F7C843]/15 text-[#F7C843]"><Mail className="h-7 w-7" /></div>
+          <h1 className="text-2xl font-bold">{language === 'es' ? 'Confirma tu correo' : 'Confirm your email'}</h1>
+          <p className="mt-3 text-sm leading-6 text-white/60">
+            {confirmationEmailSent
+              ? (language === 'es' ? `Enviamos un enlace de confirmación a ${email}. Ábrelo para verificar tu cuenta y continuar.` : `We sent a confirmation link to ${email}. Open it to verify your account and continue.`)
+              : (language === 'es' ? `Tu cuenta se creó, pero no pudimos enviar el correo a ${email}. Puedes volver a intentarlo.` : `Your account was created, but we could not send the email to ${email}. You can try again.`)}
+          </p>
+          {confirmationResent && <p className="mt-4 text-sm text-emerald-300" role="status">{language === 'es' ? 'Si la cuenta aún necesita confirmación, te enviamos otro correo.' : 'If the account still needs confirmation, another email is on its way.'}</p>}
+          <button type="button" disabled={loading} onClick={async () => {
+            setLoading(true);
+            try {
+              const { error: resendError } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: 'https://hub.asciende.pro/confirm-email' } });
+              if (resendError) setError(language === 'es' ? 'No se pudo reenviar el correo. Inténtalo de nuevo.' : 'Could not resend the email. Please try again.');
+              else { setError(''); setConfirmationEmailSent(true); setConfirmationResent(true); }
+            } catch {
+              setError(language === 'es' ? 'No se pudo reenviar el correo. Inténtalo de nuevo.' : 'Could not resend the email. Please try again.');
+            } finally { setLoading(false); }
+          }} className="mt-7 w-full rounded-xl bg-[#F7C843] px-4 py-3.5 text-sm font-bold text-[#2A1F4A] hover:bg-[#f3bc24] disabled:opacity-50">
+            {loading ? (language === 'es' ? 'Enviando…' : 'Sending…') : (language === 'es' ? 'Reenviar correo de confirmación' : 'Resend confirmation email')}
+          </button>
+          {error && <p className="mt-3 text-sm text-red-300" role="alert">{error}</p>}
+          <button type="button" onClick={() => { setSignupConfirmationSent(false); setConfirmationResent(false); setMode('login'); setSignupStep(1); setError(''); }} className="mt-5 text-sm text-white/55 hover:text-white">
+            {language === 'es' ? 'Volver al inicio de sesión' : 'Return to login'}
+          </button>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <div

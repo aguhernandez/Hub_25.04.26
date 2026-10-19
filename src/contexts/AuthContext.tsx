@@ -14,7 +14,7 @@ interface AuthContextType {
   role: UserRole | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName?: string, sport?: string) => Promise<{ error: AuthError | null; user?: User | null }>;
+  signUp: (email: string, password: string, fullName?: string, sport?: string, profileDetails?: { first_name?: string; last_name?: string; date_of_birth?: string; gender?: string; terms_accepted?: boolean }) => Promise<{ error: AuthError | null; user?: User | null; confirmationRequired?: boolean; confirmationEmailSent?: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
@@ -93,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, fullName?: string, sport?: string) => {
+  const signUp = async (email: string, password: string, fullName?: string, sport?: string, profileDetails?: { first_name?: string; last_name?: string; date_of_birth?: string; gender?: string; terms_accepted?: boolean }) => {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -108,6 +108,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           email,
           password,
           full_name: fullName || '',
+          sport: sport || '',
+          ...profileDetails,
         }),
       });
 
@@ -116,6 +118,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!response.ok || result.error) {
         const error = new Error(result.error || 'Signup failed') as AuthError;
         return { error, user: null };
+      }
+
+      if (result.confirmation_required) {
+        let confirmationEmailSent = false;
+        try {
+          const { error: resendError } = await supabase.auth.resend({
+            type: 'signup',
+            email,
+            options: { emailRedirectTo: 'https://hub.asciende.pro/confirm-email' },
+          });
+          confirmationEmailSent = !resendError;
+        } catch {
+          confirmationEmailSent = false;
+        }
+        return { error: null, user: null, confirmationRequired: true, confirmationEmailSent };
       }
 
       if (sport) {

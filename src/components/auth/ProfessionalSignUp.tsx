@@ -76,6 +76,8 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [accountCreated, setAccountCreated] = useState(false);
   const [createdUserId, setCreatedUserId] = useState<string | null>(null);
+  const [confirmationPending, setConfirmationPending] = useState(false);
+  const [confirmationEmailSent, setConfirmationEmailSent] = useState(false);
 
   useEffect(() => {
     setStep(initialStep);
@@ -239,6 +241,7 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
           tagline: form.tagline || undefined,
           country: form.country || undefined,
           terms_accepted: true,
+          billing_cycle: billingCycle,
         }),
       });
 
@@ -247,6 +250,17 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
       if (!response.ok || result.error) {
         setError(result.error || 'Signup failed');
         setLoading(false);
+        return;
+      }
+
+      if (result.confirmation_required) {
+        try {
+          const { error: confirmationError } = await supabase.auth.resend({ type: 'signup', email: form.email, options: { emailRedirectTo: 'https://hub.asciende.pro/confirm-email' } });
+          setConfirmationEmailSent(!confirmationError);
+        } catch {
+          setConfirmationEmailSent(false);
+        }
+        setConfirmationPending(true);
         return;
       }
 
@@ -274,6 +288,39 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
 
   const inputClass = 'w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-[#fdda36]/50 focus:bg-white/[0.07] transition-all';
   const labelClass = 'block text-xs font-semibold text-white/60 mb-1.5 uppercase tracking-wide';
+
+  if (confirmationPending) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-[#100D1B] px-4 py-10 text-white">
+        <section className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.04] p-7 text-center shadow-2xl sm:p-10">
+          <AsciendeLogo height={44} className="mx-auto mb-8" />
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#F7C843]/15 text-[#F7C843]"><Mail className="h-7 w-7" /></div>
+          <h1 className="text-2xl font-bold">{language === 'es' ? 'Confirma tu correo' : 'Confirm your email'}</h1>
+          <p className="mt-3 text-sm leading-6 text-white/60">
+            {confirmationEmailSent
+              ? (language === 'es' ? `Enviamos un enlace a ${form.email}. Confirma tu dirección para continuar con la activación de tu cuenta profesional.` : `We sent a link to ${form.email}. Confirm your address to continue activating your professional account.`)
+              : (language === 'es' ? `Tu cuenta se creó, pero no pudimos enviar el correo a ${form.email}. Puedes volver a intentarlo.` : `Your account was created, but we could not send the email to ${form.email}. You can try again.`)}
+          </p>
+          <button type="button" disabled={loading} onClick={async () => {
+            setLoading(true);
+            try {
+              const { error: resendError } = await supabase.auth.resend({ type: 'signup', email: form.email, options: { emailRedirectTo: 'https://hub.asciende.pro/confirm-email' } });
+              if (resendError) setError(language === 'es' ? 'No se pudo reenviar el correo. Inténtalo de nuevo.' : 'Could not resend the email. Please try again.');
+              else { setError(''); setConfirmationEmailSent(true); }
+            } catch {
+              setError(language === 'es' ? 'No se pudo reenviar el correo. Inténtalo de nuevo.' : 'Could not resend the email. Please try again.');
+            } finally { setLoading(false); }
+          }} className="mt-7 w-full rounded-xl bg-[#F7C843] px-4 py-3.5 text-sm font-bold text-[#2A1F4A] hover:bg-[#f3bc24] disabled:opacity-50">
+            {loading ? (language === 'es' ? 'Enviando…' : 'Sending…') : (language === 'es' ? 'Reenviar correo de confirmación' : 'Resend confirmation email')}
+          </button>
+          {error && <p className="mt-3 text-sm text-red-300" role="alert">{error}</p>}
+          <button type="button" onClick={() => { window.location.assign('/'); }} className="mt-5 text-sm text-white/55 hover:text-white">
+            {language === 'es' ? 'Volver al inicio de sesión' : 'Return to login'}
+          </button>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <div
