@@ -258,9 +258,29 @@ export default function PassportCard({ passport, isActive, canEdit, onUpdateVisi
   const payloadObject = isObject(labPayload) ? labPayload : {};
   const sourceData = isObject(payloadObject.data) ? payloadObject.data : isObject(payloadObject.payload) ? payloadObject.payload : payloadObject;
   const physiologicalData = sourceData.physiological ?? null;
+  const physiological = isObject(physiologicalData) ? physiologicalData : {};
+  const thresholds = isObject(physiological.thresholds) ? physiological.thresholds : {};
   const anthropometryData = sourceData.anthropometry ?? null;
+  const anthropometry = isObject(anthropometryData) ? anthropometryData : {};
+  const metricValue = (value: unknown): number | string | null => {
+    return typeof value === 'number' || typeof value === 'string' ? value : null;
+  };
+  const physiologicalValue = (key: string, fallback?: unknown): number | string | null => metricValue(physiological[key] ?? fallback);
+  const anthropometryValue = (key: string, fallback?: unknown): number | string | null => metricValue(anthropometry[key] ?? fallback);
+  const anthropometryObjectSummary = (key: string): string | null => {
+    const value = anthropometry[key];
+    if (!hasPopulatedValue(value)) return null;
+    return isObject(value) || Array.isArray(value) ? 'Available' : String(value);
+  };
   const moduleValue = (key: string, fallback: unknown) => sourceData[key] ?? fallback;
   const compositionChart = isObject(anthropometryData) ? anthropometryData.composition_chart : null;
+  const additionalPhysiologicalResults = {
+    lt1_pace: physiological.lt1_pace,
+    lt2_pace: physiological.lt2_pace,
+    hrmax: physiological.hrmax,
+    thresholds: { vt1: thresholds.vt1, vt2: thresholds.vt2 },
+    pace_zones_json: physiological.pace_zones_json,
+  };
 
   return (
     <div className={`rounded-2xl border transition-all ${
@@ -384,47 +404,42 @@ export default function PassportCard({ passport, isActive, canEdit, onUpdateVisi
               color="text-sky-600 dark:text-sky-400"
             />
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-              <MetricCell icon={<Wind className="w-3 h-3" />} label="VO2max" value={passport.vo2max} unit="ml/kg/min" />
-              <MetricCell icon={<Zap className="w-3 h-3" />} label="FTP" value={passport.ftp_watts} unit="W" />
-              <MetricCell icon={<Zap className="w-3 h-3" />} label="Critical Power" value={passport.critical_power} unit="W" />
-              <MetricCell icon={<Activity className="w-3 h-3" />} label="W' Anaerobic" value={passport.anaerobic_capacity_kj} unit="kJ" />
-              <MetricCell icon={<Heart className="w-3 h-3" />} label="LT1 HR" value={passport.lt1_hr} unit="bpm" />
-              <MetricCell icon={<Heart className="w-3 h-3" />} label="LT2 HR" value={passport.lt2_hr} unit="bpm" />
-              <MetricCell icon={<Mountain className="w-3 h-3" />} label="LT1 Power" value={passport.lt1_power} unit="W" />
-              <MetricCell icon={<Mountain className="w-3 h-3" />} label="LT2 Power" value={passport.lt2_power} unit="W" />
-              <MetricCell icon={<Timer className="w-3 h-3" />} label="Threshold Pace" value={passport.running_threshold_pace} unit="/km" />
-              <MetricCell icon={<TrendingUp className="w-3 h-3" />} label="VAM" value={passport.vam} unit="m/h" />
-              <MetricCell icon={<TrendingUp className="w-3 h-3" />} label="PAM" value={passport.pam} unit="W/kg" />
+              <MetricCell icon={<Wind className="w-3 h-3" />} label="VO₂ max" value={physiologicalValue('vo2max', passport.vo2max)} unit="ml/kg/min" />
+              <MetricCell icon={<Zap className="w-3 h-3" />} label="FTP" value={physiologicalValue('ftp_watts', passport.ftp_watts)} unit="W" />
+              <MetricCell icon={<Zap className="w-3 h-3" />} label="Critical power" value={physiologicalValue('critical_power', passport.critical_power)} unit="W" />
+              <MetricCell icon={<Activity className="w-3 h-3" />} label="Anaerobic capacity" value={physiologicalValue('anaerobic_capacity_kj', passport.anaerobic_capacity_kj)} unit="kJ" />
+              <MetricCell icon={<Heart className="w-3 h-3" />} label="LT1 heart rate" value={physiologicalValue('lt1_hr', passport.lt1_hr)} unit="bpm" />
+              <MetricCell icon={<Heart className="w-3 h-3" />} label="LT2 heart rate" value={physiologicalValue('lt2_hr', passport.lt2_hr)} unit="bpm" />
+              <MetricCell icon={<Mountain className="w-3 h-3" />} label="LT1 power" value={physiologicalValue('lt1_power', passport.lt1_power)} unit="W" />
+              <MetricCell icon={<Mountain className="w-3 h-3" />} label="LT2 power" value={physiologicalValue('lt2_power', passport.lt2_power)} unit="W" />
+              <MetricCell icon={<Timer className="w-3 h-3" />} label="Threshold pace" value={physiologicalValue('running_threshold_pace', passport.running_threshold_pace)} />
+              <MetricCell icon={<TrendingUp className="w-3 h-3" />} label="VAM" value={physiologicalValue('vam', physiological.vam_kmh ?? passport.vam)} unit="m/h" />
+              <MetricCell icon={<TrendingUp className="w-3 h-3" />} label="PAM" value={physiologicalValue('pam', physiological.pam_watts ?? passport.pam)} unit="W" />
             </div>
           </div>
 
-          {/* ── Body Composition ── */}
+          {/* ── Anthropometry summary ── */}
           <div>
             <SectionHeader
               icon={<User className="w-3.5 h-3.5" />}
-              label="Body Composition"
+              label="Anthropometry"
               color="text-emerald-600 dark:text-emerald-400"
             />
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-              <MetricCell icon={<Activity className="w-3 h-3" />} label="Height" value={passport.height_cm} unit="cm" />
-              <MetricCell icon={<Activity className="w-3 h-3" />} label="Weight" value={passport.weight_kg} unit="kg" />
-              <MetricCell icon={<Activity className="w-3 h-3" />} label="Body Fat" value={passport.body_fat_percent} unit="%" />
-              <MetricCell icon={<Activity className="w-3 h-3" />} label="Muscle Mass" value={passport.muscle_mass_kg} unit="kg" />
-              <MetricCell icon={<Activity className="w-3 h-3" />} label="Lean Mass" value={passport.lean_mass_kg} unit="kg" />
-              <MetricCell icon={<Activity className="w-3 h-3" />} label="Bone Mass" value={passport.bone_mass_kg} unit="kg" />
-              <MetricCell icon={<Activity className="w-3 h-3" />} label="Sum 6 Skinfolds" value={passport.skinfold_sum_6} unit="mm" />
-              <MetricCell icon={<Activity className="w-3 h-3" />} label="Muscle/Bone Ratio" value={passport.muscle_bone_index} />
+              <MetricCell icon={<Activity className="w-3 h-3" />} label="Height" value={anthropometryValue('height_cm', passport.height_cm)} unit="cm" />
+              <MetricCell icon={<Activity className="w-3 h-3" />} label="Weight" value={anthropometryValue('weight_kg', passport.weight_kg)} unit="kg" />
+              <MetricCell icon={<Activity className="w-3 h-3" />} label="Body fat" value={anthropometryValue('body_fat_percent', passport.body_fat_percent)} unit="%" />
+              <MetricCell icon={<Activity className="w-3 h-3" />} label="Muscle mass" value={anthropometryValue('muscle_mass_kg', passport.muscle_mass_kg)} unit="kg" />
+              <MetricCell icon={<Activity className="w-3 h-3" />} label="Lean mass" value={anthropometryValue('lean_mass_kg', passport.lean_mass_kg)} unit="kg" />
+              <MetricCell icon={<Activity className="w-3 h-3" />} label="Bone mass" value={anthropometryValue('bone_mass_kg', passport.bone_mass_kg)} unit="kg" />
+              <MetricCell icon={<Activity className="w-3 h-3" />} label="Sum of 6 skinfolds" value={anthropometryValue('skinfold_sum_6', anthropometryValue('sum_6_skinfolds_mm', passport.skinfold_sum_6))} unit="mm" />
+              <MetricCell icon={<Activity className="w-3 h-3" />} label="Muscle/bone ratio" value={anthropometryValue('muscle_bone_ratio', anthropometryValue('muscle_bone_index', passport.muscle_bone_index))} />
+              <MetricCell icon={<Activity className="w-3 h-3" />} label="Ballast index" value={anthropometryValue('ballast_index')} />
+              <MetricCell icon={<Activity className="w-3 h-3" />} label="Adipose/muscle ratio" value={anthropometryValue('adipose_muscle_ratio')} />
+              <MetricCell icon={<Activity className="w-3 h-3" />} label="Measurement details" value={anthropometryObjectSummary('measurement')} />
+              <MetricCell icon={<Activity className="w-3 h-3" />} label="Anthropometric profile" value={anthropometryObjectSummary('profile')} />
+              <MetricCell icon={<Activity className="w-3 h-3" />} label="Kerr results" value={anthropometryObjectSummary('raw_kerr_results')} />
             </div>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              <MetricCell icon={<Activity className="w-3 h-3" />} label="Z Adipose" value={passport.z_adipose} />
-              <MetricCell icon={<Activity className="w-3 h-3" />} label="Z Muscle" value={passport.z_muscle} />
-              <MetricCell icon={<Activity className="w-3 h-3" />} label="Z Bone" value={passport.z_bone} />
-            </div>
-            {passport.test_protocol && (
-              <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
-                Protocol: <span className="font-medium text-gray-600 dark:text-gray-300">{passport.test_protocol}</span>
-              </p>
-            )}
           </div>
 
           {/* ── Training Zones ── */}
@@ -650,10 +665,9 @@ export default function PassportCard({ passport, isActive, canEdit, onUpdateVisi
           )}
 
           {/* ── Notes ── */}
-          <ExtensionSection title="Laboratory physiological data" icon={<Wind className="w-3.5 h-3.5" />} value={physiologicalData} color="text-sky-600 dark:text-sky-400" />
-          <ExtensionSection title="Laboratory anthropometry data" icon={<User className="w-3.5 h-3.5" />} value={anthropometryData} color="text-emerald-600 dark:text-emerald-400" />
+          <ExtensionSection title="Additional thresholds and pace data" icon={<Wind className="w-3.5 h-3.5" />} value={additionalPhysiologicalResults} color="text-sky-600 dark:text-sky-400" />
           <section>
-            <SectionHeader icon={<User className="w-3.5 h-3.5" />} label="Body composition chart" color="text-emerald-600 dark:text-emerald-400" />
+            <SectionHeader icon={<User className="w-3.5 h-3.5" />} label="Body composition breakdown" color="text-emerald-600 dark:text-emerald-400" />
             <CompositionChart value={compositionChart} />
           </section>
           <ExtensionSection title="Biochemical lab" icon={<FlaskConical className="w-3.5 h-3.5" />} value={moduleValue('biochemical_lab', null)} color="text-violet-600 dark:text-violet-400" />
