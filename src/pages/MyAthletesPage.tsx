@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
-import { Users, User, UserPlus, MessageSquare, Dumbbell, Search, X, Calendar, Apple, CheckCircle, TrendingUp, ChevronDown, ChevronUp, Crown, MoreVertical } from 'lucide-react';
+import { Users, User, UserPlus, MessageSquare, Dumbbell, Search, X, Calendar, Apple, CheckCircle, TrendingUp, ChevronDown, ChevronUp, Crown, MoreVertical, Settings } from 'lucide-react';
 import { useAthlete } from '../contexts/AthleteContext';
 import ChangeMembershipModal from '../components/ChangeMembershipModal';
 import ProfileOptionsModal from '../components/ProfileOptionsModal';
+import AthleteSettingsModal from '../components/AthleteSettingsModal';
 
 interface Athlete {
   id: string;
@@ -14,6 +15,13 @@ interface Athlete {
   email: string;
   country: string | null;
   sport: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  gender?: string | null;
+  date_of_birth?: string | null;
+  phone?: string | null;
+  username?: string | null;
+  timezone?: string | null;
   team_names?: string[];
   is_direct: boolean;
   membership?: {
@@ -50,6 +58,7 @@ export default function MyAthletesPage() {
   const [showMembershipModal, setShowMembershipModal] = useState(false);
   const [showProfileOptionsModal, setShowProfileOptionsModal] = useState(false);
   const [selectedAthleteForOptions, setSelectedAthleteForOptions] = useState<Athlete | null>(null);
+  const [settingsAthleteId, setSettingsAthleteId] = useState<string | null>(null);
 
   const navigate = (page: string) => {
     window.dispatchEvent(new CustomEvent('navigate', { detail: page }));
@@ -68,7 +77,7 @@ export default function MyAthletesPage() {
     try {
       let directAthletes = supabase
         .from('profiles')
-        .select('id, full_name, avatar_url, email, country, sport')
+        .select('id, full_name, first_name, last_name, avatar_url, email, country, sport, gender, date_of_birth, phone, username, timezone')
         .eq('role', 'athlete');
       if (profile?.role !== 'head_coach') {
         directAthletes = directAthletes.eq(profile?.role === 'nutritionist' ? 'assigned_nutritionist_id' : 'assigned_trainer_id', user.id);
@@ -97,7 +106,7 @@ export default function MyAthletesPage() {
         const athleteIds = teamMembers.map(tm => tm.athlete_id);
         const { data: profiles } = await supabase
           .from('profiles')
-          .select('id, full_name, avatar_url, email, country, sport')
+          .select('id, full_name, first_name, last_name, avatar_url, email, country, sport, gender, date_of_birth, phone, username, timezone')
           .in('id', athleteIds);
 
         teamAthleteProfiles = profiles || [];
@@ -482,6 +491,13 @@ export default function MyAthletesPage() {
                       {expandedAthleteId === athlete.id && (
                         <div className="grid grid-cols-2 gap-2 mt-2 animate-fadeIn">
                           <button
+                            onClick={() => setSettingsAthleteId(athlete.id)}
+                            className="px-2 py-1.5 bg-gray-100 dark:bg-gray-600/60 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-1 text-xs font-medium"
+                          >
+                            <Settings className="w-3 h-3" />
+                            {language === 'es' ? 'Configuración' : 'Settings'}
+                          </button>
+                          <button
                             onClick={() => {
                               setSelectedAthlete(athlete.id, athlete.full_name);
                               navigate('training');
@@ -657,6 +673,13 @@ export default function MyAthletesPage() {
 
                 {expandedAthleteId === athlete.id && (
                   <div className="grid grid-cols-2 gap-2 pt-2 animate-fadeIn">
+                    <button
+                      onClick={() => setSettingsAthleteId(athlete.id)}
+                      className="px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                    >
+                      <Settings className="w-4 h-4" />
+                      {language === 'es' ? 'Configuración' : 'Settings'}
+                    </button>
                     <button
                       onClick={() => {
                         setSelectedAthlete(athlete.id, athlete.full_name);
@@ -962,6 +985,14 @@ export default function MyAthletesPage() {
           userEmail={selectedAthlete.email}
           userName={selectedAthlete.full_name || selectedAthlete.email}
           onSuccess={loadAthletes}
+        />
+      )}
+
+      {/* Athlete settings modal */}
+      {settingsAthleteId && (
+        <AthleteSettingsModal
+          athleteId={settingsAthleteId}
+          onClose={() => setSettingsAthleteId(null)}
         />
       )}
 
