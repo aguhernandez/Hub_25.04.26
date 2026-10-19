@@ -477,8 +477,13 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
           return;
         }
         if (data.confirmation_required) {
+          // Keep the selected satellite destination through the email round trip.
+          // The Hub JWT is issued only after confirmation, via the existing
+          // get-session-token endpoint.
+          const confirmationUrl = new URL('https://hub.asciende.pro/confirm-email');
+          confirmationUrl.searchParams.set('redirect_url', redirectUrl);
           try {
-            const { error: confirmationError } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: 'https://hub.asciende.pro/confirm-email' } });
+            const { error: confirmationError } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: confirmationUrl.toString() } });
             setConfirmationEmailSent(!confirmationError);
           } catch {
             setConfirmationEmailSent(false);

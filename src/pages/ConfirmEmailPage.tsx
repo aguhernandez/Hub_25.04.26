@@ -11,6 +11,7 @@ const initialCallback = (() => {
   return {
     hasError: Boolean(url.searchParams.get('error') || url.searchParams.get('error_code') ||
       hash.get('error') || hash.get('error_description')),
+    redirectUrl: url.searchParams.get('redirect_url'),
   };
 })();
 
@@ -29,6 +30,43 @@ export default function ConfirmEmailPage() {
   const [email, setEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [resent, setResent] = useState(false);
+
+  const continueToHub = () => navigate('/', { replace: true });
+
+  const continueToSatellite = async () => {
+    const target = getAllowedSatelliteUrl(initialCallback.redirectUrl);
+    if (!target) {
+      continueToHub();
+      return;
+    }
+
+    setBusy(true);
+    setMessage('');
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) throw new Error('No confirmed Hub session is available.');
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-session-token`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+      });
+      const tokenData = await response.json();
+      if (!response.ok || !tokenData.success || !tokenData.token) {
+        throw new Error('Could not prepare the existing planner session token.');
+      }
+
+      target.searchParams.set('session_token', tokenData.token);
+      window.location.assign(target.toString());
+    } catch {
+      setMessage('We confirmed your email, but could not connect to the selected planner. You can continue to Asciende Hub and open it again.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -168,8 +206,16 @@ export default function ConfirmEmailPage() {
               <button onClick={continueToPayment} className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-[#F7C843] px-4 py-3.5 text-sm font-bold text-[#2A1F4A] hover:bg-[#f3bc24]">
                 Continue to account activation <ArrowRight className="h-4 w-4" />
               </button>
+            ) : initialCallback.redirectUrl ? (
+              <>
+                <button onClick={continueToSatellite} disabled={busy} className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2A1F4A] px-4 py-3.5 text-sm font-semibold text-white hover:bg-[#3B2D66] disabled:opacity-50">
+                  {busy ? 'Connecting…' : 'Continue to planner'} <ArrowRight className="h-4 w-4" />
+                </button>
+                {message && <p className="mt-4 text-sm text-red-700" role="alert">{message}</p>}
+                {message && <button onClick={continueToHub} className="mt-3 w-full py-2 text-sm font-semibold text-[#2A1F4A] hover:underline">Continue to Asciende Hub</button>}
+              </>
             ) : (
-              <button onClick={() => navigate('/', { replace: true })} className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2A1F4A] px-4 py-3.5 text-sm font-semibold text-white hover:bg-[#3B2D66]">
+              <button onClick={continueToHub} className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-[#2A1F4A] px-4 py-3.5 text-sm font-semibold text-white hover:bg-[#3B2D66]">
                 Continue to Asciende <ArrowRight className="h-4 w-4" />
               </button>
             )}
@@ -199,4 +245,18 @@ export default function ConfirmEmailPage() {
       </section>
     </main>
   );
+}
+
+function getAllowedSatelliteUrl(value: string | null): URL | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    const isAsciendeDomain = url.protocol === 'https:' &&
+      (url.hostname === 'asciende.pro' || url.hostname.endsWith('.asciende.pro'));
+    const isLocalDevelopment = url.protocol === 'http:' &&
+      (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
+    return isAsciendeDomain || isLocalDevelopment ? url : null;
+  } catch {
+    return null;
+  }
 }
