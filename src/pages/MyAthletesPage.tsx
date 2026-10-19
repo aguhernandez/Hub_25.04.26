@@ -993,6 +993,7 @@ export default function MyAthletesPage() {
         <AthleteSettingsModal
           athleteId={settingsAthleteId}
           onClose={() => setSettingsAthleteId(null)}
+          onSaved={loadAthletes}
         />
       )}
 

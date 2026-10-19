@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Calendar, Mail, MapPin, Phone, Settings, User, X } from 'lucide-react';
+import { Calendar, Mail, MapPin, Phone, Save, Settings, User, X } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
+import CountrySelect from './CountrySelect';
+import PhoneInput from './PhoneInput';
+import SportSelect from './SportSelect';
 
 interface AthleteSettings {
   id: string;
@@ -19,22 +22,32 @@ interface AthleteSettings {
   role: string | null;
 }
 
+type EditableField = Exclude<keyof AthleteSettings, 'id' | 'email' | 'role'>;
+type AthleteDraft = Pick<AthleteSettings, EditableField>;
+
 interface Props {
   athleteId: string;
   onClose: () => void;
+  onSaved?: () => void;
 }
 
-export default function AthleteSettingsModal({ athleteId, onClose }: Props) {
+const inputClass = 'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-[#fdda36]';
+
+export default function AthleteSettingsModal({ athleteId, onClose, onSaved }: Props) {
   const { language } = useLanguage();
   const [settings, setSettings] = useState<AthleteSettings | null>(null);
+  const [draft, setDraft] = useState<AthleteDraft | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
   const es = language === 'es';
 
   useEffect(() => {
     let active = true;
     const load = async () => {
       setLoading(true);
+      setError(null);
       const { data, error: queryError } = await supabase
         .from('profiles')
         .select('id, email, first_name, last_name, full_name, gender, date_of_birth, country, phone, sport, username, timezone, role')
@@ -42,13 +55,68 @@ export default function AthleteSettingsModal({ athleteId, onClose }: Props) {
         .eq('role', 'athlete')
         .maybeSingle();
       if (!active) return;
-      setSettings(data as AthleteSettings | null);
-      setError(Boolean(queryError) || !data);
+      if (queryError || !data) {
+        setError(es ? 'No se pudo cargar la configuración del atleta.' : 'Could not load athlete settings.');
+      } else {
+        const profile = data as AthleteSettings;
+        setSettings(profile);
+        setDraft({
+          first_name: profile.first_name || '',
+          last_name: profile.last_name || '',
+          full_name: profile.full_name || '',
+          gender: profile.gender || '',
+          date_of_birth: profile.date_of_birth || '',
+          country: profile.country || '',
+          phone: profile.phone || '',
+          sport: profile.sport || '',
+          username: profile.username || '',
+          timezone: profile.timezone || '',
+        });
+      }
       setLoading(false);
     };
     load();
     return () => { active = false; };
-  }, [athleteId]);
+  }, [athleteId, es]);
+
+  const updateDraft = <K extends EditableField>(field: K, value: AthleteDraft[K]) => {
+    setDraft(current => current ? { ...current, [field]: value } : current);
+    setSaved(false);
+  };
+
+  const save = async () => {
+    if (!draft || !settings) return;
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    const fullName = [draft.first_name.trim(), draft.last_name.trim()].filter(Boolean).join(' ') || draft.full_name.trim();
+    const { data, error: saveError } = await supabase
+      .from('profiles')
+      .update({
+        first_name: draft.first_name.trim() || null,
+        last_name: draft.last_name.trim() || null,
+        full_name: fullName || null,
+        gender: draft.gender || null,
+        date_of_birth: draft.date_of_birth || null,
+        country: draft.country || null,
+        phone: draft.phone || null,
+        sport: draft.sport || null,
+        username: draft.username.trim() || null,
+        timezone: draft.timezone.trim() || null,
+      })
+      .eq('id', athleteId)
+      .eq('role', 'athlete')
+      .select('id')
+      .maybeSingle();
+    setSaving(false);
+    if (saveError || !data) {
+      setError(es ? 'No se pudieron guardar los cambios. Verifica que sigas conectado con este atleta.' : 'Changes could not be saved. Check that you are still connected to this athlete.');
+      return;
+    }
+    setSettings({ ...settings, ...draft, full_name: fullName });
+    setSaved(true);
+    onSaved?.();
+  };
 
   const genderLabels: Record<string, string> = {
     male: es ? 'Masculino' : 'Male',
@@ -56,19 +124,7 @@ export default function AthleteSettingsModal({ athleteId, onClose }: Props) {
     other: es ? 'Otro' : 'Other',
     prefer_not_to_say: es ? 'Prefiere no decir' : 'Prefer not to say',
   };
-  const fullName = [settings?.first_name, settings?.last_name].filter(Boolean).join(' ') || settings?.full_name;
-  const fields = [
-    { label: es ? 'Nombre y apellido' : 'First and last name', value: fullName, icon: User },
-    { label: es ? 'Correo electrónico' : 'Email address', value: settings?.email, icon: Mail },
-    { label: es ? 'Tipo de perfil' : 'Profile type', value: settings?.role ? (es ? 'Atleta' : 'Athlete') : null, icon: User },
-    { label: es ? 'Género' : 'Gender', value: settings?.gender ? (genderLabels[settings.gender] || settings.gender) : null, icon: User },
-    { label: 'Username', value: settings?.username, icon: User },
-    { label: es ? 'Deporte' : 'Sport', value: settings?.sport, icon: User },
-    { label: es ? 'País' : 'Country', value: settings?.country, icon: MapPin },
-    { label: es ? 'Teléfono celular' : 'Cell phone', value: settings?.phone, icon: Phone },
-    { label: es ? 'Fecha de nacimiento' : 'Date of birth', value: settings?.date_of_birth, icon: Calendar },
-    { label: es ? 'Zona horaria' : 'Time zone', value: settings?.timezone, icon: MapPin },
-  ];
+  const labelClass = 'block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1';
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
@@ -78,18 +134,28 @@ export default function AthleteSettingsModal({ athleteId, onClose }: Props) {
           <button onClick={onClose} aria-label={es ? 'Cerrar' : 'Close'} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"><X className="w-5 h-5" /></button>
         </header>
         <div className="p-5 overflow-y-auto max-h-[calc(90vh-72px)]">
-          {loading ? <p className="text-sm text-gray-500">{es ? 'Cargando...' : 'Loading...'}</p> : error ? <p className="text-sm text-red-600">{es ? 'No se pudo cargar la configuración del atleta.' : 'Could not load athlete settings.'}</p> : (
+          {loading ? <p className="text-sm text-gray-500">{es ? 'Cargando...' : 'Loading...'}</p> : error && !draft ? <p className="text-sm text-red-600">{error}</p> : draft && settings ? (
             <>
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">{es ? 'Información personal' : 'Personal Information'}</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {fields.map(({ label, value, icon: Icon }) => <div key={label} className="rounded-lg bg-gray-50 dark:bg-gray-700/50 p-3 min-w-0">
-                  <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400"><Icon className="w-3.5 h-3.5" />{label}</div>
-                  <div className="mt-1 text-sm text-gray-900 dark:text-white break-words">{value || <span className="text-gray-400">—</span>}</div>
-                </div>)}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label><span className={labelClass}>{es ? 'Nombre' : 'First name'}</span><input className={inputClass} value={draft.first_name} onChange={e => updateDraft('first_name', e.target.value)} /></label>
+                <label><span className={labelClass}>{es ? 'Apellido' : 'Last name'}</span><input className={inputClass} value={draft.last_name} onChange={e => updateDraft('last_name', e.target.value)} /></label>
+                <label><span className={`${labelClass} flex items-center gap-1`}><Mail className="w-3.5 h-3.5" />Email</span><input className={`${inputClass} opacity-70 cursor-not-allowed`} type="email" value={settings.email || ''} disabled readOnly /></label>
+                <label><span className={`${labelClass} flex items-center gap-1`}><Calendar className="w-3.5 h-3.5" />{es ? 'Fecha de nacimiento' : 'Date of birth'}</span><input className={inputClass} type="date" value={draft.date_of_birth || ''} onChange={e => updateDraft('date_of_birth', e.target.value)} /></label>
+                <label><span className={`${labelClass} flex items-center gap-1`}><User className="w-3.5 h-3.5" />{es ? 'Género' : 'Gender'}</span><select className={inputClass} value={draft.gender || ''} onChange={e => updateDraft('gender', e.target.value)}><option value="">{es ? 'Seleccionar...' : 'Choose...'}</option><option value="male">{genderLabels.male}</option><option value="female">{genderLabels.female}</option><option value="other">{genderLabels.other}</option><option value="prefer_not_to_say">{genderLabels.prefer_not_to_say}</option></select></label>
+                <div><span className={labelClass}>{es ? 'Tipo de perfil' : 'Profile type'}</span><div className={`${inputClass} bg-gray-100 dark:bg-gray-900`}>{es ? 'Atleta' : 'Athlete'}</div></div>
+                <label><span className={labelClass}>Username</span><input className={inputClass} value={draft.username || ''} onChange={e => updateDraft('username', e.target.value)} /></label>
+                <label><span className={labelClass}>{es ? 'Deporte' : 'Sport'}</span><SportSelect value={draft.sport || ''} onChange={value => updateDraft('sport', value)} language={language} /></label>
+                <div><span className={`${labelClass} flex items-center gap-1`}><MapPin className="w-3.5 h-3.5" />{es ? 'País' : 'Country'}</span><CountrySelect value={draft.country || ''} onChange={value => updateDraft('country', value)} language={language} /></div>
+                <div><span className={`${labelClass} flex items-center gap-1`}><Phone className="w-3.5 h-3.5" />{es ? 'Teléfono celular' : 'Cell phone'}</span><PhoneInput value={draft.phone || ''} onChange={value => updateDraft('phone', value)} language={language} /></div>
+                <label><span className={labelClass}>{es ? 'Zona horaria' : 'Time zone'}</span><input className={inputClass} value={draft.timezone || ''} onChange={e => updateDraft('timezone', e.target.value)} placeholder="US/Mountain (GMT-06)" /></label>
               </div>
-              <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">{es ? 'Vista de solo lectura.' : 'Read-only view.'}</p>
+              <div className="mt-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div aria-live="polite" className="text-sm">{error ? <span className="text-red-600">{error}</span> : saved ? <span className="text-green-600">{es ? 'Cambios guardados.' : 'Changes saved.'}</span> : <span className="text-xs text-gray-500 dark:text-gray-400">{es ? 'El email no se puede cambiar desde aquí.' : 'Email cannot be changed here.'}</span>}</div>
+                <button onClick={save} disabled={saving} className="px-4 py-2 bg-[#fdda36] text-[#514163] rounded-lg font-semibold hover:bg-[#ffd51a] disabled:opacity-50 flex items-center justify-center gap-2"><Save className="w-4 h-4" />{saving ? (es ? 'Guardando...' : 'Saving...') : (es ? 'Guardar cambios' : 'Save changes')}</button>
+              </div>
             </>
-          )}
+          ) : error ? <p className="text-sm text-red-600">{error}</p> : null}
         </div>
       </section>
     </div>
