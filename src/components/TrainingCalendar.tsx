@@ -5,6 +5,7 @@ import {
   ChevronDown, Heart, CheckCircle2, Flag, Sofa, StickyNote, Clock, MapPin, Zap
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import DeleteWorkoutModal from './DeleteWorkoutModal';
 
 interface CalendarDay {
   date: Date;
@@ -434,6 +435,7 @@ export default function TrainingCalendar({
   const [draggedWorkout, setDraggedWorkout] = useState<string | null>(null);
   const [contextMenuWorkout, setContextMenuWorkout] = useState<string | null>(null);
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
+  const [workoutPendingDelete, setWorkoutPendingDelete] = useState<any | null>(null);
   const [showAddMenuForDate, setShowAddMenuForDate] = useState<string | null>(null);
   const closeContextMenu = () => { setContextMenuWorkout(null); setContextMenuPos(null); };
   const detailRef = useRef<HTMLDivElement>(null);
@@ -1004,7 +1006,7 @@ export default function TrainingCalendar({
                 </button>
               )}
               {onWorkoutDelete && (
-                <button onClick={(e) => { e.stopPropagation(); onWorkoutDelete(workout.id); closeContextMenu(); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors last:rounded-b-lg">
+                <button onClick={(e) => { e.stopPropagation(); setWorkoutPendingDelete(workout); closeContextMenu(); }} className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors last:rounded-b-lg">
                   <Trash2 className="w-4 h-4" />
                   {language === 'es' ? 'Eliminar' : 'Delete'}
                 </button>
@@ -1013,6 +1015,19 @@ export default function TrainingCalendar({
           </div>
         );
       })()}
+      <DeleteWorkoutModal
+        open={!!workoutPendingDelete}
+        workoutName={workoutPendingDelete?.name || workoutPendingDelete?.title || (language === 'es' ? 'Entrenamiento' : 'Workout')}
+        workoutDate={workoutPendingDelete?.scheduled_date
+          ? new Date(`${workoutPendingDelete.scheduled_date}T12:00:00`).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+          : ''}
+        workoutDuration={workoutPendingDelete?.duration || (workoutPendingDelete?.estimated_duration_minutes ? formatMinutes(workoutPendingDelete.estimated_duration_minutes) : '')}
+        onCancel={() => setWorkoutPendingDelete(null)}
+        onConfirm={() => {
+          if (workoutPendingDelete && onWorkoutDelete) onWorkoutDelete(workoutPendingDelete.id);
+          setWorkoutPendingDelete(null);
+        }}
+      />
     </div>
   );
 }
