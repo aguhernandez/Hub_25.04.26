@@ -125,6 +125,10 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
         supabase.from('atp_weekly_loads').select('*').eq('atp_id', atpId).order('week_number')
       ]);
 
+      const firstError = macroRes.error || mesoRes.error || loadRes.error;
+      if (firstError) {
+        throw firstError;
+      }
       setMacrocycles(macroRes.data || []);
       setMesocycles(mesoRes.data || []);
       setWeeklyLoads(loadRes.data || []);
@@ -186,7 +190,11 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
       .select()
       .single();
 
-    if (!error && data) {
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    if (data) {
       setMesocycles([...mesocycles, data]);
       setHasChanges(true);
     }
