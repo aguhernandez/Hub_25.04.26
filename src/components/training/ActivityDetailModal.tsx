@@ -64,6 +64,7 @@ interface ActivityStream {
 interface Props {
   activity: UnifiedActivity | null;
   onClose: () => void;
+  onBack?: () => void;
   athleteId?: string;
   wearableDetails?: any;
   wearableLoading?: boolean;
@@ -485,7 +486,7 @@ function TelemetryGraph({ streams, distanceMeters, onHover }: { streams: Activit
   </section>;
 }
 
-export function ActivityDetailModal({ activity, onClose, athleteId, wearableDetails, wearableLoading = false, isWearable = false, actions, language: languageProp }: Props) {
+export function ActivityDetailModal({ activity, onClose, onBack, athleteId, wearableDetails, wearableLoading = false, isWearable = false, actions, language: languageProp }: Props) {
   const language = languageProp || (typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('es') ? 'es' : 'en');
   const [streams, setStreams] = useState<ActivityStream | null>(null);
   const [gpsPoints, setGpsPoints] = useState<{ latitude: number; longitude: number; altitude?: number }[]>([]);
@@ -676,7 +677,7 @@ export function ActivityDetailModal({ activity, onClose, athleteId, wearableDeta
       <div className="relative flex h-[90vh] w-[96vw] max-w-[1400px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-neutral-900">
         <div className="z-10 flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-5 py-3 dark:border-neutral-700 dark:bg-neutral-900">
           <div className="flex min-w-0 items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30"><ActivityIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" /></div><div className="min-w-0"><h2 className="truncate font-bold text-neutral-900 dark:text-white">{activity.name}</h2><p className="text-xs text-neutral-500 dark:text-neutral-400">{startDate.toLocaleDateString()} · {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p></div><SportBadge sport={activity.sport_type} source={activity.source} /></div>
-          <div className="ml-3 flex shrink-0 items-center gap-2">{actions}<button onClick={onClose} className="rounded-lg p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"><X className="h-5 w-5 text-neutral-500" /></button></div>
+          <div className="ml-3 flex shrink-0 items-center gap-2">{onBack && <button onClick={onBack} className="rounded-lg px-3 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-900/30">{language === 'es' ? 'Resumen' : 'Summary'}</button>}{actions}<button onClick={onClose} className="rounded-lg p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"><X className="h-5 w-5 text-neutral-500" /></button></div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
           <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(300px,3fr)]">

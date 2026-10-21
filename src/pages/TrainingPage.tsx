@@ -24,6 +24,7 @@ import ServiceAccessGate from '../components/ServiceAccessGate';
 import LogWorkoutModal from '../components/training/LogWorkoutModal';
 import WorkoutReassignModal from '../components/training/WorkoutReassignModal';
 import { ActivityDetailModal } from '../components/training/ActivityDetailModal';
+import ActivitySummaryModal from '../components/training/ActivitySummaryModal';
 import TrainerAthleteSelector from '../components/training/TrainerAthleteSelector';
 import { getExerciseName } from '../utils/exerciseI18n';
 import Toast from '../components/Toast';
@@ -155,6 +156,7 @@ export default function TrainingPage() {
   const [reassignSourceWorkout, setReassignSourceWorkout] = useState<EnduranceWorkout | null>(null);
   const [logReassignTarget, setLogReassignTarget] = useState<{ workout: EnduranceWorkout; executedOnDate: string; originalPlannedDay: string } | null>(null);
   const [selectedGPSActivity, setSelectedGPSActivity] = useState<any | null>(null);
+  const [activityAnalysisOpen, setActivityAnalysisOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{ last_push_at: string | null; planner_source: string | null; status: string | null } | null>(null);
   const [deletingPlanIds, setDeletingPlanIds] = useState<Set<string>>(new Set());
   const [staledPlanIds, setStaledPlanIds] = useState<Set<string>>(new Set());
@@ -957,7 +959,7 @@ export default function TrainingPage() {
             name: session.sport_raw || session.name || session.sport || (language === 'es' ? 'Sesión realizada' : 'Completed session'), description: '',
             scheduled_date: String(session.start_time || '').slice(0, 10), status: 'completed', source: session.source, type: 'wearable_executed', sport: session.sport_category && session.sport_category !== 'other' ? session.sport_category : session.sport_raw || session.sport,
             duration_seconds: session.duration_seconds, distance_m: session.distance_m, avg_hr: session.avg_hr, max_hr: session.max_hr, calories: session.calories,
-            completion_source: session.source, athlete_feedback: session.athlete_feedback,
+            completion_source: session.source, provider: session.provider, athlete_feedback: session.athlete_feedback,
             wearable_metrics: session.source === 'watch' ? (wearable.metrics || []).find((metric: any) => metric.executed_session_id === session.id) : null,
             wearable_match: (wearable.matches || []).find((match: any) => match.executed_session_id === session.id) || null,
           }));
@@ -1504,12 +1506,14 @@ export default function TrainingPage() {
     // Imported activities share the same detail view regardless of provider.
     if (workout.type === 'external') {
       const raw = (workout as any).raw_data;
+      setActivityAnalysisOpen(false);
       setSelectedGPSActivity({ ...workout, ...(raw && typeof raw === 'object' ? raw : {}), source: (workout as any).source || raw?.source, raw_data: raw });
       return;
     }
 
     if ((workout as any).type === 'wearable_executed') {
       setSelectedWearableDetails(null);
+      setActivityAnalysisOpen(false);
       setSelectedWearableSession(workout);
       return;
     }
@@ -2942,12 +2946,22 @@ export default function TrainingPage() {
         <WorkoutHistory athleteId={effectiveAthleteId} />
       )}
 
-      {selectedGPSActivity && (
+      {selectedGPSActivity && !activityAnalysisOpen && (
+        <ActivitySummaryModal
+          activity={selectedGPSActivity}
+          language={language}
+          onAnalyse={() => setActivityAnalysisOpen(true)}
+          onClose={() => setSelectedGPSActivity(null)}
+        />
+      )}
+
+      {selectedGPSActivity && activityAnalysisOpen && (
         <ActivityDetailModal
           activity={selectedGPSActivity}
           athleteId={effectiveAthleteId}
           language={language}
-          onClose={() => setSelectedGPSActivity(null)}
+          onBack={() => setActivityAnalysisOpen(false)}
+          onClose={() => { setSelectedGPSActivity(null); setActivityAnalysisOpen(false); }}
         />
       )}
 
@@ -3510,10 +3524,18 @@ export default function TrainingPage() {
         </div>
       )}
 
-      {selectedWearableSession && <ActivityDetailModal
+      {selectedWearableSession && !activityAnalysisOpen && <ActivitySummaryModal
+        activity={selectedWearableSession}
+        language={language}
+        onAnalyse={() => setActivityAnalysisOpen(true)}
+        onClose={() => setSelectedWearableSession(null)}
+      />}
+
+      {selectedWearableSession && activityAnalysisOpen && <ActivityDetailModal
         isWearable
         language={language}
         athleteId={effectiveAthleteId}
+        onBack={() => setActivityAnalysisOpen(false)}
         wearableDetails={selectedWearableDetails}
         wearableLoading={wearableDetailsLoading}
         activity={{
@@ -3547,7 +3569,7 @@ export default function TrainingPage() {
           streams_fetched: true,
         } as any}
         actions={selectedWearableSession.executed_session_id && <div className="flex flex-wrap gap-2">{selectedWearableSession.wearable_match?.status === 'suggested' && <button onClick={() => void updateWearableMatch(selectedWearableSession.executed_session_id, 'manual_matched', selectedWearableSession.wearable_match.planned_workout_id)} className="rounded-lg bg-[#fdda36] px-3 py-2 text-sm font-semibold text-[#3b2d6b] hover:bg-[#f5cd1a]">{language === 'es' ? 'Confirmar sugerencia' : 'Confirm suggestion'}</button>}<button onClick={() => setShowChangeWearableMatch(value => !value)} className="rounded-lg bg-[#fdda36] px-3 py-2 text-sm font-semibold text-[#3b2d6b]">{language === 'es' ? 'Cambiar vínculo' : 'Change match'}</button><button onClick={() => void updateWearableMatch(selectedWearableSession.executed_session_id, 'unplanned')} className="rounded-lg bg-[#fdda36] px-3 py-2 text-sm font-semibold text-[#3b2d6b]">{language === 'es' ? 'Desvincular' : 'Unlink'}</button><button onClick={() => void updateWearableMatch(selectedWearableSession.executed_session_id, 'dismissed')} className="rounded-lg bg-[#fdda36] px-3 py-2 text-sm font-semibold text-[#3b2d6b]">{language === 'es' ? 'Descartar' : 'Dismiss'}</button>{showChangeWearableMatch && <div className="absolute right-20 top-16 z-20 max-h-64 overflow-y-auto rounded-lg bg-white p-2 shadow-xl dark:bg-gray-800">{workouts.filter(item => item.type === 'endurance_plan' && Math.abs(new Date(`${item.scheduled_date}T00:00:00`).getTime() - new Date(`${selectedWearableSession.scheduled_date}T00:00:00`).getTime()) <= 86400000).map(item => <button key={item.id} onClick={() => { const id = String(item.id).replace(/^endurance-workout-/, ''); void updateWearableMatch(selectedWearableSession.executed_session_id, 'manual_matched', id); setShowChangeWearableMatch(false); }} className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-gray-100 dark:hover:bg-gray-700">{item.scheduled_date} · {item.name}</button>)}</div>}</div>}
-        onClose={() => setSelectedWearableSession(null)}
+        onClose={() => { setSelectedWearableSession(null); setActivityAnalysisOpen(false); }}
       />}
 
       {selectedRacePlan && (
