@@ -146,9 +146,16 @@ export default function WorkoutBuilderPage() {
   useEffect(() => {
     const checkSessionStorage = () => {
       const savedDate = sessionStorage.getItem('workout_scheduled_date');
+      const savedTeamId = sessionStorage.getItem('workout_team_id');
       const editWorkoutId = sessionStorage.getItem('edit_workout_id');
       const editScheduledDate = sessionStorage.getItem('edit_scheduled_date');
       const savedDraftId = sessionStorage.getItem('workout_draft_id');
+
+      if (savedTeamId) {
+        setAssignmentType('team');
+        setSelectedTeam(savedTeamId);
+        sessionStorage.removeItem('workout_team_id');
+      }
 
       if (savedDraftId) {
         loadDraft(savedDraftId);
@@ -157,8 +164,13 @@ export default function WorkoutBuilderPage() {
         loadWorkoutForEdit(editWorkoutId, editScheduledDate);
         sessionStorage.removeItem('edit_workout_id');
         sessionStorage.removeItem('edit_scheduled_date');
+        sessionStorage.removeItem('workout_scheduled_date');
       } else if (savedDate) {
         setScheduledDate(savedDate);
+        if (!savedTeamId) {
+          setAssignmentType('individual');
+          setSelectedTeam('');
+        }
         setWorkoutName('');
         setWorkoutDescription('');
         setWorkoutExercises([]);
@@ -167,7 +179,7 @@ export default function WorkoutBuilderPage() {
         if (!ctxAthleteId) {
           setSelectedAthlete('');
         }
-        setSelectedTeam('');
+        if (!savedTeamId) setSelectedTeam('');
         setSelectedMembership('');
         sessionStorage.removeItem('workout_scheduled_date');
       }
@@ -992,7 +1004,9 @@ export default function WorkoutBuilderPage() {
       setDraftId(null);
       setPublishAfterDraftLoad(false);
 
-      window.dispatchEvent(new CustomEvent('navigate', { detail: 'training' }));
+      const returnPage = sessionStorage.getItem('workout_return_page') || 'training';
+      sessionStorage.removeItem('workout_return_page');
+      window.dispatchEvent(new CustomEvent('navigate', { detail: returnPage }));
     } catch (err: any) {
       console.error('Error:', err);
       error(err.message || (language === 'es' ? 'Error al guardar' : 'Error saving'));

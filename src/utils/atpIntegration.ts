@@ -162,21 +162,21 @@ export async function getATPComplianceSummary(atpId: string): Promise<{
       };
     }
 
-    const completedWeeks = data.filter(w => w.actual_sessions > 0);
-    const avgCompliance = completedWeeks.length > 0
-      ? completedWeeks.reduce((sum, w) => sum + w.compliance_percentage, 0) / completedWeeks.length
-      : 0;
+    const completedWeeks = data.filter(w => w.actual_sessions > 0 && w.planned_sessions > 0);
+    const actualSessions = completedWeeks.reduce((sum, week) => sum + week.actual_sessions, 0);
+    const plannedSessions = completedWeeks.reduce((sum, week) => sum + week.planned_sessions, 0);
+    const avgCompliance = plannedSessions > 0 ? (actualSessions / plannedSessions) * 100 : 0;
 
     const onTrackWeeks = data.filter(w =>
-      w.compliance_percentage >= 95 && w.compliance_percentage <= 105
+      w.planned_sessions > 0 && w.compliance_percentage >= 95 && w.compliance_percentage <= 105
     ).length;
 
     const underPerformingWeeks = data.filter(w =>
-      w.compliance_percentage < 70 && w.actual_sessions > 0
+      w.planned_sessions > 0 && w.compliance_percentage < 70 && w.actual_sessions > 0
     ).length;
 
     const overPerformingWeeks = data.filter(w =>
-      w.compliance_percentage > 140
+      w.planned_sessions > 0 && w.compliance_percentage > 140
     ).length;
 
     return {

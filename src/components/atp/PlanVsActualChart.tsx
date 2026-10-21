@@ -7,20 +7,23 @@ interface PlanVsActualChartProps {
   atpId: string;
   startWeek?: number;
   endWeek?: number;
+  refreshKey?: number;
 }
 
 interface WeekData {
   week_number: number;
   week_start_date: string;
+  week_end_date: string;
   planned_sessions: number;
   planned_tonnage: number;
   actual_sessions: number;
   actual_tonnage: number;
-  compliance_percentage: number;
+  compliance_percentage: number | null;
+  tonnage_compliance_percentage: number | null;
   status: string;
 }
 
-export default function PlanVsActualChart({ atpId, startWeek = 1, endWeek = 52 }: PlanVsActualChartProps) {
+export default function PlanVsActualChart({ atpId, startWeek = 1, endWeek = 52, refreshKey = 0 }: PlanVsActualChartProps) {
   const { language } = useLanguage();
   const [weekData, setWeekData] = useState<WeekData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +31,7 @@ export default function PlanVsActualChart({ atpId, startWeek = 1, endWeek = 52 }
 
   useEffect(() => {
     loadData();
-  }, [atpId, startWeek, endWeek]);
+  }, [atpId, startWeek, endWeek, refreshKey]);
 
   const loadData = async () => {
     try {
@@ -57,8 +60,8 @@ export default function PlanVsActualChart({ atpId, startWeek = 1, endWeek = 52 }
     }
   };
 
-  const getStatusIcon = (status: string, compliance: number) => {
-    if (status === 'not_started') return <Minus className="w-4 h-4 text-gray-400" />;
+  const getStatusIcon = (status: string, compliance: number | null) => {
+    if (status === 'not_started' || compliance == null) return <Minus className="w-4 h-4 text-gray-400" />;
     if (compliance >= 95 && compliance <= 105) return <CheckCircle className="w-4 h-4 text-green-500" />;
     if (compliance < 70) return <TrendingDown className="w-4 h-4 text-red-500" />;
     if (compliance > 140) return <AlertTriangle className="w-4 h-4 text-orange-500" />;
@@ -66,8 +69,8 @@ export default function PlanVsActualChart({ atpId, startWeek = 1, endWeek = 52 }
     return <TrendingUp className="w-4 h-4 text-blue-500" />;
   };
 
-  const getStatusColor = (status: string, compliance: number) => {
-    if (status === 'not_started') return 'bg-gray-100 dark:bg-gray-800 dark:bg-gray-800';
+  const getStatusColor = (status: string, compliance: number | null) => {
+    if (status === 'not_started' || compliance == null) return 'bg-gray-100 dark:bg-gray-800 dark:bg-gray-800';
     if (compliance >= 95 && compliance <= 105) return 'bg-green-50 dark:bg-green-900/20';
     if (compliance < 70) return 'bg-red-50 dark:bg-red-900/20';
     if (compliance > 140) return 'bg-orange-50 dark:bg-orange-900/20';
@@ -75,11 +78,21 @@ export default function PlanVsActualChart({ atpId, startWeek = 1, endWeek = 52 }
     return 'bg-blue-50 dark:bg-blue-900/20';
   };
 
+  const getWeekCompliance = (week: WeekData): number | null => {
+    const planned = viewMode === 'sessions' ? week.planned_sessions : week.planned_tonnage;
+    const actual = viewMode === 'sessions' ? week.actual_sessions : week.actual_tonnage;
+    return planned > 0 ? (actual / planned) * 100 : null;
+  };
+
   const calculateOverallCompliance = () => {
-    const completedWeeks = weekData.filter(w => w.actual_sessions > 0);
-    if (completedWeeks.length === 0) return 0;
-    const totalCompliance = completedWeeks.reduce((sum, w) => sum + w.compliance_percentage, 0);
-    return Math.round(totalCompliance / completedWeeks.length);
+    const today = new Date().toISOString().slice(0, 10);
+    const relevantWeeks = weekData.filter(week =>
+      getWeekCompliance(week) !== null && (week.actual_sessions > 0 || week.week_end_date < today)
+    );
+    if (relevantWeeks.length === 0) return null;
+    const plannedTotal = relevantWeeks.reduce((sum, week) => sum + (viewMode === 'sessions' ? week.planned_sessions : week.planned_tonnage), 0);
+    const actualTotal = relevantWeeks.reduce((sum, week) => sum + (viewMode === 'sessions' ? week.actual_sessions : week.actual_tonnage), 0);
+    return plannedTotal > 0 ? Math.round((actualTotal / plannedTotal) * 100) : null;
   };
 
   const t = (key: string) => {
@@ -147,7 +160,7 @@ export default function PlanVsActualChart({ atpId, startWeek = 1, endWeek = 52 }
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm opacity-90">{t('overall_compliance')}</p>
-            <p className="text-3xl font-bold">{overallCompliance}%</p>
+            <p className="text-3xl font-bold">{overallCompliance == null ? '—' : `${overallCompliance}%`}</p>
           </div>
           {getStatusIcon('', overallCompliance)}
         </div>
@@ -162,19 +175,20 @@ export default function PlanVsActualChart({ atpId, startWeek = 1, endWeek = 52 }
             const actualValue = viewMode === 'sessions' ? week.actual_sessions : week.actual_tonnage;
             const plannedPercent = (plannedValue / maxValue) * 100;
             const actualPercent = (actualValue / maxValue) * 100;
+            const compliance = getWeekCompliance(week);
 
             return (
               <div
                 key={week.week_number}
-                className={`p-3 rounded-lg transition-all ${getStatusColor(week.status, week.compliance_percentage)}`}
+                className={`p-3 rounded-lg transition-all ${getStatusColor(week.status, compliance)}`}
               >
                 <div className="flex items-center gap-3 mb-2">
                   <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 dark:text-gray-300 min-w-[60px]">
                     {t('week')} {week.week_number}
                   </span>
-                  {getStatusIcon(week.status, week.compliance_percentage)}
+                  {getStatusIcon(week.status, compliance)}
                   <span className="text-xs text-gray-600 dark:text-gray-400 dark:text-gray-400">
-                    {Math.round(week.compliance_percentage)}% {t('compliance')}
+                    {compliance == null ? '—' : `${Math.round(compliance)}% ${t('compliance')}`}
                   </span>
                   <span className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 ml-auto">
                     {new Date(week.week_start_date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {

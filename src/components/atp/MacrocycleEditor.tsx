@@ -135,6 +135,10 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
   const handleAddMacrocycle = async () => {
     const lastMacro = macrocycles[macrocycles.length - 1];
     const startWeek = lastMacro ? lastMacro.end_week + 1 : 1;
+    if (startWeek > 52) {
+      alert(language === 'es' ? 'El plan ya cubre las 52 semanas' : 'The plan already covers all 52 weeks');
+      return;
+    }
     const endWeek = Math.min(startWeek + 11, 52);
 
     const { data, error } = await supabase
@@ -161,6 +165,10 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
     const lastMeso = macroMesocycles[macroMesocycles.length - 1];
     const startWeek = lastMeso ? lastMeso.end_week + 1 : macroStartWeek;
     const endWeek = Math.min(startWeek + 3, macroEndWeek);
+    if (endWeek - startWeek + 1 < 3) {
+      alert(language === 'es' ? 'Quedan menos de 3 semanas disponibles en esta fase' : 'Fewer than 3 weeks remain in this phase');
+      return;
+    }
 
     const { data, error } = await supabase
       .from('atp_mesocycles')
@@ -209,6 +217,13 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
 
     if (!error) {
       setWeeklyLoads(weeklyLoads.map(w => w.id === weekId ? { ...w, ...updates } : w));
+      const week = weeklyLoads.find(w => w.id === weekId);
+      if (week) {
+        await supabase.rpc('calculate_weekly_compliance', {
+          p_atp_id: atpId,
+          p_week_number: week.week_number
+        });
+      }
       setHasChanges(true);
     }
   };
@@ -235,7 +250,15 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
       w => w.week_number >= mesocycle.start_week && w.week_number <= mesocycle.end_week
     );
 
-    const baseLoad = mesoWeeks[0]?.estimated_load || 1000;
+    const baseLoad = mesocycle.target_tonnage > 0
+      ? mesocycle.target_tonnage
+      : mesoWeeks.find(week => week.estimated_load > 0)?.estimated_load || 0;
+    if (baseLoad <= 0) {
+      alert(language === 'es'
+        ? 'Define una carga base positiva antes de generar la progresión'
+        : 'Set a positive base load before generating a progression');
+      return;
+    }
     let updates: Array<{ id: string; estimated_load: number }> = [];
 
     if (type === 'linear') {
@@ -255,22 +278,27 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
       });
     } else if (type === 'block') {
       mesoWeeks.forEach((week, idx) => {
-        const isDeload = (idx + 1) % 4 === 0;
+        const weekInBlock = idx % 4;
         updates.push({
           id: week.id,
-          estimated_load: isDeload ? baseLoad * 0.6 : baseLoad * 1.1
+          estimated_load: weekInBlock === 3 ? baseLoad * 0.6 : baseLoad * (1 + weekInBlock * 0.05)
         });
       });
     }
 
     for (const update of updates) {
-      await supabase
+      const { error } = await supabase
         .from('atp_weekly_loads')
         .update({ estimated_load: update.estimated_load })
         .eq('id', update.id);
+      if (error) {
+        alert(error.message);
+        return;
+      }
     }
 
-    loadData();
+    await loadData();
+    onUpdate();
     setHasChanges(true);
   };
 
@@ -281,7 +309,7 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
   };
 
   const getComplianceBadge = (week: WeeklyLoad) => {
-    if (!week.actual_load) return null;
+    if (week.actual_load == null || week.estimated_load <= 0) return null;
     const percent = (week.actual_load / week.estimated_load) * 100;
     if (percent >= 90) return <div className="w-2 h-2 rounded-full bg-green-500" />;
     if (percent >= 70) return <div className="w-2 h-2 rounded-full bg-yellow-500" />;

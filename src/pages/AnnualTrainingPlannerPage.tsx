@@ -6,7 +6,6 @@ import { Calendar, Plus, CreditCard as Edit2, Trash2, Download, Eye, Users, Tren
 import WeeklyPlanEditor from '../components/atp/WeeklyPlanEditor';
 import PlanVsActualChart from '../components/atp/PlanVsActualChart';
 import MacrocycleEditor from '../components/atp/MacrocycleEditor';
-import { recalculateATPCompliance } from '../utils/atpIntegration';
 import ATPPlanTagsSection from '../components/tags/ATPPlanTagsSection';
 
 interface AnnualTrainingPlan {
@@ -92,12 +91,15 @@ export default function AnnualTrainingPlannerPage() {
   const [macrocycles, setMacrocycles] = useState<Macrocycle[]>([]);
   const [weeklyLoads, setWeeklyLoads] = useState<WeeklyLoad[]>([]);
   const [events, setEvents] = useState<Event[]>([]);
+  const [detailsLoadedFor, setDetailsLoadedFor] = useState<string | null>(null);
+  const [detailsRevision, setDetailsRevision] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showWeekDetail, setShowWeekDetail] = useState<number | null>(null);
   const [showMacroEditor, setShowMacroEditor] = useState(false);
   const [viewStartWeek, setViewStartWeek] = useState(1);
   const [athletes, setAthletes] = useState<any[]>([]);
+  const [teams, setTeams] = useState<Array<{ id: string; name: string }>>([]);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   const [formEvents, setFormEvents] = useState<Array<{date: string, title: string, priority: 'A' | 'B' | 'C'}>>([]);
 
@@ -116,13 +118,17 @@ export default function AnnualTrainingPlannerPage() {
       loadATPs();
       if (profile?.role === 'trainer' || profile?.role === 'admin') {
         loadAthletes();
+        loadTeams();
       }
     }
   }, [profile]);
 
   useEffect(() => {
     if (selectedATP) {
-      loadATPDetails(selectedATP.id);
+      setDetailsLoadedFor(null);
+      const recalculateLoad = sessionStorage.getItem('workout_return_recalculate_load') === 'true';
+      sessionStorage.removeItem('workout_return_recalculate_load');
+      loadATPDetails(selectedATP.id, recalculateLoad).then(() => setDetailsLoadedFor(selectedATP.id));
     }
   }, [selectedATP]);
 
@@ -154,7 +160,12 @@ export default function AnnualTrainingPlannerPage() {
 
       if (error) throw error;
       setAtps(data || []);
-      if (data && data.length > 0 && !selectedATP) {
+      const returnAtpId = sessionStorage.getItem('workout_return_atp_id');
+      const returnAtp = returnAtpId ? data?.find(plan => plan.id === returnAtpId) : null;
+      if (returnAtp) {
+        setSelectedATP(returnAtp);
+        sessionStorage.removeItem('workout_return_atp_id');
+      } else if (data && data.length > 0 && !selectedATP) {
         setSelectedATP(data[0]);
       }
     } catch (error) {
@@ -174,8 +185,22 @@ export default function AnnualTrainingPlannerPage() {
     setAthletes(data || []);
   };
 
-  const loadATPDetails = async (atpId: string) => {
+  const loadTeams = async () => {
+    const { data, error } = await supabase.from('teams').select('id, name').order('name');
+    if (error) {
+      console.error('Error loading teams for ATPs:', error);
+      return;
+    }
+    setTeams(data || []);
+  };
+
+  const loadATPDetails = async (atpId: string, recalculateLoad = false) => {
     try {
+      const { error: syncError } = await supabase.rpc('sync_atp_weekly_plan', {
+        p_atp_id: atpId,
+        p_recalculate_load: recalculateLoad
+      });
+      if (syncError) console.error('Error syncing ATP planned loads:', syncError);
       const [macroRes, loadRes, eventRes] = await Promise.all([
         supabase.from('atp_macrocycles').select('*').eq('atp_id', atpId).order('start_week'),
         supabase.from('atp_weekly_loads').select('*').eq('atp_id', atpId).order('week_number'),
@@ -185,6 +210,7 @@ export default function AnnualTrainingPlannerPage() {
       setMacrocycles(macroRes.data || []);
       setWeeklyLoads(loadRes.data || []);
       setEvents(eventRes.data || []);
+      setDetailsRevision(revision => revision + 1);
     } catch (error) {
       console.error('Error loading ATP details:', error);
     }
@@ -203,51 +229,70 @@ export default function AnnualTrainingPlannerPage() {
       return;
     }
 
+    let createdAtpId: string | null = null;
     try {
-      const startDate = new Date(formData.start_date);
-      const endDate = formData.end_date
-        ? new Date(formData.end_date)
-        : new Date(startDate.getFullYear(), 11, 31);
+      // Treat date inputs as calendar dates, avoiding local timezone/DST shifts.
+      const startDate = new Date(`${formData.start_date}T00:00:00.000Z`);
+      const startYear = startDate.getUTCFullYear();
+      if (Number(formData.year) !== startYear) {
+        alert(language === 'es' ? 'El año debe coincidir con la fecha de inicio' : 'Year must match the start date');
+        return;
+      }
+      const lastWeekEnd = new Date(startDate);
+      lastWeekEnd.setUTCDate(lastWeekEnd.getUTCDate() + 52 * 7 - 1);
+      const endDate = lastWeekEnd.toISOString().slice(0, 10);
+
+      if (formEvents.some(evt => !evt.title.trim() || !evt.date || evt.date < formData.start_date || evt.date > endDate)) {
+        alert(language === 'es'
+          ? 'Cada competición necesita nombre y una fecha dentro de las 52 semanas del plan'
+          : 'Each event needs a name and a date within the 52-week plan');
+        return;
+      }
 
       const { data: atp, error: atpError } = await supabase
         .from('annual_training_plans')
         .insert({
-          ...formData,
+          year: startYear,
+          title: formData.title.trim(),
+          start_date: formData.start_date,
+          notes: formData.notes || null,
           athlete_id: isAthlete ? profile.id : (formData.athlete_id || null),
           team_id: formData.team_id || null,
           coach_id: isAthlete ? null : profile?.id,
-          end_date: endDate.toISOString().split('T')[0]
+          end_date: endDate
         })
         .select()
         .single();
 
       if (atpError) throw atpError;
+      createdAtpId = atp.id;
 
       // Create 52 weeks
       const weeklyLoadsToInsert = [];
       for (let week = 1; week <= 52; week++) {
         const weekStart = new Date(startDate);
-        weekStart.setDate(weekStart.getDate() + (week - 1) * 7);
+        weekStart.setUTCDate(weekStart.getUTCDate() + (week - 1) * 7);
         const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
+        weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
 
         weeklyLoadsToInsert.push({
           atp_id: atp.id,
           week_number: week,
-          start_date: weekStart.toISOString().split('T')[0],
-          end_date: weekEnd.toISOString().split('T')[0],
+          start_date: weekStart.toISOString().slice(0, 10),
+          end_date: weekEnd.toISOString().slice(0, 10),
           estimated_load: 0,
           num_sessions: 0
         });
       }
 
-      await supabase.from('atp_weekly_loads').insert(weeklyLoadsToInsert);
+      const { error: weeksError } = await supabase.from('atp_weekly_loads').insert(weeklyLoadsToInsert);
+      if (weeksError) throw weeksError;
 
       // Create events if any
       if (formEvents.length > 0) {
         const eventsToInsert = formEvents.map((evt) => {
-          const eventDate = new Date(evt.date);
-          const weekNum = Math.ceil((eventDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+          const eventDate = new Date(`${evt.date}T00:00:00.000Z`);
+          const weekNum = Math.floor((eventDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
           return {
             atp_id: atp.id,
             week_number: Math.max(1, Math.min(52, weekNum)),
@@ -258,7 +303,8 @@ export default function AnnualTrainingPlannerPage() {
             icon: '🏆'
           };
         });
-        await supabase.from('atp_events').insert(eventsToInsert);
+        const { error: eventsError } = await supabase.from('atp_events').insert(eventsToInsert);
+        if (eventsError) throw eventsError;
       }
 
       setShowCreateModal(false);
@@ -277,6 +323,11 @@ export default function AnnualTrainingPlannerPage() {
       // Auto-select the newly created ATP
       setSelectedATP(atp);
     } catch (error: any) {
+      // Keep a failed create from leaving an ATP with missing weekly rows/events.
+      if (createdAtpId) {
+        const { error: rollbackError } = await supabase.from('annual_training_plans').delete().eq('id', createdAtpId);
+        if (rollbackError) console.error('Error rolling back incomplete ATP:', rollbackError);
+      }
       console.error('Error creating ATP:', error);
       setNotification({
         message: error.message,
@@ -531,11 +582,12 @@ export default function AnnualTrainingPlannerPage() {
           </div>
 
           {/* Plan vs Actual Chart */}
-          {selectedATP && (
+          {selectedATP && detailsLoadedFor === selectedATP.id && (
             <PlanVsActualChart
               atpId={selectedATP.id}
               startWeek={Math.max(1, viewStartWeek - 4)}
               endWeek={Math.min(52, viewStartWeek + 15)}
+              refreshKey={detailsRevision}
             />
           )}
         </>
@@ -584,7 +636,7 @@ export default function AnnualTrainingPlannerPage() {
                 />
               </div>
 
-              <div>
+              {profile?.role !== 'athlete' && <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   {language === 'es' ? 'Atleta' : 'Athlete'}
                 </label>
@@ -600,7 +652,18 @@ export default function AnnualTrainingPlannerPage() {
                     </option>
                   ))}
                 </select>
-              </div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mt-3 mb-2">
+                  {language === 'es' ? 'Equipo (opcional)' : 'Team (optional)'}
+                </label>
+                <select
+                  value={formData.team_id}
+                  onChange={(e) => setFormData({ ...formData, team_id: e.target.value, athlete_id: e.target.value ? '' : formData.athlete_id })}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#fdda36]"
+                >
+                  <option value="">{language === 'es' ? 'Sin equipo' : 'No team'}</option>
+                  {teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+                </select>
+              </div>}
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -621,7 +684,7 @@ export default function AnnualTrainingPlannerPage() {
                   <input
                     type="date"
                     value={formData.start_date}
-                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value, year: e.target.value ? Number(e.target.value.slice(0, 4)) : formData.year })}
                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#fdda36]"
                   />
                 </div>
@@ -739,6 +802,8 @@ export default function AnnualTrainingPlannerPage() {
         <MacrocycleEditor
           atpId={selectedATP.id}
           athleteId={selectedATP.athlete_id || ''}
+          teamId={selectedATP.team_id || ''}
+          athleteName={selectedATP.athlete?.full_name || ''}
           onClose={() => setShowMacroEditor(false)}
           onUpdate={() => {
             loadATPDetails(selectedATP.id);

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useAthlete } from '../../contexts/AthleteContext';
 import { supabase } from '../../lib/supabase';
 import { X, Plus, Calendar, Dumbbell, Copy, FileText, TrendingUp, CreditCard as Edit2, Trash2, Check, Clock, Target, Activity } from 'lucide-react';
 import EventManager from './EventManager';
@@ -22,12 +23,15 @@ interface WeeklyPlanEditorProps {
     color: string;
   } | null;
   athleteId: string;
+  athleteName: string;
+  teamId: string;
   onClose: () => void;
   onUpdate: () => void;
 }
 
 interface Workout {
   id: string;
+  assignment_id: string;
   name: string;
   scheduled_date: string;
   description: string | null;
@@ -58,53 +62,51 @@ export default function WeeklyPlanEditor({
   weekData,
   macrocycle,
   athleteId,
+  athleteName,
+  teamId,
   onClose,
   onUpdate
 }: WeeklyPlanEditorProps) {
   const { language } = useLanguage();
-
-  const formatDateLocal = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
+  const { setSelectedAthlete, clearSelectedAthlete } = useAthlete();
 
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
   const [weekNotes, setWeekNotes] = useState(weekData.notes || '');
   const [weekFocus, setWeekFocus] = useState(weekData.focus || '');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newWorkout, setNewWorkout] = useState({
-    name: '',
-    day_index: 0,
-    description: ''
-  });
 
   useEffect(() => {
     loadWeekWorkouts();
-  }, [weekNumber, athleteId]);
+  }, [weekNumber, athleteId, teamId, weekData.start_date, weekData.end_date]);
 
   const loadWeekWorkouts = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('workouts')
+      let query = supabase
+        .from('athlete_workouts')
         .select(`
-          id,
-          name,
+          id, workout_id, team_id,
           scheduled_date,
-          description,
-          session_notes,
-          workout_exercises(count)
+          workout:workouts(id, name, description, workout_exercises(count))
         `)
-        .eq('athlete_id', athleteId)
         .gte('scheduled_date', weekData.start_date)
         .lte('scheduled_date', weekData.end_date)
         .order('scheduled_date');
 
+      query = teamId ? query.eq('team_id', teamId) : query.eq('athlete_id', athleteId);
+      const { data, error } = await query;
       if (error) throw error;
-      setWorkouts(data || []);
+      const assignments = (data || []).flatMap((assignment: any) => assignment.workout ? [{
+        ...assignment.workout,
+        scheduled_date: assignment.scheduled_date,
+        assignment_id: assignment.id,
+        team_id: assignment.team_id
+      }] : []));
+      const uniqueSessions = new Map<string, Workout>();
+      assignments.forEach((assignment: Workout) => {
+        uniqueSessions.set(`${assignment.id}:${assignment.scheduled_date}`, assignment);
+      });
+      setWorkouts([...uniqueSessions.values()]);
     } catch (error) {
       console.error('Error loading workouts:', error);
     } finally {
@@ -112,48 +114,23 @@ export default function WeeklyPlanEditor({
     }
   };
 
-  const handleAddWorkout = async () => {
-    if (!newWorkout.name) {
-      alert(language === 'es' ? 'Ingresa un nombre para la sesión' : 'Enter a session name');
-      return;
-    }
-
-    try {
-      const workoutDate = new Date(weekData.start_date);
-      workoutDate.setDate(workoutDate.getDate() + newWorkout.day_index);
-
-      const { error } = await supabase
-        .from('workouts')
-        .insert({
-          name: newWorkout.name,
-          description: newWorkout.description,
-          athlete_id: athleteId,
-          scheduled_date: formatDateLocal(workoutDate),
-          session_notes: `ATP Week ${weekNumber} - ${weekFocus || macrocycle?.phase_type || 'Training'}`
-        });
-
-      if (error) throw error;
-
-      await updateWeekStats();
-      loadWeekWorkouts();
-      setShowAddModal(false);
-      setNewWorkout({ name: '', day_index: 0, description: '' });
-      onUpdate();
-    } catch (error: any) {
-      console.error('Error adding workout:', error);
-      alert(error.message);
-    }
-  };
-
   const handleDeleteWorkout = async (workoutId: string) => {
     if (!confirm(language === 'es' ? '¿Eliminar esta sesión?' : 'Delete this session?')) return;
 
     try {
-      const { error } = await supabase
-        .from('workouts')
-        .delete()
-        .eq('id', workoutId);
+      const scheduledDate = workouts.find(w => w.id === workoutId)?.scheduled_date || weekData.start_date;
+      let query = supabase.from('athlete_workouts').delete()
+        .eq('workout_id', workoutId)
+        .eq('scheduled_date', scheduledDate);
 
+      if (teamId) {
+        // Team assignments are represented by one row per athlete for the shared session.
+        query = query.eq('team_id', teamId);
+      } else {
+        query = query.eq('athlete_id', athleteId);
+      }
+
+      const { error } = await query;
       if (error) throw error;
 
       await updateWeekStats();
@@ -173,76 +150,46 @@ export default function WeeklyPlanEditor({
 
     try {
       // Get previous week data
-      const { data: prevWeekData } = await supabase
+      const { data: prevWeekData, error: prevWeekError } = await supabase
         .from('atp_weekly_loads')
         .select('*')
         .eq('atp_id', atpId)
         .eq('week_number', weekNumber - 1)
         .single();
 
-      if (!prevWeekData) {
+      if (prevWeekError || !prevWeekData) {
         alert(language === 'es' ? 'No hay plan en la semana anterior' : 'No plan in previous week');
         return;
       }
 
       // Get previous week workouts
-      const { data: prevWorkouts } = await supabase
-        .from('workouts')
-        .select(`
-          *,
-          workout_exercises(*)
-        `)
-        .eq('athlete_id', athleteId)
+      let previousAssignmentsQuery = supabase
+        .from('athlete_workouts')
+        .select('athlete_id, trainer_id, workout_id, assignment_type, team_id, membership_id, scheduled_date')
         .gte('scheduled_date', prevWeekData.start_date)
         .lte('scheduled_date', prevWeekData.end_date);
+      previousAssignmentsQuery = teamId
+        ? previousAssignmentsQuery.eq('team_id', teamId)
+        : previousAssignmentsQuery.eq('athlete_id', athleteId);
+      const { data: prevWorkouts, error: prevWorkoutsError } = await previousAssignmentsQuery;
+      if (prevWorkoutsError) throw prevWorkoutsError;
 
       if (!prevWorkouts || prevWorkouts.length === 0) {
         alert(language === 'es' ? 'No hay sesiones en la semana anterior' : 'No sessions in previous week');
         return;
       }
 
-      // Duplicate workouts with date adjustment
-      for (const workout of prevWorkouts) {
-        const prevDate = new Date(workout.scheduled_date);
-        const newDate = new Date(prevDate);
-        newDate.setDate(newDate.getDate() + 7);
-
-        const { data: newWorkout, error: workoutError } = await supabase
-          .from('workouts')
-          .insert({
-            name: workout.name,
-            description: workout.description,
-            athlete_id: athleteId,
-            scheduled_date: formatDateLocal(newDate),
-            session_notes: workout.session_notes,
-            created_by: workout.created_by
-          })
-          .select()
-          .single();
-
-        if (workoutError) throw workoutError;
-
-        // Duplicate exercises
-        if (workout.workout_exercises && workout.workout_exercises.length > 0) {
-          const exercisesToInsert = workout.workout_exercises.map((ex: any) => ({
-            workout_id: newWorkout.id,
-            exercise_id: ex.exercise_id,
-            sets: ex.sets,
-            reps: ex.reps,
-            rest_seconds: ex.rest_seconds,
-            weight_kg: ex.weight_kg,
-            notes: ex.notes,
-            order_index: ex.order_index,
-            superset_group: ex.superset_group,
-            primary_metric: ex.primary_metric,
-            secondary_metric: ex.secondary_metric,
-            set_lines: ex.set_lines,
-            section_title: ex.section_title
-          }));
-
-          await supabase.from('workout_exercises').insert(exercisesToInsert);
-        }
-      }
+      const assignmentsToInsert = prevWorkouts.map((assignment: any) => {
+        const nextDate = new Date(`${assignment.scheduled_date}T00:00:00.000Z`);
+        nextDate.setUTCDate(nextDate.getUTCDate() + 7);
+        return {
+          ...assignment,
+          scheduled_date: nextDate.toISOString().slice(0, 10),
+          status: 'pending'
+        };
+      });
+      const { error: duplicateError } = await supabase.from('athlete_workouts').insert(assignmentsToInsert);
+      if (duplicateError) throw duplicateError;
 
       await updateWeekStats();
       loadWeekWorkouts();
@@ -257,34 +204,55 @@ export default function WeeklyPlanEditor({
   const updateWeekStats = async () => {
     try {
       // Recalculate week stats based on workouts
-      const { data: weekWorkouts } = await supabase
-        .from('workouts')
+      let query = supabase
+        .from('athlete_workouts')
         .select(`
-          id,
-          workout_exercises(
+          id, workout_id, scheduled_date,
+          workout:workouts(
+            workout_exercises(
             sets,
             reps,
-            weight_kg
+            primary_metric,
+            secondary_metric,
+            primary_value,
+            secondary_value
+            )
           )
         `)
-        .eq('athlete_id', athleteId)
         .gte('scheduled_date', weekData.start_date)
         .lte('scheduled_date', weekData.end_date);
 
+      query = teamId ? query.eq('team_id', teamId) : query.eq('athlete_id', athleteId);
+      const { data: weekWorkouts, error: workoutsError } = await query;
+      if (workoutsError) throw workoutsError;
+
+      const uniqueSessions = new Map<string, any>();
+      (weekWorkouts || []).forEach((assignment: any) => {
+        uniqueSessions.set(`${assignment.workout_id}:${assignment.scheduled_date}`, assignment);
+      });
+      const plannedSessions = [...uniqueSessions.values()];
       let totalLoad = 0;
-      let numSessions = weekWorkouts?.length || 0;
+      const numSessions = plannedSessions.length;
 
       // Simple load calculation: sum of (sets * avg_reps * avg_weight)
-      weekWorkouts?.forEach((workout: any) => {
-        workout.workout_exercises?.forEach((ex: any) => {
+      plannedSessions.forEach((workout: any) => {
+        workout.workout?.workout_exercises?.forEach((ex: any) => {
           const sets = ex.sets || 0;
-          const reps = parseInt(ex.reps) || 10;
-          const weight = ex.weight_kg || 0;
+          const parseAverage = (value: unknown) => {
+            const values = String(value || '').match(/\d+(?:\.\d+)?/g)?.map(Number) || [];
+            return values.length > 1 ? (values[0] + values[1]) / 2 : (values[0] || 0);
+          };
+          const reps = parseAverage(ex.reps);
+          const primaryMetric = String(ex.primary_metric || '').toLowerCase();
+          const secondaryMetric = String(ex.secondary_metric || '').toLowerCase();
+          const weight = primaryMetric.includes('kg')
+            ? parseAverage(ex.primary_value)
+            : secondaryMetric.includes('kg') ? parseAverage(ex.secondary_value) : 0;
           totalLoad += sets * reps * weight;
         });
       });
 
-      await supabase
+      const { error: updateError } = await supabase
         .from('atp_weekly_loads')
         .update({
           estimated_load: totalLoad,
@@ -294,6 +262,7 @@ export default function WeeklyPlanEditor({
           focus: weekFocus
         })
         .eq('id', weekData.id);
+      if (updateError) throw updateError;
     } catch (error) {
       console.error('Error updating week stats:', error);
     }
@@ -301,13 +270,14 @@ export default function WeeklyPlanEditor({
 
   const handleSaveWeekSettings = async () => {
     try {
-      await supabase
+      const { error } = await supabase
         .from('atp_weekly_loads')
         .update({
           notes: weekNotes,
           focus: weekFocus
         })
         .eq('id', weekData.id);
+      if (error) throw error;
 
       onUpdate();
       alert(language === 'es' ? 'Configuración guardada' : 'Settings saved');
@@ -318,19 +288,26 @@ export default function WeeklyPlanEditor({
   };
 
   const openWorkoutBuilder = (workoutId?: string) => {
-    // Navigate to workout builder
-    const event = new CustomEvent('navigate', { detail: 'workout-builder' });
-    window.dispatchEvent(event);
-
-    // Store workout context for the builder
+    if (athleteId) setSelectedAthlete(athleteId, athleteName);
+    else clearSelectedAthlete();
+    const existingWorkout = workoutId ? workouts.find(w => w.assignment_id === workoutId) : null;
+    const scheduledDate = existingWorkout?.scheduled_date || weekData.start_date;
+    sessionStorage.setItem('workout_scheduled_date', scheduledDate);
+    sessionStorage.setItem('workout_return_page', 'atp');
+    sessionStorage.setItem('workout_return_atp_id', atpId);
+    sessionStorage.setItem('workout_return_recalculate_load', 'true');
+    if (teamId) sessionStorage.setItem('workout_team_id', teamId);
+    else sessionStorage.removeItem('workout_team_id');
     if (workoutId) {
-      sessionStorage.setItem('editWorkoutId', workoutId);
+      sessionStorage.setItem('edit_workout_id', workoutId);
+      sessionStorage.setItem('edit_scheduled_date', scheduledDate);
     }
+    window.dispatchEvent(new CustomEvent('navigate', { detail: 'workout-builder' }));
   };
 
   const getDayName = (dateString: string) => {
-    const date = new Date(dateString);
-    const dayIndex = date.getDay();
+    const date = new Date(`${dateString}T00:00:00.000Z`);
+    const dayIndex = date.getUTCDay();
     const adjustedIndex = dayIndex === 0 ? 6 : dayIndex - 1;
     return DAYS_OF_WEEK[language][adjustedIndex];
   };
@@ -422,7 +399,7 @@ export default function WeeklyPlanEditor({
         <div className="p-6 border-b border-gray-200 dark:border-gray-700 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 dark:bg-gray-900">
           <div className="flex flex-wrap gap-3">
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={() => openWorkoutBuilder()}
               className="px-4 py-2 bg-[#fdda36] text-[#514163] font-medium rounded-lg hover:bg-[#ffd51a] transition-colors flex items-center gap-2"
             >
               <Plus className="w-4 h-4" />
@@ -504,7 +481,7 @@ export default function WeeklyPlanEditor({
                   : 'No training sessions defined for this week'}
               </p>
               <button
-                onClick={() => setShowAddModal(true)}
+                onClick={() => openWorkoutBuilder()}
                 className="px-6 py-3 bg-[#fdda36] text-[#514163] font-medium rounded-lg hover:bg-[#ffd51a] transition-colors inline-flex items-center gap-2"
               >
                 <Plus className="w-5 h-5" />
@@ -546,7 +523,7 @@ export default function WeeklyPlanEditor({
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => openWorkoutBuilder(workout.id)}
+                        onClick={() => openWorkoutBuilder(workout.assignment_id)}
                         className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-lg transition-colors"
                         title={language === 'es' ? 'Editar' : 'Edit'}
                       >
@@ -568,76 +545,7 @@ export default function WeeklyPlanEditor({
         </div>
       </div>
 
-      {/* Add Session Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white dark:bg-gray-800 dark:bg-gray-800 rounded-xl max-w-md w-full">
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700 dark:border-gray-700">
-              <h4 className="text-lg font-bold text-gray-900 dark:text-white dark:text-white">
-                {language === 'es' ? 'Nueva Sesión' : 'New Session'}
-              </h4>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300 mb-2">
-                  {language === 'es' ? 'Nombre' : 'Name'} *
-                </label>
-                <input
-                  type="text"
-                  value={newWorkout.name}
-                  onChange={(e) => setNewWorkout({ ...newWorkout, name: e.target.value })}
-                  placeholder={language === 'es' ? 'Ej: Tren Superior' : 'e.g., Upper Body'}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:bg-gray-900 text-gray-900 dark:text-white dark:text-white focus:outline-none focus:ring-2 focus:ring-[#fdda36]"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300 mb-2">
-                  {language === 'es' ? 'Día de la Semana' : 'Day of Week'}
-                </label>
-                <select
-                  value={newWorkout.day_index}
-                  onChange={(e) => setNewWorkout({ ...newWorkout, day_index: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:bg-gray-900 text-gray-900 dark:text-white dark:text-white focus:outline-none focus:ring-2 focus:ring-[#fdda36]"
-                >
-                  {DAYS_OF_WEEK[language].map((day, index) => (
-                    <option key={index} value={index}>
-                      {day}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 dark:text-gray-300 mb-2">
-                  {language === 'es' ? 'Descripción' : 'Description'}
-                </label>
-                <textarea
-                  value={newWorkout.description}
-                  onChange={(e) => setNewWorkout({ ...newWorkout, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:bg-gray-900 text-gray-900 dark:text-white dark:text-white focus:outline-none focus:ring-2 focus:ring-[#fdda36] resize-none"
-                />
-              </div>
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => {
-                    setShowAddModal(false);
-                    setNewWorkout({ name: '', day_index: 0, description: '' });
-                  }}
-                  className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 dark:border-gray-600 text-gray-700 dark:text-gray-300 dark:text-gray-300 font-medium rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 transition-colors"
-                >
-                  {language === 'es' ? 'Cancelar' : 'Cancel'}
-                </button>
-                <button
-                  onClick={handleAddWorkout}
-                  className="flex-1 px-4 py-2 bg-[#fdda36] text-[#514163] font-medium rounded-lg hover:bg-[#ffd51a] transition-colors"
-                >
-                  {language === 'es' ? 'Crear' : 'Create'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }
