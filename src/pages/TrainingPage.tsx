@@ -168,6 +168,7 @@ export default function TrainingPage() {
   const [selectedSessionAnalysis, setSelectedSessionAnalysis] = useState<any | null>(null);
   const [showRequestQuestionnaire, setShowRequestQuestionnaire] = useState(false);
   const [tpSyncing, setTpSyncing] = useState(false);
+  const [stravaSyncing, setStravaSyncing] = useState(false);
 
   const updateWearableMatch = async (sessionId: string, status: 'manual_matched' | 'dismissed' | 'unplanned', plannedWorkoutId?: string) => {
     const { error: invokeError } = await supabase.functions.invoke('open-wearables', { body: { action: 'analysis-update-match', executed_session_id: sessionId, status, planned_workout_id: plannedWorkoutId } });
@@ -215,6 +216,41 @@ export default function TrainingPage() {
       }
     } finally {
       setTpSyncing(false);
+    }
+  };
+
+  const handleStravaSync = async () => {
+    if (!effectiveAthleteId || stravaSyncing) return;
+    setStravaSyncing(true);
+    try {
+      const { StravaClient } = await import('../utils/stravaClient');
+      const connected = await StravaClient.checkAthleteConnection(effectiveAthleteId);
+      if (!connected) {
+        error(language === 'es'
+          ? 'Esta persona no tiene conexión con Strava. Ve a Settings para conectar Strava.'
+          : 'This athlete has no Strava connection. Go to Settings to connect Strava.');
+        return;
+      }
+
+      const result = await StravaClient.syncActivities({
+        athleteId: effectiveAthleteId,
+        perPage: 200,
+        fullSync: true,
+      });
+      if (!result.success) {
+        throw new Error(result.error || 'Strava sync failed');
+      }
+
+      success(language === 'es'
+        ? `Sincronización de Strava completada: ${result.synced || 0} actividades procesadas.`
+        : `Strava sync complete: ${result.synced || 0} activities processed.`);
+      await loadWorkouts();
+    } catch (err: any) {
+      error(language === 'es'
+        ? `No se pudo sincronizar Strava: ${err?.message || 'error desconocido'}`
+        : `Could not sync Strava: ${err?.message || 'unknown error'}`);
+    } finally {
+      setStravaSyncing(false);
     }
   };
 
@@ -553,7 +589,15 @@ export default function TrainingPage() {
       const extEnd = parseDateStr(endDateStr); extEnd.setDate(extEnd.getDate() + 7);
       const { data: externalData, error: externalError } = await supabase
         .from('external_activities')
-        .select('id, name, sport_type, source, start_time, local_date, duration_seconds, distance_meters, user_notes')
+        .select(`
+          id, external_id, name, sport_type, source, start_time, local_date,
+          duration_seconds, elapsed_time_seconds, distance_meters, elevation_gain_meters,
+          average_speed_mps, max_speed_mps, average_heartrate, max_heartrate, has_heartrate,
+          average_watts, max_watts, weighted_avg_watts, has_power, average_cadence,
+          suffer_score, calories, device_name, time_in_zones, fused_activity_id, raw_data,
+          streams_fetched, splits_metric, splits_standard, map_polyline, map_summary_polyline,
+          average_grade, elev_high, elev_low, user_notes
+        `)
         .eq('user_id', effectiveAthleteId)
         .gte('start_time', `${formatDateLocal(extStart)}T00:00:00`)
         .lte('start_time', `${formatDateLocal(extEnd)}T23:59:59`)
@@ -1461,7 +1505,11 @@ export default function TrainingPage() {
     if (workout.type === 'external') {
       const raw = (workout as any).raw_data;
       if ((workout as any).source === 'asciende_gps' || raw?.source === 'asciende_gps') {
-        setSelectedGPSActivity((workout as any).raw_data || workout);
+        setSelectedGPSActivity(raw || workout);
+        return;
+      }
+      if ((workout as any).source === 'strava' || raw?.source === 'strava') {
+        setSelectedGPSActivity(raw || workout);
         return;
       }
       window.dispatchEvent(new CustomEvent('navigate', { detail: 'activity-history' }));
@@ -2480,15 +2528,12 @@ export default function TrainingPage() {
             History
           </button>
           <button
-            onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'activity-history' }))}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'strava'
-                ? 'bg-orange-500 text-white'
-                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
-            }`}
+            onClick={handleStravaSync}
+            disabled={!effectiveAthleteId || stravaSyncing}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors bg-[#FC4C02] text-white hover:bg-[#E34402] disabled:cursor-not-allowed disabled:opacity-60"
             title={language === 'es' ? 'Sincronizar Strava' : 'Sync Strava'}
           >
-            <RotateCw className="w-4 h-4" />
+            <RotateCw className={`w-4 h-4 ${stravaSyncing ? 'animate-spin' : ''}`} />
             Strava
           </button>
           <button
