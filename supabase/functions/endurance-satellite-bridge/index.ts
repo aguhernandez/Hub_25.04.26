@@ -1300,8 +1300,14 @@ Deno.serve(async (req: Request) => {
             diagnostics: forwarded.data?.diagnostics || [],
           });
         } else {
-          const { data: candidates, error } = await serviceSupabase.from("external_activities")
-            .select("*").eq("external_id", external_activity_id).limit(100);
+          // Endurance calendar stores Hub's internal external_activities.id. Accept
+          // that id as well as the provider's external_id for older callers.
+          let { data: candidates, error } = await serviceSupabase.from("external_activities")
+            .select("*").eq("id", external_activity_id).limit(100);
+          if (!error && (!candidates || candidates.length === 0)) {
+            ({ data: candidates, error } = await serviceSupabase.from("external_activities")
+              .select("*").eq("external_id", external_activity_id).limit(100));
+          }
           if (error) throw error;
           for (const ea of candidates || []) {
             if (await canActorReadAthlete(ea.user_id)) {
@@ -1336,6 +1342,10 @@ Deno.serve(async (req: Request) => {
           if (error) throw error;
           plannedWorkout = data;
         }
+        const { data: passport, error: passportError } = await serviceSupabase.from("biological_passports")
+          .select("ftp_watts, critical_power, lt1_power, lt2_power, lt1_hr, lt2_hr, running_threshold_pace, hr_zones_json, power_zones_json, training_zones, lab_payload, measurement_date")
+          .eq("athlete_id", athleteId).eq("status", "active").order("measurement_date", { ascending: false }).limit(1).maybeSingle();
+        if (passportError) throw passportError;
         const objectHasData = (value: any, patterns: RegExp[]) => {
           if (!value || typeof value !== "object") return false;
           const stack = [value];
@@ -1359,7 +1369,7 @@ Deno.serve(async (req: Request) => {
           zones: !!metrics?.hr_zone_seconds || !!metrics?.power_zone_seconds || objectHasData(rawForCapabilities, [/zones?/i]),
         };
         delete sessionRow.raw;
-        return json({ session: sessionRow, metrics: metrics || null, match: matchRow || null, planned_workout: plannedWorkout, capabilities });
+        return json({ session: sessionRow, metrics: metrics || null, match: matchRow || null, planned_workout: plannedWorkout, biological_passport: passport || null, capabilities });
       }
 
       // ── get-session-timeseries ──
@@ -1403,7 +1413,10 @@ Deno.serve(async (req: Request) => {
           return json(forwarded.data, forwarded.status);
         }
 
-        const { data: candidates, error: activityError } = await serviceSupabase.from("external_activities").select("id, user_id").eq("external_id", external_activity_id).limit(100);
+        let { data: candidates, error: activityError } = await serviceSupabase.from("external_activities").select("id, user_id").eq("id", external_activity_id).limit(100);
+        if (!activityError && (!candidates || candidates.length === 0)) {
+          ({ data: candidates, error: activityError } = await serviceSupabase.from("external_activities").select("id, user_id").eq("external_id", external_activity_id).limit(100));
+        }
         if (activityError) throw activityError;
         let activityId: string | null = null;
         let targetAthleteId: string | null = null;
