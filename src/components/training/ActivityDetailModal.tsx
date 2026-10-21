@@ -395,7 +395,7 @@ function ZoneTimePanel({ zoneTimes, language }: { zoneTimes: ZoneMap; language: 
   </section>;
 }
 
-function TelemetryGraph({ streams, distanceMeters, zones, language, onHover }: { streams: ActivityStream | null; distanceMeters: number; zones: ZoneMap; language: 'en' | 'es'; onHover: (index: number | null) => void }) {
+function TelemetryGraph({ streams, distanceMeters, language, onHover }: { streams: ActivityStream | null; distanceMeters: number; language: 'en' | 'es'; onHover: (index: number | null) => void }) {
   const available = useMemo(() => {
     const metrics: ChartMetric[] = [];
     if (streams?.velocity_smooth_stream?.length || (streams?.time_stream?.length && streams?.distance_stream?.length)) metrics.push('pace');
@@ -407,6 +407,7 @@ function TelemetryGraph({ streams, distanceMeters, zones, language, onHover }: {
   }, [streams]);
   const [visible, setVisible] = useState<ChartMetric[]>([]);
   const [axisMode, setAxisMode] = useState<'time' | 'distance'>('time');
+  const [hoveredSample, setHoveredSample] = useState<number | null>(null);
   useEffect(() => { setVisible(available); }, [available]);
   if (!streams?.time_stream?.length || !available.length) return null;
 
@@ -416,42 +417,60 @@ function TelemetryGraph({ streams, distanceMeters, zones, language, onHover }: {
   const indices = Array.from({ length: Math.ceil(length / step) }, (_, i) => Math.min(i * step, length - 1));
   const canUseDistance = !!streams.distance_stream?.length;
   const width = 1000;
+  const height = 280, plotTop = 28, plotBottom = 235, plotLeft = 58, plotRight = 944;
+  const plotHeight = plotBottom - plotTop, plotWidth = plotRight - plotLeft;
   const pace = (index: number) => {
     const speed = streams.velocity_smooth_stream?.[index] ?? ((index > 0 && streams.distance_stream && times[index] > times[index - 1]) ? (streams.distance_stream[index] - streams.distance_stream[index - 1]) / (times[index] - times[index - 1]) : 0);
     return speed > 0 ? 1000 / speed : null;
   };
   const xRaw = (index: number) => axisMode === 'distance' && canUseDistance ? Number(streams.distance_stream?.[index] || 0) : Number(times[index] || 0);
   const xMin = xRaw(indices[0] || 0), xMax = xRaw(indices[indices.length - 1] || length - 1);
-  const xForSample = (index: number) => (xRaw(index) - xMin) / (xMax - xMin || 1) * width;
+  const xForSample = (index: number) => plotLeft + (xRaw(index) - xMin) / (xMax - xMin || 1) * plotWidth;
   const makeValues = (metric: ChartMetric) => indices.map(index => metric === 'pace' ? pace(index) : metric === 'hr' ? streams.heartrate_stream?.[index] ?? null : metric === 'elevation' ? streams.altitude_stream?.[index] ?? null : metric === 'power' ? streams.watts_stream?.[index] ?? null : streams.cadence_stream?.[index] ?? null).map(value => value != null && Number.isFinite(value) ? Number(value) : null);
-  const lanes = visible.map(metric => ({ metric, ...METRIC_META[metric], values: makeValues(metric), zones: metric === 'hr' ? zones.hr : metric === 'pace' ? zones.pace : metric === 'power' ? zones.power : [] })).filter(lane => lane.values.some(value => value != null));
-  const laneHeight = 84, gap = 20, height = lanes.length * (laneHeight + gap) + 10;
+  const series = visible.map(metric => ({ metric, ...METRIC_META[metric], values: makeValues(metric) }))
+    .filter(item => item.values.some(value => value != null))
+    .map(item => {
+      const values = item.values.filter((value): value is number => value != null && Number.isFinite(value));
+      return { ...item, min: Math.min(...values), max: Math.max(...values) };
+    });
+  const paceSeries = series.find(item => item.metric === 'pace');
+  const elevationSeries = series.find(item => item.metric === 'elevation');
+  const drawSeries = [...series.filter(item => item.metric === 'elevation'), ...series.filter(item => item.metric !== 'elevation')];
+  const yFor = (metric: ChartMetric, value: number, min: number, max: number) => {
+    const ratio = (value - min) / (max - min || 1);
+    return metric === 'pace' ? plotTop + ratio * plotHeight : plotBottom - ratio * plotHeight;
+  };
+  const pathFor = (item: typeof series[number]) => {
+    const points = item.values.map((value, index) => value == null ? null : [xForSample(indices[index] || 0), yFor(item.metric, value, item.min, item.max)] as const);
+    const valid = points.filter((point): point is readonly [number, number] => point !== null);
+    if (!valid.length) return '';
+    const line = valid.map(([x, y], index) => `${index ? 'L' : 'M'}${x},${y}`).join(' ');
+    return item.metric === 'elevation' ? `${line} L${valid[valid.length - 1][0]},${plotBottom} L${valid[0][0]},${plotBottom} Z` : line;
+  };
   const setMetric = (metric: ChartMetric) => setVisible(current => current.includes(metric) ? current.filter(item => item !== metric) : [...available.filter(item => current.includes(item) || item === metric)]);
   const xStart = axisMode === 'distance' && canUseDistance ? `${((streams.distance_stream![0] || 0) / 1000).toFixed(1)} km` : '0:00';
   const xEnd = axisMode === 'distance' && canUseDistance ? `${((streams.distance_stream![length - 1] || distanceMeters) / 1000).toFixed(1)} km` : fmtDuration(times[length - 1] || 0);
   return <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-800">
     <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold text-neutral-900 dark:text-white">{language === 'es' ? 'Telemetría sincronizada' : 'Synchronized telemetry'}</h3><p className="mt-0.5 text-[11px] text-neutral-500">{language === 'es' ? 'Elige qué métricas comparar; el cursor sigue el recorrido del mapa.' : 'Choose which metrics to compare; the cursor follows the route on the map.'}</p></div><div className="flex flex-wrap items-center gap-2"><div className="flex rounded-lg bg-neutral-100 p-1 dark:bg-neutral-900"><button type="button" onClick={() => setAxisMode('time')} className={`rounded-md px-2 py-1 text-[11px] ${axisMode === 'time' ? 'bg-white font-semibold text-neutral-900 shadow dark:bg-neutral-700 dark:text-white' : 'text-neutral-500'}`}>{language === 'es' ? 'Tiempo' : 'Time'}</button><button type="button" disabled={!canUseDistance} onClick={() => setAxisMode('distance')} className={`rounded-md px-2 py-1 text-[11px] disabled:opacity-40 ${axisMode === 'distance' ? 'bg-white font-semibold text-neutral-900 shadow dark:bg-neutral-700 dark:text-white' : 'text-neutral-500'}`}>{language === 'es' ? 'Distancia' : 'Distance'}</button></div><div className="flex flex-wrap gap-1.5">{available.map(metric => { const active = visible.includes(metric); const meta = METRIC_META[metric]; return <button type="button" key={metric} aria-pressed={active} onClick={() => setMetric(metric)} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${active ? 'border-transparent text-white' : 'border-neutral-200 text-neutral-500 dark:border-neutral-600'}`} style={active ? { backgroundColor: meta.color } : undefined}>{active && <Check className="h-3 w-3" />}{meta.label[language]}</button>; })}</div></div></div>
-    {lanes.length ? <svg viewBox={`0 0 ${width} ${height}`} className="w-full touch-none" onPointerLeave={() => onHover(null)} onPointerMove={event => {
+    {series.length ? <>
+      <svg viewBox={`0 0 ${width} ${height}`} className="w-full touch-none" onPointerLeave={() => { onHover(null); setHoveredSample(null); }} onPointerMove={event => {
       const rect = event.currentTarget.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-      const targetX = ratio * width;
+      const pointerX = Math.max(plotLeft, Math.min(plotRight, (event.clientX - rect.left) / rect.width * width));
+      const ratio = (pointerX - plotLeft) / plotWidth;
+      const targetX = pointerX;
       const sampleIndex = indices.reduce((best, candidate) => Math.abs(xForSample(candidate) - targetX) < Math.abs(xForSample(best) - targetX) ? candidate : best, indices[0] || 0);
-      onHover(distanceMeters > 0 && streams.distance_stream?.length ? Math.round(sampleIndex / (streams.distance_stream.length - 1) * 10000) : Math.round(ratio * 10000));
+      setHoveredSample(sampleIndex);
+      onHover(distanceMeters > 0 && streams.distance_stream?.length ? Math.round(sampleIndex / (streams.distance_stream.length - 1) * 10000) : Math.round(sampleIndex / (length - 1) * 10000));
     }}>
-      {lanes.map((lane, laneIndex) => {
-        const values = lane.values.filter((value): value is number => value != null && Number.isFinite(value));
-        const min = Math.min(...values), max = Math.max(...values), span = max - min || 1, top = laneIndex * (laneHeight + gap) + 12;
-        const y = (value: number) => lane.metric === 'pace'
-          ? top + 7 + ((value - min) / span) * (laneHeight - 12)
-          : top + laneHeight - 5 - ((value - min) / span) * (laneHeight - 12);
-        const points = lane.values.map((value, index) => value == null ? null : `${xForSample(indices[index] || 0)},${y(value)}`).filter(Boolean).join(' ');
-        return <g key={lane.metric}><line x1="0" x2={width} y1={top + laneHeight} y2={top + laneHeight} stroke="#94a3b8" strokeOpacity=".25" />{lane.zones.filter((zone: any) => Number.isFinite(zone.min) && Number.isFinite(zone.max) && zone.max > zone.min).map((zone: any, zoneIndex: number) => {
-          const y1 = y(Math.max(min, Math.min(max, zone.max))), y2 = y(Math.max(min, Math.min(max, zone.min)));
-          return <rect key={zone.zone} x="0" y={Math.min(y1, y2)} width={width} height={Math.max(2, Math.abs(y2 - y1))} fill={ZONE_COLORS[zoneIndex % ZONE_COLORS.length]} opacity=".09" />;
-        })}<text x="2" y={top - 1} fontSize="12" fontWeight="600" fill={lane.color}>{lane.label[language]} <tspan fill="#94a3b8">{lane.unit}</tspan></text><text x={width - 2} y={top + 12} textAnchor="end" fontSize="10" fill="#94a3b8">{metricValueLabel(lane.metric, max)} – {metricValueLabel(lane.metric, min)}</text><polyline points={points} fill="none" stroke={lane.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" /></g>;
-      })}
-      <text x="0" y={height - 1} fontSize="10" fill="#64748b">{xStart}</text><text x={width} y={height - 1} textAnchor="end" fontSize="10" fill="#64748b">{xEnd}</text>
-    </svg> : <p className="py-8 text-center text-sm text-neutral-500">{language === 'es' ? 'Elige al menos una métrica disponible.' : 'Select at least one available metric.'}</p>}
+      <rect x={plotLeft} y={plotTop} width={plotWidth} height={plotHeight} fill="#f8fafc" className="dark:fill-neutral-900" />
+      {[0, 0.25, 0.5, 0.75, 1].map(fraction => { const y = plotTop + fraction * plotHeight; return <g key={fraction}><line x1={plotLeft} x2={plotRight} y1={y} y2={y} stroke="#94a3b8" strokeOpacity=".3" />{paceSeries && <text x={plotLeft - 7} y={y + 3} textAnchor="end" fontSize="10" fill={paceSeries.color}>{metricValueLabel('pace', paceSeries.min + fraction * (paceSeries.max - paceSeries.min))}</text>}{elevationSeries && <text x={plotRight + 7} y={y + 3} fontSize="10" fill="#57534e">{Math.round(elevationSeries.max - fraction * (elevationSeries.max - elevationSeries.min))}m</text>}</g>; })}
+      {drawSeries.map(item => <path key={item.metric} d={pathFor(item)} fill={item.metric === 'elevation' ? '#78716c' : 'none'} fillOpacity={item.metric === 'elevation' ? 0.42 : 0} stroke={item.metric === 'elevation' ? '#57534e' : item.color} strokeWidth={item.metric === 'elevation' ? 1.5 : 2.2} strokeLinejoin="round" strokeLinecap="round" />)}
+      {hoveredSample != null && <g><line x1={xForSample(hoveredSample)} x2={xForSample(hoveredSample)} y1={plotTop} y2={plotBottom} stroke="#334155" strokeDasharray="4 4" strokeWidth="1.5" />{series.map(item => { const index = indices.indexOf(hoveredSample), value = item.values[index]; return value == null ? null : <circle key={item.metric} cx={xForSample(hoveredSample)} cy={yFor(item.metric, value, item.min, item.max)} r="4" fill={item.metric === 'elevation' ? '#57534e' : item.color} stroke="white" strokeWidth="1.5" />; })}</g>}
+      <line x1={plotLeft} x2={plotRight} y1={plotBottom} y2={plotBottom} stroke="#64748b" strokeOpacity=".5" />
+      <text x={plotLeft} y={height - 9} fontSize="10" fill="#64748b">{xStart}</text><text x={plotRight} y={height - 9} textAnchor="end" fontSize="10" fill="#64748b">{xEnd}</text>
+    </svg>
+    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">{series.map(item => <span key={item.metric} className="inline-flex items-center gap-1.5 text-[10px] text-neutral-500"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: item.metric === 'elevation' ? '#78716c' : item.color }} />{item.label[language]}: {metricValueLabel(item.metric, item.min)}–{metricValueLabel(item.metric, item.max)} {item.unit}</span>)}</div>
+      </> : <p className="py-8 text-center text-sm text-neutral-500">{language === 'es' ? 'Elige al menos una métrica disponible.' : 'Select at least one available metric.'}</p>}
   </section>;
 }
 
@@ -734,7 +753,7 @@ export function ActivityDetailModal({ activity, onClose, onBack, athleteId, wear
           <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(300px,3fr)]">
             <main className="min-w-0 space-y-4 xl:col-start-1 xl:row-start-1">
               {hasMap ? <div className="overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700"><ActivityMapViewer gpsPoints={detailGpsPoints} activePointIndex={activeMapIndex} /></div> : <div className="flex h-[38vh] min-h-64 items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 text-sm text-neutral-500 dark:border-neutral-700 dark:bg-neutral-800">{mapError || 'No GPS track available for this activity'}</div>}
-              {loadingStreams || wearableLoading ? <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-500" /></div> : <TelemetryGraph streams={detailStreams} distanceMeters={activity.distance_meters} zones={zoneTimes} language={language} onHover={setActivePointIndex} />}
+              {loadingStreams || wearableLoading ? <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-500" /></div> : <TelemetryGraph streams={detailStreams} distanceMeters={activity.distance_meters} language={language} onHover={setActivePointIndex} />}
               {!loadingStreams && !wearableLoading && <ZoneTimePanel zoneTimes={zoneTimes} language={language} />}
               {!loadingStreams && !wearableLoading && <PeakAnalysis streams={detailStreams} language={language} />}
               {splits?.length ? <SplitsTable splits={splits} isMetric={isMetric} streams={detailStreams} zones={zoneTimes} language={language} /> : <PaceAnalysis splits={splits} isMetric={isMetric} />}
