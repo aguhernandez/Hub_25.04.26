@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
 import {
   Plus, X, Save, Trash2, Copy, TrendingUp, AlertCircle, Check,
-  ChevronDown, ChevronRight, Sparkles, Edit2, GripVertical
+  ChevronDown, ChevronRight, Sparkles, Edit2, GripVertical, ArrowUp, ArrowDown
 } from 'lucide-react';
 
 interface Macrocycle {
@@ -102,6 +102,8 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
   const [weeklyLoads, setWeeklyLoads] = useState<WeeklyLoad[]>([]);
   const [expandedMacro, setExpandedMacro] = useState<string | null>(null);
   const [expandedMeso, setExpandedMeso] = useState<string | null>(null);
+  const [editingMacro, setEditingMacro] = useState<string | null>(null);
+  const [macroDraft, setMacroDraft] = useState<{ title: string; phase_type: string; start_week: number; end_week: number } | null>(null);
   const [editingWeek, setEditingWeek] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [showAISuggestions, setShowAISuggestions] = useState(false);
@@ -197,6 +199,82 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
       setMacrocycles(macrocycles.filter(m => m.id !== id));
       setHasChanges(true);
     }
+  };
+
+  const startEditingMacrocycle = (macro: Macrocycle) => {
+    setEditingMacro(macro.id);
+    setMacroDraft({
+      title: macro.title || '',
+      phase_type: macro.phase_type,
+      start_week: macro.start_week,
+      end_week: macro.end_week
+    });
+  };
+
+  const handleSaveMacrocycle = async (macro: Macrocycle) => {
+    if (!macroDraft) return;
+    const { start_week, end_week } = macroDraft;
+    if (!macroDraft.title.trim()) {
+      alert(language === 'es' ? 'El nombre de la fase es obligatorio' : 'Phase name is required');
+      return;
+    }
+    if (start_week < 1 || end_week > 52 || start_week > end_week) {
+      alert(language === 'es' ? 'El rango debe estar entre las semanas 1 y 52' : 'Weeks must be within 1 to 52 and start before end');
+      return;
+    }
+    const overlaps = macrocycles.some(other => other.id !== macro.id && start_week <= other.end_week && end_week >= other.start_week);
+    if (overlaps) {
+      alert(language === 'es' ? 'Ese rango se superpone con otra fase' : 'That range overlaps another phase');
+      return;
+    }
+
+    const { error } = await supabase.from('atp_macrocycles').update({
+      title: macroDraft.title.trim(),
+      phase_type: macroDraft.phase_type,
+      start_week,
+      end_week,
+      color: PHASE_COLORS[macroDraft.phase_type as keyof typeof PHASE_COLORS]
+    }).eq('id', macro.id);
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    setMacrocycles(current => current.map(item => item.id === macro.id ? {
+      ...item,
+      ...macroDraft,
+      title: macroDraft.title.trim(),
+      color: PHASE_COLORS[macroDraft.phase_type as keyof typeof PHASE_COLORS]
+    } : item));
+    setEditingMacro(null);
+    setMacroDraft(null);
+    setHasChanges(true);
+  };
+
+  const handleMoveMacrocycle = async (macro: Macrocycle, direction: -1 | 1) => {
+    const ordered = [...macrocycles].sort((a, b) => a.start_week - b.start_week);
+    const index = ordered.findIndex(item => item.id === macro.id);
+    const neighbor = ordered[index + direction];
+    if (!neighbor) return;
+
+    const updates = [
+      { id: macro.id, start_week: neighbor.start_week, end_week: neighbor.end_week },
+      { id: neighbor.id, start_week: macro.start_week, end_week: macro.end_week }
+    ];
+    for (const update of updates) {
+      const { error } = await supabase.from('atp_macrocycles')
+        .update({ start_week: update.start_week, end_week: update.end_week })
+        .eq('id', update.id);
+      if (error) {
+        alert(error.message);
+        await loadData();
+        return;
+      }
+    }
+    setMacrocycles(current => current.map(item => {
+      const update = updates.find(candidate => candidate.id === item.id);
+      return update ? { ...item, start_week: update.start_week, end_week: update.end_week } : item;
+    }).sort((a, b) => a.start_week - b.start_week));
+    setHasChanges(true);
   };
 
   const handleDeleteMesocycle = async (id: string) => {
@@ -352,8 +430,8 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               {language === 'es'
-                ? 'Gestiona fases, mesociclos y progresiones de carga'
-                : 'Manage phases, mesocycles, and load progressions'}
+                ? 'Edita los nombres y semanas de cada fase; usa las flechas para cambiar su orden.'
+                : 'Edit phase names and week ranges; use the arrows to change their order.'}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -401,6 +479,8 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
               </div>
             ) : (
               macrocycles.map((macro) => {
+                const orderedMacrocycles = [...macrocycles].sort((a, b) => a.start_week - b.start_week);
+                const macroIndex = orderedMacrocycles.findIndex(item => item.id === macro.id);
                 const macroWeeks = weeklyLoads.filter(
                   w => w.week_number >= macro.start_week && w.week_number <= macro.end_week
                 );
@@ -419,15 +499,59 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
                     <div className="bg-gray-50 dark:bg-gray-900/50 p-4">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <button
-                            onClick={() => setExpandedMacro(isExpanded ? null : macro.id)}
-                            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-                          >
-                            {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-                            <h4 className="text-lg font-bold text-gray-900 dark:text-white">
-                              {PHASE_NAMES[language][macro.phase_type as keyof typeof PHASE_NAMES['en']]}
-                            </h4>
-                          </button>
+                          {editingMacro === macro.id && macroDraft ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-w-2xl" onClick={event => event.stopPropagation()}>
+                              <input
+                                value={macroDraft.title}
+                                onChange={event => setMacroDraft({ ...macroDraft, title: event.target.value })}
+                                className="md:col-span-2 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                aria-label={language === 'es' ? 'Nombre de la fase' : 'Phase name'}
+                                placeholder={language === 'es' ? 'Nombre de la fase' : 'Phase name'}
+                              />
+                              <select
+                                value={macroDraft.phase_type}
+                                onChange={event => setMacroDraft({ ...macroDraft, phase_type: event.target.value })}
+                                className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                aria-label={language === 'es' ? 'Tipo de fase' : 'Phase type'}
+                              >
+                                {Object.entries(PHASE_NAMES[language]).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                              </select>
+                              <div className="flex items-center gap-2">
+                                <label className="text-xs text-gray-600 dark:text-gray-400">{language === 'es' ? 'Semanas' : 'Weeks'}</label>
+                                <input
+                                  type="number" min={1} max={52} value={macroDraft.start_week}
+                                  onChange={event => setMacroDraft({ ...macroDraft, start_week: Number(event.target.value) })}
+                                  className="w-20 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                  aria-label={language === 'es' ? 'Semana inicial' : 'Start week'}
+                                />
+                                <span>–</span>
+                                <input
+                                  type="number" min={1} max={52} value={macroDraft.end_week}
+                                  onChange={event => setMacroDraft({ ...macroDraft, end_week: Number(event.target.value) })}
+                                  className="w-20 px-2 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                  aria-label={language === 'es' ? 'Semana final' : 'End week'}
+                                />
+                              </div>
+                              <div className="md:col-span-2 flex gap-2">
+                                <button onClick={() => handleSaveMacrocycle(macro)} className="inline-flex items-center gap-1 px-3 py-2 bg-[#fdda36] text-[#514163] rounded-lg font-medium">
+                                  <Save className="w-4 h-4" />{language === 'es' ? 'Guardar fase' : 'Save phase'}
+                                </button>
+                                <button onClick={() => { setEditingMacro(null); setMacroDraft(null); }} className="inline-flex items-center gap-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg">
+                                  <X className="w-4 h-4" />{language === 'es' ? 'Cancelar' : 'Cancel'}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setExpandedMacro(isExpanded ? null : macro.id)}
+                              className="flex items-center gap-2 text-left hover:opacity-80 transition-opacity cursor-pointer"
+                            >
+                              {isExpanded ? <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-300" /> : <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-300" />}
+                              <h4 className="text-lg font-bold text-gray-900 dark:text-white">
+                                {macro.title?.trim() || PHASE_NAMES[language][macro.phase_type as keyof typeof PHASE_NAMES['en']]}
+                              </h4>
+                            </button>
+                          )}
                           <div className="flex items-center gap-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
                             <span>
                               {language === 'es' ? 'Semanas' : 'Weeks'} {macro.start_week}-{macro.end_week}
@@ -445,6 +569,23 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
                         </div>
                         {isCoachOrAdmin && (
                           <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleMoveMacrocycle(macro, -1)}
+                              disabled={macroIndex === 0}
+                              className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                              title={language === 'es' ? 'Mover antes en el plan' : 'Move earlier in the plan'}
+                            ><ArrowUp className="w-4 h-4" /></button>
+                            <button
+                              onClick={() => handleMoveMacrocycle(macro, 1)}
+                              disabled={macroIndex === orderedMacrocycles.length - 1}
+                              className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                              title={language === 'es' ? 'Mover después en el plan' : 'Move later in the plan'}
+                            ><ArrowDown className="w-4 h-4" /></button>
+                            <button
+                              onClick={() => editingMacro === macro.id ? (setEditingMacro(null), setMacroDraft(null)) : startEditingMacrocycle(macro)}
+                              className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                              title={language === 'es' ? 'Editar nombre, tipo y semanas' : 'Edit name, type, and weeks'}
+                            ><Edit2 className="w-4 h-4 text-blue-600" /></button>
                             <button
                               onClick={() => handleAddMesocycle(macro.id, macro.start_week, macro.end_week)}
                               className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
