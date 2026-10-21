@@ -610,7 +610,7 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
                             ><Edit2 className="w-4 h-4 text-blue-600" /></button>
                             <button
                               onClick={() => handleAddMesocycle(macro.id, macro.start_week, macro.end_week)}
-                              className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                              className="p-2 bg-[#fdda36] hover:bg-[#ffd51a] rounded-lg transition-colors"
                               title={language === 'es' ? 'Agregar Mesociclo' : 'Add Mesocycle'}
                             >
                               <Plus className="w-4 h-4" />

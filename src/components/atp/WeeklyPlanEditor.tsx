@@ -351,7 +351,7 @@ export default function WeeklyPlanEditor({
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 bg-[#514163] text-white hover:bg-[#3f3150] rounded-lg transition-colors"
             >
               <X className="w-6 h-6" />
             </button>
