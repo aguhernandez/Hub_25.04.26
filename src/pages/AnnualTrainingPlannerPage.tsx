@@ -503,7 +503,7 @@ export default function AnnualTrainingPlannerPage() {
             <button
               onClick={() => setViewStartWeek(Math.max(1, viewStartWeek - 12))}
               disabled={viewStartWeek === 1}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 bg-[#514163] text-white"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
@@ -513,7 +513,7 @@ export default function AnnualTrainingPlannerPage() {
             <button
               onClick={() => setViewStartWeek(Math.min(41, viewStartWeek + 12))}
               disabled={viewStartWeek >= 41}
-              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 bg-[#514163] text-white"
             >
               <ChevronRight className="w-5 h-5" />
             </button>
