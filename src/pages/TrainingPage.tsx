@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 51010)
-Total output lines: 3914
-
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -1308,7 +1305,1658 @@ export default function TrainingPage() {
                     {workout.type === 'endurance_plan' ? (() => {
                       const planWeekId = (workout as any).plan_week_id as string | undefined;
                       const isStale = planWeekId ? staledPlanIds.has(planWeekId) : false;
-                      const isDeleting = de…21010 tokens truncated…    <div>
+                      const isDeleting = deletingPlanIds.has(workout.id);
+                      if (trainingAccess.status === 'restricted' || trainingAccess.status === 'blocked') {
+                        return (
+                          <div
+                            onClick={(e) => { e.stopPropagation(); setShowTrainingAccessModal(true); }}
+                            className="w-full text-xs p-2 pl-3 pr-3 rounded text-left relative blur-sm opacity-50 cursor-pointer bg-sky-100 dark:bg-sky-900/20 text-sky-800 dark:text-sky-400 border-l-2 border-sky-400"
+                          >
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <Lock className="w-3 h-3 flex-shrink-0" />
+                              <span className="font-semibold truncate">{workout.name}</span>
+                            </div>
+                          </div>
+                        );
+                      }
+                      if (isStale) {
+                        return (
+                          <div className="w-full text-xs p-2 pl-3 rounded border border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center gap-1.5 animate-pulse">
+                            <Flag className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">{language === 'es' ? 'Eliminado en el origen' : 'Removed from source'}</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div className="relative group/ep">
+                          <div
+                            draggable
+                            onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, workout); }}
+                            onDragEnd={handleDragEnd}
+                            onClick={(e) => {
+                              if ((e.target as HTMLElement).closest('.grip-handle')) return;
+                              e.stopPropagation();
+                              openWorkoutModal(workout);
+                            }}
+                            className={`w-full text-xs p-2 pl-6 pr-7 rounded text-left relative ${getEnduranceColor(workout).bg} ${getEnduranceColor(workout).text} border-l-2 transition-all cursor-pointer ${
+                              draggedWorkout?.id === workout.id ? 'opacity-50 scale-95' : ''
+                            }`}
+                            style={{ borderLeftColor: getEnduranceColor(workout).border }}
+                          >
+                            <div className="grip-handle absolute left-1 top-1/2 -translate-y-1/2 cursor-move">
+                              <GripVertical className="w-3 h-3 opacity-30" />
+                            </div>
+                            <div className="flex items-center gap-1 mb-0.5">
+                              <Activity className="w-3 h-3 flex-shrink-0 opacity-60" />
+                              <span className="font-semibold truncate">{workout.name}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 opacity-70 flex-wrap">
+                              {(workout as any).estimated_duration_minutes > 0 && (
+                                <span>{(workout as any).estimated_duration_minutes >= 60
+                                  ? `${Math.floor((workout as any).estimated_duration_minutes / 60)}h${(workout as any).estimated_duration_minutes % 60 > 0 ? `${(workout as any).estimated_duration_minutes % 60}m` : ''}`
+                                  : `${(workout as any).estimated_duration_minutes}min`}</span>
+                              )}
+                              {(workout as any).target_zones?.length > 0 && (
+                                <span>· {(workout as any).target_zones.join(' ')}</span>
+                              )}
+                            </div>
+                            {workout.status === 'completed' && (
+                              <CheckCircle2 className="absolute bottom-1 right-1 w-3.5 h-3.5 text-teal-500 dark:text-teal-400" />
+                            )}
+                          </div>
+                          {planWeekId && (
+                            <button
+                              disabled={isDeleting}
+                              onClick={(e) => { e.stopPropagation(); deleteEndurancePlan(planWeekId, workout.id); }}
+                              className="absolute top-1 right-1 p-0.5 opacity-0 group-hover/ep:opacity-100 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-opacity text-red-500 dark:text-red-400 disabled:opacity-30"
+                              title={language === 'es' ? 'Eliminar' : 'Delete'}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })() : (
+                    <div
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, workout)}
+                      onDragEnd={handleDragEnd}
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('.grip-handle')) return;
+                        openWorkoutModal(workout);
+                      }}
+                      className={`w-full text-xs md:text-xs p-2.5 md:p-2 pl-7 md:pl-6 rounded text-left transition-all cursor-pointer relative ${
+                        draggedWorkout?.id === workout.id
+                          ? 'opacity-50 scale-95'
+                          : workout.status === 'completed'
+                          ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/20 dark:text-teal-400'
+                          : workout.status === 'skipped'
+                          ? 'bg-neutral-200 text-neutral-600 dark:bg-neutral-700/50 dark:text-neutral-400'
+                          : 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/30'
+                      }`}
+                    >
+                      <div className="grip-handle absolute left-1.5 md:left-1 top-1/2 -translate-y-1/2 cursor-move">
+                        <GripVertical className="w-3.5 h-3.5 md:w-3 md:h-3 opacity-40" />
+                      </div>
+                      <span className="line-clamp-2">{workout.name}</span>
+                      {workout.status === 'completed' && (
+                        <CheckCircle2 className="absolute bottom-1 right-1 w-3.5 h-3.5 text-teal-500 dark:text-teal-400" />
+                      )}
+                    </div>
+                    )}
+                    {workout.type !== 'race_plan' && workout.type !== 'endurance_plan' && workout.source !== 'race_plan' && (
+                    <button
+                      onClick={() => setContextMenuWorkout(contextMenuWorkout === workout.id ? null : workout.id)}
+                      className="absolute top-1 right-1 p-1 opacity-0 group-hover:opacity-100 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded transition-opacity"
+                    >
+                      <MoreVertical className="w-3 h-3" />
+                    </button>
+                    )}
+                    {contextMenuWorkout === workout.id && workout.type !== 'race_plan' && workout.type !== 'endurance_plan' && (
+                      <div className="absolute right-0 top-8 z-10 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 min-w-[160px]">
+                        <button
+                          onClick={() => handleEditWorkout(workout)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-left text-gray-700 dark:text-gray-300"
+                        >
+                          <Edit className="w-3 h-3" />
+                          {language === 'es' ? 'Editar' : 'Edit'}
+                        </button>
+                        <button
+                          onClick={() => handleCopyWorkout(workout)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-left text-gray-700 dark:text-gray-300"
+                        >
+                          <Copy className="w-3 h-3" />
+                          {language === 'es' ? 'Copiar' : 'Copy'}
+                        </button>
+                        <button
+                          onClick={() => handleDuplicateWorkout(workout)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-left text-gray-700 dark:text-gray-300"
+                        >
+                          <Copy className="w-3 h-3" />
+                          {language === 'es' ? 'Duplicar...' : 'Duplicate...'}
+                        </button>
+                        <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
+                        <button
+                          onClick={() => handleDeleteWorkout(workout)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-red-50 dark:hover:bg-red-900/20 text-left text-red-600 dark:text-red-400"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          {language === 'es' ? 'Eliminar' : 'Delete'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {copiedWorkout && (
+                  <button
+                    onClick={() => handlePasteWorkout(formatDateLocal(date))}
+                    className="w-full text-xs p-2 rounded text-left transition-colors bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/30 flex items-center gap-1"
+                  >
+                    <Clipboard className="w-3 h-3" />
+                    {language === 'es' ? 'Pegar' : 'Paste'}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        </div>
+      </div>
+    );
+  };
+
+  const openWorkoutModal = async (workout: Workout) => {
+    // Scheduled questionnaire — open the corresponding existing form for the athlete
+    if ((workout as any).type === 'scheduled_questionnaire') {
+      const sq = workout as any;
+      if (sq.athlete_id === profile?.id && sq.status !== 'completed' && sq.scheduled_questionnaire_id) {
+        supabase
+          .from('scheduled_questionnaires')
+          .update({ status: 'completed', completed_at: new Date().toISOString() })
+          .eq('id', sq.scheduled_questionnaire_id)
+          .then(() => loadWorkouts());
+      }
+      if (sq.questionnaire_type === 'wellness') {
+        setShowWellnessCheckin(true);
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('navigate', { detail: 'nutrition-dashboard' }));
+      window.dispatchEvent(new CustomEvent('open-nutrition-tab', {
+        detail: sq.questionnaire_type === 'anamnesis' ? 'anamnesis' : 'diary',
+      }));
+      return;
+    }
+
+    // Race plan items — load full plan and open GPS recorder with fuel alerts
+    if ((workout as any).type === 'race_plan') {
+      const planId = (workout as any).race_plan_id;
+      if (!planId) return;
+      const { data: fullPlan } = await supabase
+        .from('race_plans')
+        .select('*')
+        .eq('id', planId)
+        .maybeSingle();
+      if (!fullPlan) return;
+      setSelectedRacePlan(fullPlan);
+      return;
+    }
+
+    // Imported activities share the same detail view regardless of provider.
+    if (workout.type === 'external') {
+      const raw = (workout as any).raw_data;
+      setSelectedGPSActivity({ ...workout, ...(raw && typeof raw === 'object' ? raw : {}), source: (workout as any).source || raw?.source, raw_data: raw });
+      return;
+    }
+
+    if ((workout as any).type === 'wearable_executed') {
+      setSelectedWearableDetails(null);
+      setSelectedWearableSession(workout);
+      return;
+    }
+
+    // Endurance plan items — show the detail card modal
+    if ((workout as any).type === 'endurance_plan') {
+      const raw = (workout as any).endurance_workout_data;
+      const w = workout as any;
+      // Normalize: raw plan-day objects have description+steps in one text blob; db rows have steps as a jsonb array
+      // Use raw?.description (full original text) first; w.description is already pre-cleaned so use as fallback
+      const rawDescription: string = raw?.description || '';
+      const steps: any[] = raw?.steps || w.parsed_steps || (rawDescription ? parseStepsFromDescription(rawDescription) : []);
+
+      // Build display description:
+      // If raw has full description text, parse out the meaningful paragraphs (skip Steps/metadata blocks and the name line)
+      // If raw has no description, use w.description (already cleaned during calendar load)
+      let cleanedDescription: string | undefined;
+      if (rawDescription) {
+        const paragraphs = rawDescription.split('\n\n');
+        // Heuristic: if first paragraph is a single short line that matches the workout name, skip it
+        const workoutName: string = (raw?.name || w.name || '').toLowerCase().trim();
+        const filtered = paragraphs.filter((p, idx) => {
+          const t = p.trim();
+          if (!t) return false;
+          if (t.startsWith('Steps:')) return false;
+          if (t.startsWith('Planned impulse:')) return false;
+          if (t.startsWith('Intensity basis:')) return false;
+          // Skip first paragraph if it's just the name
+          if (idx === 0 && workoutName && t.toLowerCase() === workoutName) return false;
+          return true;
+        });
+        cleanedDescription = filtered.join('\n\n').trim() || undefined;
+      } else {
+        cleanedDescription = w.description || undefined;
+      }
+
+      const intensityBasis: string = raw?.intensity_basis || w.intensity_basis || 'zone';
+      const formatZone = (z: any): string => {
+        if (typeof z === 'string') return z; // already formatted
+        if (intensityBasis === 'rpe') return `RPE ${z}`;
+        return `Z${z}`;
+      };
+      const rawZones = raw?.target_zones || w.target_zones;
+      const formattedZones = Array.isArray(rawZones) ? rawZones.map(formatZone) : undefined;
+
+      if (raw) {
+        setSelectedEnduranceWorkout({
+          id: raw.id || w.id,
+          name: raw.name || w.name,
+          sport: raw.sport || w.sport || 'cycling',
+          sub_discipline: raw.sub_discipline || w.sub_discipline,
+          description: cleanedDescription,
+          intensity_basis: intensityBasis,
+          scheduled_date: raw.scheduled_date || w.scheduled_date,
+          estimated_duration_minutes: raw.estimated_duration_minutes || raw.planned_duration_minutes || raw.duration_min || w.estimated_duration_minutes || 0,
+          estimated_impulse: raw.estimated_impulse || raw.planned_tss || raw.tss || w.estimated_impulse,
+          status: raw.status || w.status || 'planned',
+          steps,
+          planner_source: raw.planner_source || w.planner_source || '',
+          session_type: raw.session_type || w.session_type,
+          target_zones: formattedZones,
+          rpe: raw.rpe || w.rpe,
+          notes: raw.notes || w.notes,
+          wearable_match: w.wearable_match,
+        } as EnduranceWorkout);
+      } else {
+        setSelectedEnduranceWorkout({
+          id: w.id,
+          name: w.name,
+          sport: w.sport || 'cycling',
+          sub_discipline: w.sub_discipline,
+          description: cleanedDescription,
+          intensity_basis: intensityBasis,
+          scheduled_date: w.scheduled_date,
+          estimated_duration_minutes: w.estimated_duration_minutes || 0,
+          estimated_impulse: w.estimated_impulse,
+          status: w.status || 'planned',
+          steps,
+          planner_source: w.planner_source || '',
+          session_type: w.session_type,
+          target_zones: formattedZones,
+          rpe: w.rpe,
+          notes: w.notes,
+          wearable_match: w.wearable_match,
+        } as EnduranceWorkout);
+      }
+      return;
+    }
+
+    // For workout type, show the daily workout view in a modal
+    // Set the selected date to the workout's scheduled date
+    setSelectedDate(parseDateStr(workout.scheduled_date));
+    setShowMonthlyDayModal(true);
+  };
+
+  const groupExercisesBySupersets = (exercises: WorkoutExercise[]) => {
+    const groups: { [key: string]: WorkoutExercise[] } = {};
+
+    exercises.forEach(ex => {
+      const key = ex.superset_group || `single_${ex.id}`;
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(ex);
+    });
+
+    return Object.values(groups);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return 'bg-teal-100 text-teal-800 dark:bg-teal-900/20 dark:text-teal-400';
+      case 'pending':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400';
+      case 'skipped':
+        return 'bg-neutral-200 text-neutral-600 dark:bg-neutral-700/50 dark:text-neutral-400';
+      default:
+        return 'bg-neutral-200 text-neutral-600 dark:bg-neutral-700/50 dark:text-neutral-400';
+    }
+  };
+
+  const handleWorkoutMove = async (workoutId: string, newDate: string) => {
+    try {
+      let error;
+
+      if (workoutId.startsWith('extra-')) {
+        const realId = workoutId.replace('extra-', '');
+        ({ error } = await supabase
+          .from('extra_training_logs')
+          .update({ training_date: newDate })
+          .eq('id', realId));
+      } else {
+        ({ error } = await supabase
+          .from('athlete_workouts')
+          .update({ scheduled_date: newDate })
+          .eq('id', workoutId));
+      }
+
+      if (!error) {
+        await loadWorkouts();
+      }
+    } catch (error) {
+      console.error('Error moving workout:', error);
+    }
+  };
+
+  // Move a single day from an external endurance plan to a new date.
+  // workoutId format: "endurance-plan-{UUID}-{dayIndex}"
+  const handleEndurancePlanMove = async (workoutId: string, newDate: string) => {
+    const lastDash = workoutId.lastIndexOf('-');
+    const dayIndex = parseInt(workoutId.substring(lastDash + 1), 10);
+    const planWeekId = workoutId.substring('endurance-plan-'.length, lastDash);
+    if (isNaN(dayIndex) || !planWeekId) return;
+
+    try {
+      const { data: planRow } = await supabase
+        .from('external_endurance_plans')
+        .select('plan_data')
+        .eq('id', planWeekId)
+        .maybeSingle();
+
+      if (!planRow?.plan_data?.days?.[dayIndex]) return;
+
+      const days = [...planRow.plan_data.days];
+      days[dayIndex] = { ...days[dayIndex], date: newDate };
+
+      const { error } = await supabase
+        .from('external_endurance_plans')
+        .update({ plan_data: { ...planRow.plan_data, days } })
+        .eq('id', planWeekId);
+
+      if (!error) await loadWorkouts();
+    } catch (err) {
+      console.error('Error moving endurance plan day:', err);
+    }
+  };
+
+  const calculateTotalVolume = async () => {
+    if (!profile?.id || !effectiveAthleteId) return;
+
+    const startDateStr = formatDateLocal(getDateRangeStart());
+    const endDateStr = formatDateLocal(getDateRangeEnd());
+    const { data: athleteWorkouts } = await supabase
+      .from('athlete_workouts')
+      .select('id, workout_id, status')
+      .eq('athlete_id', effectiveAthleteId)
+      .gte('scheduled_date', startDateStr)
+      .lte('scheduled_date', endDateStr);
+
+    if (!athleteWorkouts || athleteWorkouts.length === 0) {
+      setTotalVolume(0);
+      setPlannedVolume(0);
+      return;
+    }
+
+    const awIds = athleteWorkouts.map(aw => aw.id);
+    const workoutIds = athleteWorkouts.map(aw => aw.workout_id).filter(Boolean);
+    const [{ data: logs }, { data: exercises }] = await Promise.all([
+      supabase
+        .from('training_logs')
+        .select('athlete_workout_id, weight_used, reps_completed')
+        .in('athlete_workout_id', awIds),
+      supabase
+        .from('workout_exercises')
+        .select('workout_id, sets, reps, primary_metric, primary_value, secondary_metric, secondary_value, set_lines')
+        .in('workout_id', workoutIds),
+    ]);
+
+    const plannedByWorkout = new Map<string, number>();
+    for (const ex of exercises || []) {
+      const lines = ex.set_lines && Array.isArray(ex.set_lines) && ex.set_lines.length > 0
+        ? ex.set_lines
+        : [{ sets: ex.sets, reps: ex.reps, primary_value: ex.primary_value, secondary_metric: ex.secondary_metric, secondary_value: ex.secondary_value }];
+      let exerciseVolume = 0;
+
+      for (const line of lines) {
+        const sets = Number(line.sets) || 0;
+        const primaryMetric = ex.primary_metric || 'reps';
+        const primaryValue = line.primary_value || ex.primary_value || line.reps || ex.reps || '0';
+        const secondaryMetric = line.secondary_metric || ex.secondary_metric;
+        const secondaryValue = line.secondary_value || ex.secondary_value || '0';
+        let kg = 0;
+        let reps = 0;
+
+        if (primaryMetric === 'kg') {
+          kg = parseFloat(primaryValue) || 0;
+          reps = secondaryMetric === 'reps'
+            ? parseFloat(secondaryValue) || 0
+            : parseFloat(String(line.reps || ex.reps || '0')) || 0;
+        } else if (secondaryMetric === 'kg') {
+          kg = parseFloat(secondaryValue) || 0;
+          reps = primaryMetric === 'reps'
+            ? parseFloat(primaryValue) || 0
+            : parseFloat(String(line.reps || ex.reps || '0')) || 0;
+        }
+
+        exerciseVolume += sets * reps * kg;
+      }
+
+      plannedByWorkout.set(
+        ex.workout_id,
+        (plannedByWorkout.get(ex.workout_id) || 0) + exerciseVolume
+      );
+    }
+
+    const actualByAthleteWorkout = new Map<string, number>();
+    for (const log of logs || []) {
+      const volume = (parseFloat(log.weight_used) || 0) * (log.reps_completed || 0);
+      actualByAthleteWorkout.set(
+        log.athlete_workout_id,
+        (actualByAthleteWorkout.get(log.athlete_workout_id) || 0) + volume
+      );
+    }
+
+    const doneVolume = athleteWorkouts.reduce((total, aw) => {
+      const actual = actualByAthleteWorkout.get(aw.id) || 0;
+      const planned = plannedByWorkout.get(aw.workout_id) || 0;
+      return total + (actual > 0 ? actual : aw.status === 'completed' ? planned : 0);
+    }, 0);
+
+    const plannedVolume = athleteWorkouts.reduce(
+      (total, aw) => total + (plannedByWorkout.get(aw.workout_id) || 0),
+      0
+    );
+
+    setTotalVolume(doneVolume);
+    setPlannedVolume(plannedVolume);
+  };
+
+  const handleCopyWorkout = async (workout: Workout) => {
+    const exercises = await loadWorkoutDetails(workout.workout_id);
+    setCopiedWorkout({
+      ...workout,
+      exercises: exercises.map((ex: any) => ({
+        id: ex.id,
+        exercise: ex.exercises,
+        sets: ex.sets,
+        reps: ex.reps,
+        rest_seconds: ex.rest_seconds,
+        notes: ex.notes,
+        superset_group: ex.superset_group,
+        order_index: ex.order_index
+      }))
+    });
+    setContextMenuWorkout(null);
+    success(language === 'es' ? 'Entrenamiento copiado' : 'Workout copied');
+  };
+
+  const deepCopyWorkoutToDate = async (sourceWorkoutId: string, targetDate: string, athleteId: string, trainerId?: string): Promise<void> => {
+    const { data: originalWorkout, error: wErr } = await supabase
+      .from('workouts')
+      .select('name, description, duration_minutes, difficulty, trainer_id')
+      .eq('id', sourceWorkoutId)
+      .maybeSingle();
+    if (wErr) throw wErr;
+
+    const { data: newWorkout, error: nwErr } = await supabase
+      .from('workouts')
+      .insert({
+        trainer_id: trainerId ?? originalWorkout?.trainer_id ?? null,
+        name: originalWorkout?.name || '',
+        description: originalWorkout?.description ?? null,
+        duration_minutes: originalWorkout?.duration_minutes ?? null,
+        difficulty: originalWorkout?.difficulty ?? null,
+      })
+      .select('id')
+      .single();
+    if (nwErr) throw nwErr;
+
+    const { data: originalExercises, error: exErr } = await supabase
+      .from('workout_exercises')
+      .select('exercise_id, custom_exercise_name, custom_exercise_video_url, sets, reps, rest_seconds, notes, superset_group, order_index, primary_metric, secondary_metric, set_lines, section_title, block_instance_id, working_set, use_1rm_auto_load, target_1rm_percentage, reference_1rm_method, calculated_load, rir, rpe, primary_value, secondary_value')
+      .eq('workout_id', sourceWorkoutId)
+      .order('order_index');
+    if (exErr) throw exErr;
+
+    if (originalExercises && originalExercises.length > 0) {
+      const copiedBlockIds = new Map<string, string>();
+      let previousBlockId: string | null = null;
+      let previousLegacyTitle: string | null = null;
+      const exercisesForCopy = originalExercises.map(ex => {
+        let blockInstanceId: string | null = null;
+        if (ex.block_instance_id) {
+          if (!copiedBlockIds.has(ex.block_instance_id)) {
+            copiedBlockIds.set(ex.block_instance_id, `block_${crypto.randomUUID()}`);
+          }
+          blockInstanceId = copiedBlockIds.get(ex.block_instance_id)!;
+          previousBlockId = blockInstanceId;
+          previousLegacyTitle = ex.section_title || null;
+        } else if (ex.section_title) {
+          if (!previousBlockId || previousLegacyTitle !== ex.section_title) {
+            previousBlockId = `block_${crypto.randomUUID()}`;
+          }
+          blockInstanceId = previousBlockId;
+          previousLegacyTitle = ex.section_title;
+        } else {
+          // Set-line continuation rows inherit the current section within this copied workout.
+          blockInstanceId = previousBlockId;
+        }
+        return { ...ex, workout_id: newWorkout.id, block_instance_id: blockInstanceId };
+      });
+      const { error: insertExErr } = await supabase
+        .from('workout_exercises')
+        .insert(exercisesForCopy);
+      if (insertExErr) throw insertExErr;
+    }
+
+    const { error: awErr } = await supabase
+      .from('athlete_workouts')
+      .insert({
+        athlete_id: athleteId,
+        workout_id: newWorkout.id,
+        scheduled_date: targetDate,
+        status: 'pending',
+        ...(trainerId && { trainer_id: trainerId }),
+      });
+    if (awErr) throw awErr;
+  };
+
+  const handlePasteWorkout = async (targetDate: string) => {
+    if (!copiedWorkout || !effectiveAthleteId) return;
+
+    try {
+      const isTrainer = profile?.role === 'trainer' && selectedAthleteId;
+      await deepCopyWorkoutToDate(
+        copiedWorkout.workout_id,
+        targetDate,
+        effectiveAthleteId,
+        isTrainer ? profile.id : undefined
+      );
+      success(language === 'es' ? 'Entrenamiento pegado exitosamente' : 'Workout pasted successfully');
+      setCopiedWorkout(null);
+      await loadWorkouts();
+    } catch (err) {
+      console.error('Error pasting workout:', err);
+      error(language === 'es' ? 'Error al pegar el entrenamiento' : 'Error pasting workout');
+    }
+  };
+
+  const handleDuplicateWorkout = (workout: Workout) => {
+    setWorkoutToDuplicate(workout);
+    setShowDuplicateModal(true);
+    setContextMenuWorkout(null);
+  };
+
+  const executeDuplicate = async (targetDates: string[]) => {
+    if (!workoutToDuplicate || !effectiveAthleteId || targetDates.length === 0) return;
+
+    try {
+      const isTrainer = profile?.role === 'trainer' && selectedAthleteId;
+      const trainerId = isTrainer ? profile.id : undefined;
+      let succeeded = 0;
+      let failed = 0;
+      for (const targetDate of targetDates) {
+        try {
+          await deepCopyWorkoutToDate(workoutToDuplicate.workout_id, targetDate, effectiveAthleteId, trainerId);
+          succeeded++;
+        } catch (err) {
+          console.error(`Error duplicating to ${targetDate}:`, err);
+          failed++;
+        }
+      }
+      if (succeeded > 0) {
+        success(
+          language === 'es'
+            ? `${succeeded} entrenamiento(s) duplicado(s) exitosamente${failed > 0 ? `, ${failed} fallido(s)` : ''}`
+            : `${succeeded} workout(s) duplicated successfully${failed > 0 ? `, ${failed} failed` : ''}`
+        );
+      } else {
+        error(language === 'es' ? 'Error al duplicar el entrenamiento' : 'Error duplicating workout');
+      }
+      await loadWorkouts();
+      setShowDuplicateModal(false);
+      setWorkoutToDuplicate(null);
+    } catch (err) {
+      console.error('Error duplicating workout:', err);
+      throw err;
+    }
+  };
+
+  const handleEditWorkout = async (workout: Workout) => {
+    setContextMenuWorkout(null);
+
+    if (workout.status === 'completed' || workout.status === 'in_progress') {
+      setCalendarView('day');
+      setSelectedDate(parseDateStr(workout.scheduled_date));
+    } else {
+      sessionStorage.setItem('edit_workout_id', workout.id);
+      sessionStorage.setItem('edit_scheduled_date', workout.scheduled_date);
+      window.dispatchEvent(new CustomEvent('navigate', { detail: 'workout-builder' }));
+    }
+  };
+
+  const handleDeleteWorkout = async (workout: Workout) => {
+    setContextMenuWorkout(null);
+
+    try {
+      let deleteError;
+
+      if (workout.id.startsWith('extra-')) {
+        const realId = workout.id.replace('extra-', '');
+        ({ error: deleteError } = await supabase
+          .from('extra_training_logs')
+          .delete()
+          .eq('id', realId));
+      } else {
+        ({ error: deleteError } = await supabase
+          .from('athlete_workouts')
+          .delete()
+          .eq('id', workout.id));
+      }
+
+      if (deleteError) throw deleteError;
+
+      success(language === 'es' ? 'Entrenamiento eliminado' : 'Workout deleted');
+      await loadWorkouts();
+      await calculateTotalVolume();
+    } catch (err) {
+      console.error('Error deleting workout:', err);
+      error(language === 'es' ? 'Error al eliminar' : 'Error deleting workout');
+    }
+  };
+
+  const [draggedWorkout, setDraggedWorkout] = useState<Workout | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, workout: Workout) => {
+    setDraggedWorkout(workout);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', workout.id);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (draggedWorkout) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetDate: Date) => {
+    e.preventDefault();
+    if (!draggedWorkout) return;
+
+    const targetDateStr = formatDateLocal(targetDate);
+    const currentDateStr = draggedWorkout.scheduled_date;
+
+    if (targetDateStr !== currentDateStr) {
+      if (draggedWorkout.type === 'endurance_plan') {
+        await handleEndurancePlanMove(draggedWorkout.id, targetDateStr);
+      } else {
+        await handleWorkoutMove(draggedWorkout.id, targetDateStr);
+      }
+    }
+
+    setDraggedWorkout(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedWorkout(null);
+  };
+
+  const enduranceWeeklySummary = (() => {
+    const start = new Date(selectedDate); start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); start.setHours(0, 0, 0, 0);
+    const end = new Date(start); end.setDate(end.getDate() + 7);
+    const from = formatDateLocal(start); const until = formatDateLocal(end);
+    const planned = workouts.filter(workout => workout.type === 'endurance_plan' && workout.scheduled_date >= from && workout.scheduled_date < until);
+    const actuals: any[] = [];
+    for (const workout of workouts as any[]) {
+      if (workout.type === 'wearable_executed' && workout.scheduled_date >= from && workout.scheduled_date < until) actuals.push(workout);
+      if (workout.wearable_match?.session && workout.scheduled_date >= from && workout.scheduled_date < until) actuals.push({ ...workout.wearable_match.session, sport_category: workout.endurance_workout_data?.sport || workout.sport, wearable_metrics: workout.wearable_match.metrics, wearable_match: { planned_workout_id: workout.id } });
+    }
+    const plannedMinutes = planned.reduce((sum, workout: any) => sum + Number(workout.estimated_duration_minutes || workout.endurance_workout_data?.estimated_duration_minutes || 0), 0);
+    const actualMinutes = actuals.reduce((sum, session) => sum + Number(session.duration_seconds || 0) / 60, 0);
+    const tss = actuals.reduce((sum, session) => sum + (Number.isFinite(Number(session.wearable_metrics?.tss)) ? Number(session.wearable_metrics.tss) : 0), 0);
+    const sports = ['running', 'cycling', 'swimming', 'other'].map(sport => ({ sport, planned: planned.filter((workout: any) => (workout.endurance_workout_data?.sport || workout.sport) === sport).reduce((sum, workout: any) => sum + Number(workout.estimated_duration_minutes || workout.endurance_workout_data?.estimated_duration_minutes || 0), 0), actual: actuals.filter(session => (session.sport_category || session.sport) === sport).reduce((sum, session) => sum + Number(session.duration_seconds || 0) / 60, 0) })).filter(row => row.planned || row.actual);
+    return { plannedMinutes, actualMinutes, tss, unplanned: actuals.filter(session => !(session as any).wearable_match?.planned_workout_id).length, sports };
+  })();
+
+  if (profile?.role === 'trainer' && !selectedAthleteId) {
+    return (
+      <>
+        {toast && (
+          <Toast message={toast.message} type={toast.type} duration={toast.duration} onClose={hideToast} />
+        )}
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+              <Dumbbell className="w-8 h-8 text-[#fdda36]" />
+              {t('menu.training')}
+            </h1>
+            <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
+              {language === 'es'
+                ? 'Selecciona un atleta para gestionar su planificación'
+                : 'Select an athlete to manage their training plan'}
+            </p>
+          </div>
+          <TrainerAthleteSelector
+            onAthleteSelected={(_id, _name) => {
+              loadWorkouts();
+            }}
+          />
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          duration={toast.duration}
+          onClose={hideToast}
+        />
+      )}
+      <div className="space-y-6">
+      {profile?.role === 'trainer' && selectedAthleteId && selectedAthleteName && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+          <button
+            onClick={() => { clearSelectedAthlete(); }}
+            className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 transition-colors"
+          >
+            <Users className="w-4 h-4" />
+            {language === 'es' ? 'Volver a lista' : 'Back to list'}
+          </button>
+          <div className="w-px h-4 bg-blue-200 dark:bg-blue-700" />
+          <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+          <p className="text-sm text-blue-700 dark:text-blue-300 flex-1">
+            {language === 'es' ? `Viendo calendario de` : `Viewing calendar of`}
+            <span className="font-semibold ml-1">{selectedAthleteName}</span>
+          </p>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'programs-marketplace' }))}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 dark:bg-blue-700 text-white text-xs font-medium hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            {language === 'es' ? 'Cargar Programa' : 'Load Program'}
+          </button>
+          <button
+            onClick={() => setShowCoachWellness(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 text-xs font-medium hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors"
+          >
+            <Heart className="w-3.5 h-3.5" />
+            {language === 'es' ? 'Panel Bienestar' : 'Wellness Panel'}
+          </button>
+        </div>
+      )}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          {t('menu.training')}
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-1">
+          Track your workouts and progress
+        </p>
+      </div>
+
+      {/* Endurance Planner sync status badge */}
+      {syncStatus?.last_push_at && (
+        <div className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm border ${
+          syncStatus.status === 'synced'
+            ? 'bg-cyan-50 dark:bg-cyan-900/20 border-cyan-200 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300'
+            : syncStatus.status === 'error'
+            ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+            : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300'
+        }`}>
+          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+            syncStatus.status === 'synced'
+              ? 'bg-cyan-500 animate-pulse'
+              : syncStatus.status === 'error'
+              ? 'bg-red-500'
+              : 'bg-amber-500 animate-pulse'
+          }`} />
+          <span className="font-medium">
+            {syncStatus.planner_source || (language === 'es' ? 'Endurance Planner' : 'Endurance Planner')}
+          </span>
+          <span className="opacity-60 hidden sm:inline">·</span>
+          <span className="opacity-70 hidden sm:inline">
+            {syncStatus.status === 'synced'
+              ? (language === 'es' ? 'Sincronizado' : 'Synced')
+              : syncStatus.status === 'error'
+              ? (language === 'es' ? 'Error de sync' : 'Sync error')
+              : (language === 'es' ? 'Pendiente' : 'Pending')}
+          </span>
+          <span className="opacity-50 ml-auto text-xs">
+            {language === 'es' ? 'Último push:' : 'Last push:'}{' '}
+            {new Date(syncStatus.last_push_at).toLocaleString(language === 'es' ? 'es-ES' : 'en-US', {
+              month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+            })}
+          </span>
+        </div>
+      )}
+
+      {/* QUICK ACTIONS — Wellness · Assessment · Plan con IA · Coaching */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+
+        {/* 1. Wellness (athlete) / Solicitar Cuestionario (professional) */}
+        {isProfessional ? (
+          <button
+            onClick={() => setShowRequestQuestionnaire(true)}
+            className="group relative overflow-hidden rounded-xl shadow-lg border-2 border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 hover:border-blue-400 dark:hover:border-blue-500 transition-all p-6 text-left"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-transparent dark:from-blue-400/10 rounded-bl-full" />
+            <div className="relative">
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform bg-gradient-to-br from-blue-500 to-indigo-600">
+                <ClipboardList className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
+                {language === 'es' ? 'Solicitar Cuestionario' : 'Request Questionnaire'}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {language === 'es'
+                  ? `Programar para ${selectedAthleteName || 'tu atleta'}`
+                  : `Schedule for ${selectedAthleteName || 'your athlete'}`}
+              </p>
+            </div>
+          </button>
+        ) : (
+        <button
+          onClick={() => setShowWellnessCheckin(true)}
+          className={`group relative overflow-hidden rounded-xl shadow-lg border-2 transition-all p-6 text-left ${
+            wellnessChecked
+              ? todayWellnessScore !== null && todayWellnessScore >= 70
+                ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-400 dark:border-emerald-600'
+                : todayWellnessScore !== null && todayWellnessScore >= 45
+                ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-400 dark:border-amber-600'
+                : todayWellnessScore !== null
+                ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-400 dark:border-rose-600'
+                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+              : 'bg-white dark:bg-gray-800 border-dashed border-gray-300 dark:border-gray-600 hover:border-emerald-400 dark:hover:border-emerald-500'
+          }`}
+        >
+          <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-emerald-500/10 to-transparent dark:from-emerald-400/10 rounded-bl-full" />
+          <div className="relative">
+            <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform ${
+              wellnessChecked && todayWellnessScore !== null
+                ? todayWellnessScore >= 70
+                  ? 'bg-gradient-to-br from-emerald-500 to-emerald-600'
+                  : todayWellnessScore >= 45
+                  ? 'bg-gradient-to-br from-amber-400 to-amber-500'
+                  : 'bg-gradient-to-br from-rose-500 to-rose-600'
+                : 'bg-gradient-to-br from-emerald-500 to-teal-600 dark:from-emerald-900/40 dark:to-teal-800/30'
+            }`}>
+              <Heart className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
+              {language === 'es' ? 'Bienestar' : 'Wellness'}
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {wellnessChecked && todayWellnessScore !== null
+                ? `${todayWellnessScore.toFixed(0)}/100 — ${
+                    todayWellnessScore >= 70
+                      ? language === 'es' ? 'Listo para entrenar' : 'Ready to train'
+                      : todayWellnessScore >= 45
+                      ? language === 'es' ? 'Moderado' : 'Moderate'
+                      : language === 'es' ? 'Recuperación recomendada' : 'Recovery recommended'
+                  }`
+                : language === 'es' ? 'Check-in diario de recuperación' : 'Daily recovery check-in'}
+            </p>
+          </div>
+        </button>
+        )}
+
+        {/* 2. Assessment */}
+        <div className="relative flex flex-col">
+          <button
+            onClick={() => setShowAssessmentMenu(!showAssessmentMenu)}
+            className={`flex-1 w-full group relative overflow-hidden rounded-xl shadow-lg border-2 transition-all p-6 text-left ${
+              showAssessmentMenu
+                ? 'bg-cyan-600 border-cyan-600'
+                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-cyan-500 dark:hover:border-cyan-500'
+            }`}
+          >
+            <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br rounded-bl-full ${
+              showAssessmentMenu ? 'from-white/10 to-transparent' : 'from-cyan-500/10 to-transparent dark:from-cyan-400/10'
+            }`} />
+            <div className="relative">
+              <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform ${
+                showAssessmentMenu
+                  ? 'bg-white/20'
+                  : 'bg-gradient-to-br from-cyan-500 to-cyan-600 dark:from-cyan-900/40 dark:to-cyan-800/30'
+              }`}>
+                <Zap className={`w-6 h-6 ${showAssessmentMenu ? 'text-white' : 'text-white dark:text-cyan-400'}`} />
+              </div>
+              <h3 className={`font-bold text-lg mb-1 ${showAssessmentMenu ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
+                {language === 'es' ? 'Assessment' : 'Assessment'}
+              </h3>
+              <p className={`text-sm ${showAssessmentMenu ? 'text-white/70' : 'text-gray-600 dark:text-gray-400'}`}>
+                {language === 'es' ? 'Mide tu rendimiento' : 'Measure performance'}
+              </p>
+            </div>
+          </button>
+
+          {showAssessmentMenu && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowAssessmentMenu(false)} />
+              <div className="absolute left-0 right-0 top-full mt-2 z-20">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 p-4">
+                  <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3 px-1">
+                    {language === 'es' ? 'Selecciona una evaluación' : 'Choose an assessment'}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => {
+                        setShowAssessmentMenu(false);
+                        if (canAccessAssessments) {
+                          setShowCMJAssessment(true);
+                        } else {
+                          setShowAssessmentUpgradeModal(true);
+                        }
+                      }}
+                      className="group relative flex flex-col items-center gap-2 p-4 rounded-xl bg-cyan-50 dark:bg-cyan-900/20 hover:bg-cyan-500 transition-all border border-cyan-200 dark:border-cyan-800 hover:border-cyan-500"
+                    >
+                      {!canAccessAssessments && (
+                        <div className="absolute top-2 right-2 bg-[#fdda36] text-[#514163] text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-tight uppercase tracking-wide">
+                          PRO
+                        </div>
+                      )}
+                      <div className="w-10 h-10 rounded-lg bg-cyan-500 group-hover:bg-white/20 flex items-center justify-center transition-colors">
+                        <Zap className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="text-center">
+                        <span className="block text-xs font-semibold text-cyan-600 dark:text-cyan-300 group-hover:text-white leading-tight">Jump Assessment</span>
+                        <span className="block text-xs text-cyan-500/70 dark:text-cyan-400/60 group-hover:text-white/70 leading-tight mt-0.5">CMJ · altura · potencia</span>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowAssessmentMenu(false);
+                        if (canAccessAssessments) {
+                          setShowBarVelocity(true);
+                        } else {
+                          setShowAssessmentUpgradeModal(true);
+                        }
+                      }}
+                      className="group relative flex flex-col items-center gap-2 p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-600 transition-all border border-blue-200 dark:border-blue-800 hover:border-blue-600"
+                    >
+                      {!canAccessAssessments && (
+                        <div className="absolute top-2 right-2 bg-[#fdda36] text-[#514163] text-[9px] font-bold px-1.5 py-0.5 rounded-full leading-tight uppercase tracking-wide">
+                          PRO
+                        </div>
+                      )}
+                      <div className="w-10 h-10 rounded-lg bg-blue-600 group-hover:bg-white/20 flex items-center justify-center transition-colors">
+                        <BarChart2 className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="text-center">
+                        <span className="block text-xs font-semibold text-blue-600 dark:text-blue-300 group-hover:text-white leading-tight">Bar Velocity</span>
+                        <span className="block text-xs text-blue-500/70 dark:text-blue-400/60 group-hover:text-white/70 leading-tight mt-0.5">VBT · velocidad · zonas</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* 3. Plan con IA — visible para todos, paywall para Inicia */}
+        <button
+          onClick={() => canAccessAIWorkouts ? setShowAIGenerator(true) : setShowAIUpgradeModal(true)}
+          className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-[#514163]/30 dark:border-[#514163]/50 hover:border-[#514163] dark:hover:border-[#514163] hover:shadow-xl hover:scale-[1.02] transition-all p-6 text-left"
+        >
+          <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-[#514163]/10 to-transparent dark:from-[#514163]/20 rounded-bl-full" />
+          {!canAccessAIWorkouts && (
+            <div className="absolute top-3 right-3 bg-[#fdda36] text-[#514163] text-[10px] font-bold px-2 py-0.5 rounded-full leading-tight uppercase tracking-wide">
+              {language === 'es' ? 'Upgrade' : 'Upgrade'}
+            </div>
+          )}
+          <div className="relative">
+            <div className="w-12 h-12 bg-gradient-to-br from-[#514163] to-[#3a2f4a] rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-md">
+              <Sparkles className="w-6 h-6 text-[#fdda36]" />
+            </div>
+            <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
+              {language === 'es' ? 'Planificar con IA' : 'Plan with AI'}
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              {language === 'es' ? 'Personalizado para ti' : 'Personalized for you'}
+            </p>
+          </div>
+        </button>
+
+        {/* 4. Coaching 1:1 */}
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'services' }))}
+          className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-[#ffd700] dark:border-[#ffd700] hover:border-[#ffed4e] dark:hover:border-[#ffed4e] hover:shadow-xl hover:scale-[1.02] transition-all p-6 text-left"
+        >
+          <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-[#fdda36]/20 to-transparent dark:from-[#fdda36]/30 rounded-bl-full" />
+          <div className="relative">
+            <div className="w-12 h-12 bg-gradient-to-br from-[#fdda36] to-[#ffd700] dark:from-[#fdda36]/40 dark:to-[#ffd700]/30 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <Activity className="w-6 h-6 text-[#514163] dark:text-white" />
+            </div>
+            <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
+              {language === 'es' ? 'Coaching 1:1' : 'Coaching 1:1'}
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">
+              {language === 'es' ? 'Planes individualizados' : 'Individualized plans'}
+            </p>
+          </div>
+        </button>
+      </div>
+
+
+      {/* AI Upgrade Modal — inline, no dependency extra */}
+      {showAIUpgradeModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            {/* Header */}
+            <div className="relative bg-gradient-to-br from-[#514163] to-[#3a2f4a] p-6 pb-8">
+              <button
+                onClick={() => setShowAIUpgradeModal(false)}
+                className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-14 h-14 bg-[#fdda36]/20 rounded-2xl flex items-center justify-center mb-4">
+                <Sparkles className="w-7 h-7 text-[#fdda36]" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-1">
+                {language === 'es' ? 'Planificar con IA' : 'Plan with AI'}
+              </h2>
+              <p className="text-white/70 text-sm">
+                {language === 'es'
+                  ? 'Necesitás el plan Pro para acceder a esta función completa.'
+                  : 'You need the Pro plan to access the full feature.'}
+              </p>
+            </div>
+
+            {/* Free tier info */}
+            <div className="px-6 py-5">
+              <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 mb-5">
+                <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-3">
+                  {language === 'es' ? 'Disponible en plan Inicia' : 'Available on Inicia plan'}
+                </p>
+                <ul className="space-y-2">
+                  {[
+                    language === 'es' ? '1 programa generado por IA al mes' : '1 AI-generated program per month',
+                    language === 'es' ? 'Duración de 7 días' : '7-day duration',
+                    language === 'es' ? 'Editable manualmente después' : 'Manually editable afterwards',
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-2 text-sm text-emerald-800 dark:text-emerald-300">
+                      <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                        <CheckCircle2 className="w-3 h-3 text-white" />
+                      </div>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <p className="text-xs text-center text-gray-500 dark:text-gray-400 mb-4">
+                {language === 'es'
+                  ? 'Con Pro: planes ilimitados, mayor duración y ajuste por rendimiento real.'
+                  : 'With Pro: unlimited plans, longer durations, and real performance adjustments.'}
+              </p>
+
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    setShowAIUpgradeModal(false);
+                    setShowAIGenerator(true);
+                  }}
+                  className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition-colors text-sm"
+                >
+                  {language === 'es' ? 'Usar versión gratuita (7 días)' : 'Use free version (7 days)'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAIUpgradeModal(false);
+                    window.dispatchEvent(new CustomEvent('navigate', { detail: 'memberships-marketplace' }));
+                  }}
+                  className="w-full py-3 rounded-xl bg-[#514163] hover:bg-[#3a2f4a] text-white font-semibold transition-colors text-sm flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4 text-[#fdda36]" />
+                  {language === 'es' ? 'Ver plan Pro' : 'See Pro plan'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assessment Upgrade Modal */}
+      {showAssessmentUpgradeModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="relative bg-gradient-to-br from-cyan-600 to-blue-700 p-6 pb-8">
+              <button
+                onClick={() => setShowAssessmentUpgradeModal(false)}
+                className="absolute top-4 right-4 text-white/60 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-14 h-14 bg-white/15 rounded-2xl flex items-center justify-center mb-4">
+                <Activity className="w-7 h-7 text-white" />
+              </div>
+              <h2 className="text-xl font-bold text-white mb-1">
+                {language === 'es' ? 'Evaluaciones de Rendimiento' : 'Performance Assessments'}
+              </h2>
+              <p className="text-white/70 text-sm">
+                {language === 'es'
+                  ? 'Necesitás el plan Pro para acceder a las evaluaciones CMJ y Bar Velocity.'
+                  : 'You need the Pro plan to access CMJ and Bar Velocity assessments.'}
+              </p>
+            </div>
+
+            <div className="px-6 py-5">
+              <div className="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 rounded-xl p-4 mb-5">
+                <p className="text-xs font-bold text-cyan-700 dark:text-cyan-400 uppercase tracking-wide mb-3">
+                  {language === 'es' ? 'Incluido en Pro' : 'Included in Pro'}
+                </p>
+                <ul className="space-y-2">
+                  {[
+                    language === 'es' ? 'Jump Assessment (CMJ) — altura y potencia' : 'Jump Assessment (CMJ) — height & power',
+                    language === 'es' ? 'Bar Velocity (VBT) — perfiles de velocidad' : 'Bar Velocity (VBT) — velocity profiles',
+                    language === 'es' ? 'Historial completo de evaluaciones' : 'Full assessment history',
+                    language === 'es' ? 'Prescripción de carga por velocidad' : 'Velocity-based load prescription',
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-2 text-sm text-cyan-800 dark:text-cyan-300">
+                      <div className="w-4 h-4 rounded-full bg-cyan-500 flex items-center justify-center flex-shrink-0">
+                        <CheckCircle2 className="w-3 h-3 text-white" />
+                      </div>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <button
+                onClick={() => {
+                  setShowAssessmentUpgradeModal(false);
+                  window.dispatchEvent(new CustomEvent('navigate', { detail: 'memberships-marketplace' }));
+                }}
+                className="w-full py-3 rounded-xl bg-[#514163] hover:bg-[#3a2f4a] text-white font-semibold transition-colors text-sm flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4 text-[#fdda36]" />
+                {language === 'es' ? 'Ver planes disponibles' : 'See available plans'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'atp' }))}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors bg-[#514163] text-white hover:bg-[#3a2f4a]"
+          >
+            <Calendar className="w-4 h-4" />
+            {language === 'es' ? 'Plan Anual' : 'Annual Plan'}
+          </button>
+          <button
+            onClick={() => setActiveTab('calendar')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeTab === 'calendar'
+                ? 'bg-[#fdda36] text-[#514163]'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+            }`}
+          >
+            <Calendar className="w-4 h-4" />
+            {language === 'es' ? 'Calendario' : 'Calendar'}
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeTab === 'history'
+                ? 'bg-[#fdda36] text-[#514163]'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            History
+          </button>
+          <button
+            onClick={handleStravaSync}
+            disabled={!effectiveAthleteId || stravaSyncing}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors bg-[#FC4C02] text-white hover:bg-[#E34402] disabled:cursor-not-allowed disabled:opacity-60"
+            title={language === 'es' ? 'Sincronizar Strava' : 'Sync Strava'}
+          >
+            <RotateCw className={`w-4 h-4 ${stravaSyncing ? 'animate-spin' : ''}`} />
+            Strava
+          </button>
+          <button
+            onClick={handleTrainingPeaksSync}
+            disabled={tpSyncing}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeTab === 'calendar'
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+            }`}
+            title={language === 'es' ? 'Sincronizar TrainingPeaks del atleta' : 'Sync athlete TrainingPeaks'}
+          >
+            <RotateCw className={`w-4 h-4 ${tpSyncing ? 'animate-spin' : ''}`} />
+            TrainingPeaks
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'calendar' && (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => setCalendarView('day')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              calendarView === 'day'
+                ? 'bg-[#fdda36] text-[#514163]'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+            }`}
+          >
+            Day
+          </button>
+          <button
+            onClick={() => setCalendarView('week')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              calendarView === 'week'
+                ? 'bg-[#fdda36] text-[#514163]'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+            }`}
+          >
+            Week
+          </button>
+          <button
+            onClick={() => setCalendarView('month')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              calendarView === 'month'
+                ? 'bg-[#fdda36] text-[#514163]'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+            }`}
+          >
+            Month
+          </button>
+          <button
+            onClick={() => setCalendarView('pending')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              calendarView === 'pending'
+                ? 'bg-[#fdda36] text-[#514163]'
+                : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
+            }`}
+          >
+            {language === 'es' ? 'Pendientes' : 'Pending'}
+          </button>
+        </div>
+      )}
+
+      {activeTab === 'calendar' && (
+      <>
+      {wearableCalendarActive && <section className="rounded-xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-900 dark:bg-violet-950/30"><div className="flex flex-wrap items-center justify-between gap-3"><h3 className="font-semibold text-violet-900 dark:text-violet-200">{language === 'es' ? 'Resumen semanal Endurance' : 'Weekly endurance summary'}</h3><div className="flex flex-wrap gap-3 text-sm text-gray-700 dark:text-gray-200"><span>{language === 'es' ? 'Plan' : 'Planned'}: {Math.round(enduranceWeeklySummary.plannedMinutes)} min</span><span>{language === 'es' ? 'Realizado' : 'Completed'}: {Math.round(enduranceWeeklySummary.actualMinutes)} min</span><span>TSS: {enduranceWeeklySummary.tss ? Math.round(enduranceWeeklySummary.tss) : '—'}</span><span>{language === 'es' ? 'Sin plan' : 'Unplanned'}: {enduranceWeeklySummary.unplanned}</span></div></div>{enduranceWeeklySummary.sports.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{enduranceWeeklySummary.sports.map(row => <span key={row.sport} className="rounded-full bg-white/80 px-2 py-1 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-200">{row.sport}: {Math.round(row.planned)} / {Math.round(row.actual)} min</span>)}</div>}</section>}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
+              <Dumbbell className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Total</p>
+              <p className="text-xl font-bold text-gray-900 dark:text-white">
+                {getVisibleWorkouts().length}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-teal-100 dark:bg-teal-900/20 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Completed</p>
+              <p className="text-xl font-bold text-gray-900 dark:text-white">
+                {getVisibleWorkouts().filter(w => w.status === 'completed').length}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-yellow-100 dark:bg-yellow-900/20 rounded-lg flex items-center justify-center">
+              <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Pending</p>
+              <p className="text-xl font-bold text-gray-900 dark:text-white">
+                {getVisibleWorkouts().filter(w => w.status === 'pending').length}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Second row: Volume Planned / Done / Difference */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-lg flex items-center justify-center">
+              <Weight className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {language === 'es' ? 'Volumen Planificado' : 'Volume Planned'}
+              </p>
+              <p className="text-xl font-bold text-gray-900 dark:text-white">
+                {plannedVolume.toFixed(0)} kg
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-teal-100 dark:bg-teal-900/20 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {language === 'es' ? 'Volumen Hecho' : 'Volume Done'}
+              </p>
+              <p className="text-xl font-bold text-gray-900 dark:text-white">
+                {totalVolume.toFixed(0)} kg
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+              (totalVolume - plannedVolume) < 0
+                ? 'bg-red-100 dark:bg-red-900/20'
+                : (totalVolume - plannedVolume) > 0
+                ? 'bg-emerald-100 dark:bg-emerald-900/20'
+                : 'bg-gray-100 dark:bg-gray-700/40'
+            }`}>
+              <BarChart2 className={`w-5 h-5 ${
+                (totalVolume - plannedVolume) < 0
+                  ? 'text-red-600 dark:text-red-400'
+                  : (totalVolume - plannedVolume) > 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-gray-500 dark:text-gray-400'
+              }`} />
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {language === 'es' ? 'Diferencia' : 'Difference'}
+              </p>
+              <p className={`text-xl font-bold ${
+                (totalVolume - plannedVolume) < 0
+                  ? 'text-red-600 dark:text-red-400'
+                  : (totalVolume - plannedVolume) > 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-gray-900 dark:text-white'
+              }`}>
+                {(totalVolume - plannedVolume) >= 0 ? '+' : ''}{(totalVolume - plannedVolume).toFixed(0)} kg
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      </>
+      )}
+
+      {activeTab === 'calendar' ? (
+        <>
+          {calendarView === 'month' ? (
+            <>
+              <TrainingCalendar
+                workouts={workouts}
+                selectedDate={selectedDate}
+                onDaySelect={(date) => {
+                  const isSameDay = selectedDate.toDateString() === date.toDateString();
+                  if (isSameDay) {
+                    setShowMonthlyDayModal(true);
+                  } else {
+                    setSelectedDate(date);
+                  }
+                }}
+                onWorkoutMove={handleWorkoutMove}
+                onWorkoutClick={openWorkoutModal}
+                onWearableMatchAction={(sessionId, status, plannedWorkoutId) => void updateWearableMatch(sessionId, status, plannedWorkoutId)}
+                onWorkoutEdit={handleEditWorkout}
+                onWorkoutDuplicate={handleDuplicateWorkout}
+                onWorkoutDelete={(workoutId) => {
+                  const workout = workouts.find(w => w.id === workoutId);
+                  if (workout) {
+                    handleDeleteWorkout(workout);
+                  }
+                }}
+                onAddWorkout={(date) => {
+                  setSelectedDate(date);
+                  const formatDateLocal = (d: Date): string => {
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                  };
+                  sessionStorage.setItem('workout_scheduled_date', formatDateLocal(date));
+                  window.dispatchEvent(new CustomEvent('navigate', { detail: 'workout-builder' }));
+                }}
+                onAddExtraTraining={(date) => {
+                  setSelectedDate(date);
+                  setShowExtraTrainingModal(true);
+                }}
+                onAddRestDay={(date) => {
+                  setSelectedDate(date);
+                  setCalendarEventType('rest_day');
+                  setCalendarEventDate(formatDateLocal(date));
+                  setExistingCalendarEvent(null);
+                  setShowCalendarEventModal(true);
+                }}
+                onAddNote={(date) => {
+                  setSelectedDate(date);
+                  setCalendarEventType('note');
+                  setCalendarEventDate(formatDateLocal(date));
+                  setExistingCalendarEvent(null);
+                  setShowCalendarEventModal(true);
+                }}
+                onCalendarEventClick={(event) => {
+                  setCalendarEventType(event.type);
+                  setCalendarEventDate(event.scheduled_date);
+                  setExistingCalendarEvent({
+                    id: event.calendar_event_id,
+                    athlete_id: effectiveAthleteId || '',
+                    created_by: '',
+                    type: event.type,
+                    description: event.description,
+                    event_date: event.scheduled_date,
+                    created_at: '',
+                    updated_at: null,
+                    creator_name: event.creator_name,
+                    creator_role: event.creator_role,
+                  });
+                  setShowCalendarEventModal(true);
+                }}
+                wellnessEntries={wellnessEntries}
+                onWellnessClick={(entry) => setSelectedWellnessEntry(entry)}
+              />
+            </>
+          ) : calendarView === 'pending' ? (
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {language === 'es' ? 'Entrenamientos Pendientes' : 'Pending Trainings'}
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                  {workouts.filter(w => w.status === 'pending' || w.status === 'planned').length} {language === 'es' ? 'entrenamientos planificados' : 'planned trainings'}
+                </p>
+              </div>
+              <div className="max-h-[70vh] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/50">
+                {workouts.filter(w => w.status === 'pending' || w.status === 'planned').length === 0 ? (
+                  <div className="p-10 text-center">
+                    <CheckCircle2 className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {language === 'es' ? 'No hay entrenamientos pendientes' : 'No pending trainings'}
+                    </p>
+                  </div>
+                ) : (
+                  workouts
+                    .filter(w => w.status === 'pending' || w.status === 'planned')
+                    .sort((a, b) => parseDateStr(a.scheduled_date).getTime() - parseDateStr(b.scheduled_date).getTime())
+                    .map(workout => {
+                      const w = workout as any;
+                      const isExpanded = expandedPending.has(workout.id);
+                      const duration = w.estimated_duration_minutes || w.endurance_workout_data?.estimated_duration_minutes || w.endurance_workout_data?.planned_duration_minutes || (w.type === 'extra' || w.type === 'external' ? w.duration : null);
+                      const intensity = w.session_type || w.endurance_workout_data?.session_type || (w.target_zones && w.target_zones.length > 0 ? w.target_zones.join(', ') : '') || (w.rpe ? `RPE ${w.rpe}` : '') || '';
+                      const dateLabel = parseDateStr(workout.scheduled_date).toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', { day: '2-digit', month: '2-digit' });
+                      return (
+                        <div key={workout.id} className="px-3 sm:px-6">
+                          <button
+                            onClick={() => {
+                              setExpandedPending(prev => {
+                                const next = new Set(prev);
+                                if (next.has(workout.id)) next.delete(workout.id);
+                                else next.add(workout.id);
+                                return next;
+                              });
+                            }}
+                            className="w-full flex items-center gap-3 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors rounded-lg px-2 -mx-2"
+                          >
+                            <ChevronDown className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-900 dark:text-white text-sm truncate">{workout.name}</p>
+                            </div>
+                            <div className="flex items-center gap-2 sm:gap-3 text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3.5 h-3.5" />
+                                {dateLabel}
+                              </span>
+                              {duration != null && (
+                                <span className="hidden sm:flex items-center gap-1">
+                                  <Clock className="w-3.5 h-3.5" />
+                                  {typeof duration === 'number' ? `${duration}min` : duration}
+                                </span>
+                              )}
+                              {intensity && (
+                                <span className="flex items-center gap-1">
+                                  <Flame className="w-3.5 h-3.5" />
+                                  <span className="capitalize">{intensity}</span>
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                          <div className={`overflow-hidden transition-all duration-200 ease-in-out ${isExpanded ? 'max-h-60 opacity-100' : 'max-h-0 opacity-0'}`}>
+                            {isExpanded && (
+                              <div className="pb-3 pl-8 pr-2">
+                                {duration != null && (
+                                  <p className="sm:hidden text-xs text-gray-500 dark:text-gray-400 mb-1 flex items-center gap-1">
+                                    <Clock className="w-3.5 h-3.5" />
+                                    {typeof duration === 'number' ? `${duration}min` : duration}
+                                  </p>
+                                )}
+                                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                                  {workout.description || (language === 'es' ? 'Sin descripción' : 'No description')}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {selectedDate.toLocaleDateString('en-US', {
+                      month: 'long',
+                      year: 'numeric',
+                      ...(calendarView === 'day' && { day: 'numeric', weekday: 'long' })
+                    })}
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => navigateDate('prev')}
+                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                    </button>
+                    <button
+                      onClick={() => setSelectedDate(new Date())}
+                      className="px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    >
+                      Today
+                    </button>
+                    <button
+                      onClick={() => navigateDate('next')}
+                      className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6">
+                {loading ? (
+                  <div className="py-12 text-center">
+                    <div className="w-12 h-12 border-4 border-[#fdda36] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                    <p className="text-gray-600 dark:text-gray-400">Loading workouts...</p>
+                  </div>
+                ) : calendarView === 'week' ? (
+                  renderWeekView()
+                ) : (
+                  <DailyWorkoutView
+                    selectedDate={selectedDate}
+                    athleteId={effectiveAthleteId}
+                    onWorkoutUpdate={loadWorkouts}
+                    onOpenExtraTraining={() => setShowExtraTrainingModal(true)}
+                    onOpenRestDay={() => {
+                      setCalendarEventType('rest_day');
+                      setCalendarEventDate(formatDateLocal(selectedDate));
+                      setExistingCalendarEvent(null);
+                      setShowCalendarEventModal(true);
+                    }}
+                    onOpenNote={() => {
+                      setCalendarEventType('note');
+                      setCalendarEventDate(formatDateLocal(selectedDate));
+                      setExistingCalendarEvent(null);
+                      setShowCalendarEventModal(true);
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <WorkoutHistory athleteId={effectiveAthleteId} />
+      )}
+
+      {selectedGPSActivity && (
+        <ActivityDetailModal
+          activity={selectedGPSActivity}
+          athleteId={effectiveAthleteId}
+          language={language}
+          onClose={() => setSelectedGPSActivity(null)}
+        />
+      )}
+
+      {showWorkoutModal && selectedWorkout && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
+              <div className="flex items-start justify-between">
+                <div>
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                     {selectedWorkout.name}
                   </h2>
