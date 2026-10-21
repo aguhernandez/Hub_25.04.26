@@ -456,7 +456,7 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
             )}
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 bg-[#4b5563] hover:bg-[#374151] text-white rounded-lg transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -546,7 +546,7 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
                                 <button onClick={() => handleSaveMacrocycle(macro)} className="inline-flex items-center gap-1 px-3 py-2 bg-[#fdda36] text-[#514163] rounded-lg font-medium">
                                   <Save className="w-4 h-4" />{language === 'es' ? 'Guardar fase' : 'Save phase'}
                                 </button>
-                                <button onClick={() => { setEditingMacro(null); setMacroDraft(null); }} className="inline-flex items-center gap-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg">
+                                <button onClick={() => { setEditingMacro(null); setMacroDraft(null); }} className="inline-flex items-center gap-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-[#4b5563] text-white">
                                   <X className="w-4 h-4" />{language === 'es' ? 'Cancelar' : 'Cancel'}
                                 </button>
                               </div>
