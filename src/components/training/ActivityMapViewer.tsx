@@ -11,6 +11,7 @@ interface GPSPoint {
 interface ActivityMapViewerProps {
   gpsPoints: GPSPoint[];
   title?: string;
+  activePointIndex?: number | null;
 }
 
 declare global {
@@ -19,9 +20,10 @@ declare global {
   }
 }
 
-export default function ActivityMapViewer({ gpsPoints, title }: ActivityMapViewerProps) {
+export default function ActivityMapViewer({ gpsPoints, title, activePointIndex }: ActivityMapViewerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
+  const activeMarkerRef = useRef<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -89,6 +91,10 @@ export default function ActivityMapViewer({ gpsPoints, title }: ActivityMapViewe
           fillOpacity: 0.9,
         }).addTo(map).bindPopup('End');
 
+        activeMarkerRef.current = L.circleMarker(latLngs[0], {
+          radius: 7, fillColor: '#facc15', color: '#fff', weight: 3, opacity: 1, fillOpacity: 1,
+        }).addTo(map);
+
         map.fitBounds(polyline.getBounds().pad(0.15));
 
         if (!cancelled) setIsLoading(false);
@@ -108,6 +114,16 @@ export default function ActivityMapViewer({ gpsPoints, title }: ActivityMapViewe
     };
   }, [gpsPoints]);
 
+  useEffect(() => {
+    const marker = activeMarkerRef.current;
+    if (!marker || activePointIndex == null || gpsPoints.length < 2) return;
+    const pointIndex = Math.max(0, Math.min(gpsPoints.length - 1, activePointIndex));
+    const point = gpsPoints[pointIndex];
+    if (point && Number.isFinite(point.latitude) && Number.isFinite(point.longitude)) {
+      marker.setLatLng([point.latitude, point.longitude]);
+    }
+  }, [activePointIndex, gpsPoints]);
+
   if (gpsPoints.length < 2) {
     return (
       <div className="w-full h-64 bg-neutral-100 dark:bg-neutral-800 rounded-lg flex items-center justify-center border border-neutral-200 dark:border-neutral-700">
@@ -124,7 +140,7 @@ export default function ActivityMapViewer({ gpsPoints, title }: ActivityMapViewe
       {title && (
         <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">{title}</h3>
       )}
-      <div className="relative w-full h-96 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+      <div className="relative w-full h-[38vh] min-h-64 rounded-lg border border-neutral-200 dark:border-neutral-700 overflow-hidden">
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-neutral-100 dark:bg-neutral-800 z-10">
             <div className="text-center">

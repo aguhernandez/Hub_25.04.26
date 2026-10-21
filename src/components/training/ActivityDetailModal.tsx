@@ -1,15 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
-import {
-  X, Clock, Mountain, Heart, Zap, Gauge,
-  Activity as ActivityIcon, MapPin, Flame, TrendingUp, TrendingDown,
-  RefreshCw,
-} from 'lucide-react';
+import type { ReactNode } from 'react';
+import { X, Activity as ActivityIcon } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, CartesianGrid, XAxis, YAxis,
   Tooltip, ReferenceLine, ResponsiveContainer, Cell,
 } from 'recharts';
 import { supabase } from '../../lib/supabase';
 import ActivityMapViewer from './ActivityMapViewer';
+import { calculateGapPace, calculateZoneTimes, getPassportZones, parseThresholdPace } from '../../utils/activityDetailAnalysis';
 
 interface UnifiedActivity {
   id: string;
@@ -47,6 +45,7 @@ interface UnifiedActivity {
   average_grade?: number | null;
   elev_high?: number | null;
   elev_low?: number | null;
+  user_id?: string;
 }
 
 interface ActivityStream {
@@ -65,13 +64,13 @@ interface ActivityStream {
 interface Props {
   activity: UnifiedActivity | null;
   onClose: () => void;
+  athleteId?: string;
+  wearableDetails?: any;
+  wearableLoading?: boolean;
+  isWearable?: boolean;
+  actions?: ReactNode;
+  language?: 'en' | 'es';
 }
-
-const ZONE_COLORS = [
-  'bg-sky-400', 'bg-teal-400', 'bg-lime-400', 'bg-yellow-400',
-  'bg-orange-400', 'bg-red-400', 'bg-rose-600',
-];
-const ZONE_LABELS = ['Z1', 'Z2', 'Z3', 'Z4', 'Z5', 'Z6', 'Z7'];
 
 function fmtDuration(s: number): string {
   const h = Math.floor(s / 3600);
@@ -122,6 +121,9 @@ function SportBadge({ sport, source }: { sport: string; source: string }) {
       )}
       {source === 'asciende_gps' && (
         <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-500 text-white">GPS</span>
+      )}
+      {source !== 'asciende_gps' && source !== 'strava' && (
+        <span className="px-2 py-0.5 rounded-md text-xs font-semibold bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-200 capitalize">{source === 'open_wearables' ? 'Open Wearables' : source.replace(/_/g, ' ')}</span>
       )}
     </div>
   );
@@ -342,43 +344,6 @@ function buildGpsSplits(streams: ActivityStream | null, isRun: boolean): any[] |
   return splits.length >= 2 ? splits : null;
 }
 
-function ZoneBar({ timeInZones }: { timeInZones: Record<string, number> | null }) {
-  if (!timeInZones) return null;
-  const zones = [1, 2, 3, 4, 5, 6, 7].map((z) => timeInZones[`zone_${z}_seconds`] || 0);
-  const total = zones.reduce((a, b) => a + b, 0);
-  if (total === 0) return null;
-
-  return (
-    <div className="bg-white dark:bg-neutral-800 rounded-xl p-4 border border-neutral-200 dark:border-neutral-700">
-      <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Time in Zones</h4>
-      <div className="flex h-6 rounded-lg overflow-hidden">
-        {zones.map((sec, i) => {
-          const pct = (sec / total) * 100;
-          if (pct === 0) return null;
-          return (
-            <div
-              key={i}
-              className={`${ZONE_COLORS[i]} flex items-center justify-center text-[10px] font-bold text-white/90 transition-all`}
-              style={{ width: `${pct}%` }}
-              title={`${ZONE_LABELS[i]}: ${fmtDuration(sec)}`}
-            >
-              {pct > 8 ? ZONE_LABELS[i] : ''}
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex justify-between mt-2 text-[10px] text-neutral-500 dark:text-neutral-500">
-        {zones.map((sec, i) => (
-          <span key={i} className="text-center">
-            {ZONE_LABELS[i]}<br />
-            <span className="text-neutral-600 dark:text-neutral-400">{fmtDuration(sec)}</span>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function SplitsTable({ splits, isMetric }: { splits: any[] | null; isMetric: boolean }) {
   if (!splits || splits.length === 0) return null;
   const unit = isMetric ? 'km' : 'mi';
@@ -476,7 +441,7 @@ function PaceAnalysis({ splits, isMetric }: { splits: any[] | null; isMetric: bo
           <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.2} />
             <XAxis dataKey="split" tick={{ fontSize: 10 }} tickFormatter={(value: number) => `${value}`} />
-            <YAxis reversed tick={{ fontSize: 10 }} width={42} tickFormatter={(value: number) => fmtPaceFromSecPerKm(value)} domain={['dataMin - 10', 'dataMax + 10']} />
+            <YAxis tick={{ fontSize: 10 }} width={42} tickFormatter={(value: number) => fmtPaceFromSecPerKm(value)} domain={['dataMin - 10', 'dataMax + 10']} />
             <Tooltip formatter={(value: number) => [`${fmtPaceFromSecPerKm(value)} /km`, 'Pace']} labelFormatter={(value) => `Split ${value}`} />
             <ReferenceLine y={average} stroke="#64748b" strokeDasharray="5 5" label={{ value: 'avg', position: 'insideTopRight', fontSize: 10 }} />
             <Bar dataKey="pace" radius={[3, 3, 0, 0]} animationDuration={700}>
@@ -489,23 +454,114 @@ function PaceAnalysis({ splits, isMetric }: { splits: any[] | null; isMetric: bo
   );
 }
 
-export function ActivityDetailModal({ activity, onClose }: Props) {
+function TelemetryGraph({ streams, distanceMeters, onHover }: { streams: ActivityStream | null; distanceMeters: number; onHover: (index: number | null) => void }) {
+  if (!streams?.time_stream?.length) return null;
+  const length = Math.min(streams.time_stream.length, streams.heartrate_stream?.length || Infinity, streams.altitude_stream?.length || Infinity, streams.distance_stream?.length || Infinity);
+  const step = Math.max(1, Math.floor(length / 900));
+  const indices = Array.from({ length: Math.ceil(length / step) }, (_, i) => Math.min(i * step, length - 1));
+  const lanes = [
+    { label: 'Pace', values: streams.velocity_smooth_stream ? indices.map(index => streams.velocity_smooth_stream![index] > 0 ? 1000 / streams.velocity_smooth_stream![index] : null) : null, color: '#8b5cf6' },
+    { label: 'Heart rate', values: streams.heartrate_stream ? indices.map(index => streams.heartrate_stream![index]) : null, color: '#f43f5e' },
+    { label: 'Elevation', values: streams.altitude_stream ? indices.map(index => streams.altitude_stream![index]) : null, color: '#10b981' },
+  ].filter(lane => lane.values?.some(value => value != null));
+  if (!lanes.length) return null;
+  const width = 1000, laneHeight = 80, gap = 22, height = lanes.length * (laneHeight + gap) + 20;
+  return <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-800">
+    <div className="mb-3 flex flex-wrap gap-4 text-xs">{lanes.map(lane => <span key={lane.label} className="flex items-center gap-1.5 text-neutral-600 dark:text-neutral-300"><i className="h-2 w-2 rounded-full" style={{ background: lane.color }} />{lane.label}</span>)}</div>
+    <svg viewBox={`0 0 ${width} ${height}`} className="w-full touch-none" onPointerLeave={() => onHover(null)} onPointerMove={event => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+      const sampleIndex = indices[Math.round(ratio * (indices.length - 1))] || 0;
+      onHover(distanceMeters > 0 && streams.distance_stream?.length ? Math.round(sampleIndex / (streams.distance_stream.length - 1) * 10000) : Math.round(ratio * 10000));
+    }}>
+      {lanes.map((lane, laneIndex) => {
+        const values = lane.values!.filter((value): value is number => value != null && Number.isFinite(value));
+        const min = Math.min(...values), max = Math.max(...values), span = max - min || 1, top = laneIndex * (laneHeight + gap) + 10;
+        const points = lane.values!.map((value, index) => value == null ? null : `${(index / (lane.values!.length - 1)) * width},${top + laneHeight - 4 - ((value - min) / span) * (laneHeight - 8)}`).filter(Boolean).join(' ');
+        return <g key={lane.label}><text x="0" y={top - 1} fontSize="12" fill="#64748b">{lane.label}</text><polyline points={points} fill="none" stroke={lane.color} strokeWidth="2.5" strokeLinejoin="round" /></g>;
+      })}
+    </svg>
+    <p className="mt-1 text-[11px] text-neutral-500">{streams.time_stream.length ? fmtDuration(streams.time_stream[streams.time_stream.length - 1]) : ''} · Hover to follow position on map</p>
+  </section>;
+}
+
+export function ActivityDetailModal({ activity, onClose, athleteId, wearableDetails, wearableLoading = false, isWearable = false, actions, language: languageProp }: Props) {
+  const language = languageProp || (typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('es') ? 'es' : 'en');
   const [streams, setStreams] = useState<ActivityStream | null>(null);
   const [gpsPoints, setGpsPoints] = useState<{ latitude: number; longitude: number; altitude?: number }[]>([]);
   const [mapError, setMapError] = useState<string | null>(null);
   const [loadingStreams, setLoadingStreams] = useState(false);
-  const [refetching, setRefetching] = useState(false);
-  const [refetchMsg, setRefetchMsg] = useState<string | null>(null);
+  const [activePointIndex, setActivePointIndex] = useState<number | null>(null);
+  const [passport, setPassport] = useState<any | null>(null);
+
+  const wearableStreams = useMemo<ActivityStream | null>(() => {
+    if (!wearableDetails?.series) return null;
+    const entries = Object.entries(wearableDetails.series) as [string, any[]][];
+    const extract = (pattern: RegExp) => entries.find(([type]) => pattern.test(type))?.[1] || [];
+    const toTime = (rows: any[]) => rows.map(row => Math.max(0, (Number(row.timestamp) - Date.parse(wearableDetails.window?.start_time || activity?.start_time || '')) / 1000));
+    const hr = extract(/heart.?rate|^hr(?:_|$)/i);
+    const power = extract(/power/i);
+    const altitude = extract(/altitude|elevation/i);
+    const distance = extract(/distance/i);
+    const speed = extract(/speed|velocity/i);
+    const cadence = extract(/cadence/i);
+    const anchor = hr.length ? hr : power.length ? power : altitude.length ? altitude : speed;
+    if (!anchor.length) return null;
+    const times = toTime(anchor);
+    const interpolate = (rows: any[], field: string) => rows.length ? times.map(time => {
+      const startMs = Date.parse(wearableDetails.window?.start_time || activity?.start_time || '');
+      let low = 0, high = rows.length - 1;
+      while (low < high) { const mid = Math.floor((low + high) / 2); if ((Number(rows[mid].timestamp) - startMs) / 1000 < time) low = mid + 1; else high = mid; }
+      const row = low > 0 && Math.abs((Number(rows[low - 1].timestamp) - startMs) / 1000 - time) <= Math.abs((Number(rows[low].timestamp) - startMs) / 1000 - time) ? rows[low - 1] : rows[low];
+      const value = Number(row.value);
+      if (field === 'distance' && value < 1000 && Number(activity?.distance_meters) > 1000) return value * 1000;
+      return value;
+    }) : null;
+    const speedValues = interpolate(speed, 'speed');
+    const distanceValues = interpolate(distance, 'distance') || (speedValues ? times.map((t, i) => i ? times[i - 1] + ((speedValues[i - 1] + speedValues[i]) / 2) * (t - times[i - 1]) : 0) : null);
+    return {
+      time_stream: times,
+      heartrate_stream: interpolate(hr, 'hr'), watts_stream: interpolate(power, 'power'),
+      altitude_stream: interpolate(altitude, 'altitude'), distance_stream: distanceValues,
+      latlng_stream: null, cadence_stream: interpolate(cadence, 'cadence'),
+      velocity_smooth_stream: speedValues, grade_smooth_stream: null,
+      moving_stream: null,
+    };
+  }, [wearableDetails, activity]);
+
+  const detailStreams = wearableStreams || streams;
+  const detailGpsPoints = useMemo(() => {
+    const route = wearableDetails?.route;
+    if (Array.isArray(route)) return route.filter((point: any) => Number.isFinite(Number(point.latitude)) && Number.isFinite(Number(point.longitude))).map((point: any) => ({ latitude: Number(point.latitude), longitude: Number(point.longitude), altitude: point.altitude_m }));
+    return gpsPoints;
+  }, [wearableDetails, gpsPoints]);
+
+  useEffect(() => {
+    const id = athleteId || activity?.user_id;
+    if (!id) { setPassport(null); return; }
+    let cancelled = false;
+    supabase.from('biological_passports')
+      .select('ftp_watts, critical_power, lt1_power, lt2_power, lt1_hr, lt2_hr, running_threshold_pace, hr_zones_json, power_zones_json, training_zones, measurement_date')
+      .eq('athlete_id', id).eq('status', 'active').order('measurement_date', { ascending: false }).limit(1).maybeSingle()
+      .then(({ data }) => { if (!cancelled) setPassport(data || null); });
+    return () => { cancelled = true; };
+  }, [athleteId, activity?.user_id]);
 
   useEffect(() => {
     if (!activity) return;
+    if (isWearable || wearableDetails) {
+      setStreams(wearableStreams);
+      setGpsPoints([]);
+      setLoadingStreams(wearableLoading);
+      return;
+    }
     setLoadingStreams(true);
     setStreams(null);
     setGpsPoints([]);
     setMapError(null);
 
     const loadAll = async () => {
-      // Load streams for both Strava and asciende_gps activities
+      // Load stored telemetry for imported activities.
       const { data: streamData } = await supabase
         .from('activity_streams')
         .select('*')
@@ -579,233 +635,69 @@ export function ActivityDetailModal({ activity, onClose }: Props) {
     };
 
     loadAll();
-  }, [activity]);
+  }, [activity, wearableDetails, wearableStreams, wearableLoading, isWearable]);
 
   if (!activity) return null;
 
-  const hasMap = gpsPoints.length >= 2;
-  const hasElevation = streams?.altitude_stream && streams.altitude_stream.length > 1 && streams.distance_stream && streams.distance_stream.length > 1;
-  const hasHr = streams?.heartrate_stream && streams.heartrate_stream.length > 1;
-  const hasPower = streams?.watts_stream && streams.watts_stream.length > 1;
-  const hasPace = streams?.time_stream && streams?.distance_stream && streams.time_stream.length > 3 && streams.distance_stream.length > 3;
-  const missingData = !hasElevation && !hasMap && activity.source === 'strava';
+  const hasMap = detailGpsPoints.length >= 2;
+  const hasElevation = detailStreams?.altitude_stream && detailStreams.altitude_stream.length > 1 && detailStreams.distance_stream && detailStreams.distance_stream.length > 1;
+  const hasHr = detailStreams?.heartrate_stream && detailStreams.heartrate_stream.length > 1;
+  const hasPower = detailStreams?.watts_stream && detailStreams.watts_stream.length > 1;
+  const hasPace = detailStreams?.time_stream && detailStreams?.distance_stream && detailStreams.time_stream.length > 3 && detailStreams.distance_stream.length > 3;
   const avgSpeed = activity.average_speed_mps > 0
     ? activity.average_speed_mps
     : (activity.duration_seconds > 0 ? activity.distance_meters / activity.duration_seconds : 0);
 
-  const handleRefetch = async () => {
-    if (!activity.external_id) return;
-    setRefetching(true);
-    setRefetchMsg(null);
-    try {
-      const { StravaClient } = await import('../../utils/stravaClient');
-      const result = await StravaClient.syncActivities({ perPage: 5 });
-      if (result.success) {
-        setRefetchMsg('Data reloaded. Close and reopen this activity to see the updated charts.');
-      } else {
-        setRefetchMsg(result.error || 'Failed to reload data. Try Force sync from the activity list.');
-      }
-    } catch (err: any) {
-      setRefetchMsg(err.message || 'Failed to reload data.');
-    }
-    setRefetching(false);
-  };
   const isRun = isRunLike(activity.sport_type);
   const startDate = new Date(activity.start_time);
-  const splits = activity.splits_metric || activity.splits_standard || buildGpsSplits(streams, isRun);
+  const splits = activity.splits_metric || activity.splits_standard || buildGpsSplits(detailStreams, isRun);
   const isMetric = true;
 
+  const hrZones = getPassportZones(passport, 'hr');
+  const powerZones = getPassportZones(passport, 'power');
+  const timeStream = detailStreams?.time_stream || [];
+  const gapPace = isRun ? calculateGapPace(timeStream, detailStreams?.distance_stream, detailStreams?.altitude_stream) : null;
+  const intensityFactor = Number(wearableDetails?.power_metrics?.intensity_factor)
+    || (activity.weighted_avg_watts && Number(passport?.ftp_watts || passport?.critical_power) ? activity.weighted_avg_watts / Number(passport.ftp_watts || passport.critical_power) : 0)
+    || (activity.average_heartrate && Number(passport?.lt2_hr) ? activity.average_heartrate / Number(passport.lt2_hr) : 0)
+    || (isRun && parseThresholdPace(passport?.running_threshold_pace) && avgSpeed > 0 ? avgSpeed / (1000 / parseThresholdPace(passport.running_threshold_pace)!) : 0);
+  const impulse = wearableDetails?.power_metrics?.tss ?? activity.raw_data?.tss ?? activity.suffer_score;
+  const zoneBasis = hasPower && powerZones.length ? 'power' : 'hr';
+  const zoneData = zoneBasis === 'power'
+    ? calculateZoneTimes(detailStreams?.watts_stream, timeStream, powerZones)
+    : calculateZoneTimes(detailStreams?.heartrate_stream, timeStream, hrZones);
+  const zoneMax = Math.max(1, ...zoneData.map(zone => zone.seconds));
+  const activeMapIndex = activePointIndex == null ? null : Math.round(activePointIndex / 10000 * Math.max(0, detailGpsPoints.length - 1));
+  const statCard = (label: string, value: string, color = 'text-neutral-900 dark:text-white') => <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-800"><p className="text-xs text-neutral-500 dark:text-neutral-400">{label}</p><p className={`mt-1 text-lg font-bold ${color}`}>{value}</p></div>;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white dark:bg-neutral-900 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 z-10 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-700 px-5 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
-              <ActivityIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="font-bold text-neutral-900 dark:text-white text-base truncate">{activity.name}</h2>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                {startDate.toLocaleDateString()} · {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors shrink-0">
-            <X className="w-5 h-5 text-neutral-500 dark:text-neutral-400" />
-          </button>
+      <div className="relative flex h-[90vh] w-[96vw] max-w-[1400px] flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-neutral-900">
+        <div className="z-10 flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-5 py-3 dark:border-neutral-700 dark:bg-neutral-900">
+          <div className="flex min-w-0 items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/30"><ActivityIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" /></div><div className="min-w-0"><h2 className="truncate font-bold text-neutral-900 dark:text-white">{activity.name}</h2><p className="text-xs text-neutral-500 dark:text-neutral-400">{startDate.toLocaleDateString()} · {startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p></div><SportBadge sport={activity.sport_type} source={activity.source} /></div>
+          <div className="ml-3 flex shrink-0 items-center gap-2">{actions}<button onClick={onClose} className="rounded-lg p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800"><X className="h-5 w-5 text-neutral-500" /></button></div>
         </div>
-
-        <div className="p-5 space-y-4">
-          <SportBadge sport={activity.sport_type} source={activity.source} />
-
-          {/* Stats grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-neutral-50 dark:bg-neutral-800 rounded-xl p-3 border border-neutral-200 dark:border-neutral-700">
-              <div className="flex items-center gap-1.5 mb-1">
-                <MapPin className="w-3.5 h-3.5 text-neutral-400" />
-                <span className="text-xs text-neutral-500 dark:text-neutral-400">Distance</span>
-              </div>
-              <p className="text-lg font-bold text-neutral-900 dark:text-white">{fmtDistance(activity.distance_meters)}</p>
-            </div>
-            <div className="bg-neutral-50 dark:bg-neutral-800 rounded-xl p-3 border border-neutral-200 dark:border-neutral-700">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Clock className="w-3.5 h-3.5 text-neutral-400" />
-                <span className="text-xs text-neutral-500 dark:text-neutral-400">Duration</span>
-              </div>
-              <p className="text-lg font-bold text-neutral-900 dark:text-white">{fmtDuration(activity.duration_seconds)}</p>
-            </div>
-            <div className="bg-neutral-50 dark:bg-neutral-800 rounded-xl p-3 border border-neutral-200 dark:border-neutral-700">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Gauge className="w-3.5 h-3.5 text-neutral-400" />
-                <span className="text-xs text-neutral-500 dark:text-neutral-400">{isRun ? 'Pace' : 'Speed'}</span>
-              </div>
-              <p className="text-lg font-bold text-neutral-900 dark:text-white">
-                {isRun ? fmtPace(avgSpeed) : fmtSpeed(avgSpeed)}
-              </p>
-            </div>
-            <div className="bg-neutral-50 dark:bg-neutral-800 rounded-xl p-3 border border-neutral-200 dark:border-neutral-700">
-              <div className="flex items-center gap-1.5 mb-1">
-                <Mountain className="w-3.5 h-3.5 text-neutral-400" />
-                <span className="text-xs text-neutral-500 dark:text-neutral-400">Elevation</span>
-              </div>
-              <p className="text-lg font-bold text-neutral-900 dark:text-white">{Math.round(activity.elevation_gain_meters || 0)} m</p>
-            </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+          <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(300px,3fr)]">
+            <main className="min-w-0 space-y-4 xl:col-start-1 xl:row-start-1">
+              {hasMap ? <div className="overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700"><ActivityMapViewer gpsPoints={detailGpsPoints} activePointIndex={activeMapIndex} /></div> : <div className="flex h-[38vh] min-h-64 items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 text-sm text-neutral-500 dark:border-neutral-700 dark:bg-neutral-800">{mapError || 'No GPS track available for this activity'}</div>}
+              {loadingStreams || wearableLoading ? <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-500" /></div> : <TelemetryGraph streams={detailStreams} distanceMeters={activity.distance_meters} onHover={setActivePointIndex} />}
+              {hasElevation && <ElevationChart distanceStream={detailStreams!.distance_stream} altitudeStream={detailStreams!.altitude_stream} />}
+              {hasPace && <PaceChart timeStream={detailStreams!.time_stream} distanceStream={detailStreams!.distance_stream} />}
+              {hasPower && <MiniChart data={detailStreams!.watts_stream} color="#f59e0b" label="Power" unit="W" height={150} />}
+            </main>
+            <aside className="min-w-0 space-y-4 xl:col-start-2 xl:row-start-1">
+              <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-800"><h3 className="mb-3 text-sm font-semibold text-neutral-800 dark:text-white">{language === 'es' ? 'Métricas principales' : 'Activity summary'}</h3><div className="grid grid-cols-2 gap-2">{statCard(language === 'es' ? 'Distancia' : 'Distance', fmtDistance(activity.distance_meters))}{statCard(language === 'es' ? 'Tiempo mov.' : 'Moving time', fmtDuration(activity.duration_seconds))}{statCard(isRun ? (language === 'es' ? 'Ritmo promedio' : 'Avg pace') : (language === 'es' ? 'Velocidad prom.' : 'Avg speed'), isRun ? fmtPace(avgSpeed) : fmtSpeed(avgSpeed))}{statCard(language === 'es' ? 'Desnivel +' : 'Elevation gain', `${Math.round(activity.elevation_gain_meters || wearableDetails?.elevation_gain_m || 0)} m`)}{isRun && statCard('GAP estimado', gapPace ? `${fmtPaceFromSecPerKm(gapPace)} /km` : '—')}{isRun && statCard(language === 'es' ? 'Ritmo vs. GAP' : 'Pace vs. GAP', gapPace ? `${fmtPace(avgSpeed)} · ${fmtPaceFromSecPerKm(gapPace)}` : '—')}</div></section>
+              <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-800"><h3 className="mb-3 text-sm font-semibold text-neutral-800 dark:text-white">{language === 'es' ? 'Carga y esfuerzo' : 'Load & effort'}</h3><div className="grid grid-cols-2 gap-2">{statCard('Impulse', impulse == null ? '—' : `${Math.round(Number(impulse))} pts`, 'text-purple-600 dark:text-purple-300')}{statCard('IF', intensityFactor > 0 ? intensityFactor.toFixed(2) : '—', 'text-blue-600 dark:text-blue-300')}{statCard('VAM', activity.duration_seconds > 0 ? `${Math.round((activity.elevation_gain_meters || wearableDetails?.elevation_gain_m || 0) / (activity.duration_seconds / 3600))} m/h` : '—')}{statCard(language === 'es' ? 'Cadencia prom.' : 'Avg cadence', activity.average_cadence == null ? '—' : `${Math.round(activity.average_cadence)} spm`)}{activity.average_heartrate != null && statCard(language === 'es' ? 'FC prom. / máx.' : 'Avg / max HR', `${Math.round(activity.average_heartrate)} / ${activity.max_heartrate ?? '—'} bpm`, 'text-rose-600 dark:text-rose-300')}{activity.average_watts != null && statCard(language === 'es' ? 'Potencia prom.' : 'Avg power', `${Math.round(activity.average_watts)} W`, 'text-amber-600 dark:text-amber-300')}</div>{passport?.measurement_date && <p className="mt-2 text-[11px] text-neutral-500">{language === 'es' ? 'Pasaporte biológico' : 'Biological Passport'} · {passport.measurement_date}</p>}</section>
+              <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-800"><h3 className="mb-3 text-sm font-semibold text-neutral-800 dark:text-white">{language === 'es' ? 'Distribución por zonas' : 'Zone distribution'} {zoneData.length ? `· ${zoneBasis === 'power' ? (language === 'es' ? 'Potencia' : 'Power') : (language === 'es' ? 'FC' : 'HR')}` : ''}</h3>{zoneData.length ? <div className="space-y-2">{zoneData.map(zone => <div key={zone.zone}><div className="mb-1 flex justify-between text-xs"><span>{zone.name} <span className="text-neutral-400">{Math.round(zone.min)}–{Math.round(zone.max)}</span></span><span>{zone.percent.toFixed(0)}% · {fmtDuration(zone.seconds)}</span></div><div className="h-2 overflow-hidden rounded bg-neutral-100 dark:bg-neutral-700"><div className="h-full rounded bg-blue-500" style={{ width: `${zone.seconds / zoneMax * 100}%` }} /></div></div>)}</div> : <p className="text-xs text-neutral-500">{language === 'es' ? 'Sin series o zonas configuradas en el Pasaporte Biológico.' : 'No telemetry or Biological Passport zones available.'}</p>}</section>
+              {hasHr && <MiniChart data={detailStreams!.heartrate_stream} color="#f43f5e" label={language === 'es' ? 'Frecuencia cardíaca' : 'Heart rate'} unit="bpm" height={130} />}
+              {splits?.length ? <SplitsTable splits={splits} isMetric={isMetric} /> : <PaceAnalysis splits={splits} isMetric={isMetric} />}
+              {splits?.length && <PaceAnalysis splits={splits} isMetric={isMetric} />}
+              {activity.calories != null && <p className="px-1 text-xs text-neutral-500">{Math.round(activity.calories)} kcal{activity.device_name ? ` · ${activity.device_name}` : ''}</p>}
+              {activity.fused_activity_id && <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">{language === 'es' ? 'Actividad GPS vinculada con esta actividad importada.' : 'This imported activity is matched with an Asciende GPS recording.'}</p>}
+            </aside>
           </div>
-
-          {/* Secondary stats */}
-          <div className="flex flex-wrap gap-2">
-            {activity.average_heartrate != null && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800">
-                <Heart className="w-4 h-4 text-rose-500" />
-                <span className="text-sm font-semibold text-rose-700 dark:text-rose-300">{Math.round(activity.average_heartrate)} bpm</span>
-                {activity.max_heartrate != null && <span className="text-xs text-rose-400">max {activity.max_heartrate}</span>}
-              </div>
-            )}
-            {activity.average_watts != null && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                <Zap className="w-4 h-4 text-amber-500" />
-                <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">{Math.round(activity.average_watts)} W</span>
-                {activity.weighted_avg_watts != null && <span className="text-xs text-amber-400">NP {Math.round(activity.weighted_avg_watts)}</span>}
-              </div>
-            )}
-            {activity.max_watts != null && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
-                <Zap className="w-4 h-4 text-orange-500" />
-                <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">Max {Math.round(activity.max_watts)} W</span>
-              </div>
-            )}
-            {activity.suffer_score != null && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
-                <Flame className="w-4 h-4 text-purple-500" />
-                <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">Suffer {Math.round(activity.suffer_score)}</span>
-              </div>
-            )}
-            {activity.calories != null && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
-                <Flame className="w-4 h-4 text-neutral-400" />
-                <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">{Math.round(activity.calories)} kcal</span>
-              </div>
-            )}
-            {activity.average_grade != null && activity.average_grade !== 0 && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
-                <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">{activity.average_grade > 0 ? '+' : ''}{activity.average_grade.toFixed(1)}%</span>
-              </div>
-            )}
-            {activity.elev_high != null && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
-                <Mountain className="w-3.5 h-3.5 text-neutral-400" />
-                <span className="text-xs text-neutral-500 dark:text-neutral-400">High {Math.round(activity.elev_high)}m</span>
-              </div>
-            )}
-            {activity.elev_low != null && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
-                <span className="text-xs text-neutral-500 dark:text-neutral-400">Low {Math.round(activity.elev_low)}m</span>
-              </div>
-            )}
-            {activity.average_cadence != null && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
-                <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">{Math.round(activity.average_cadence)} cad</span>
-              </div>
-            )}
-            {activity.device_name && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
-                <span className="text-xs text-neutral-500 dark:text-neutral-400">{activity.device_name}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Map */}
-          {hasMap ? (
-            <div className="rounded-xl overflow-hidden border border-neutral-200 dark:border-neutral-700">
-              <ActivityMapViewer gpsPoints={gpsPoints} />
-            </div>
-          ) : (
-            <div className="bg-neutral-50 dark:bg-neutral-800 rounded-xl p-6 border border-neutral-200 dark:border-neutral-700 text-center">
-              <MapPin className="w-8 h-8 text-neutral-300 dark:text-neutral-600 mx-auto mb-2" />
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">{mapError || 'No GPS track available for this activity'}</p>
-            </div>
-          )}
-
-          {/* Charts */}
-          {loadingStreams ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
-            </div>
-          ) : (
-            <>
-              {hasElevation ? (
-                <ElevationChart distanceStream={streams!.distance_stream} altitudeStream={streams!.altitude_stream} />
-              ) : activity.source === 'strava' && (
-                <div className="bg-neutral-50 dark:bg-neutral-800 rounded-xl p-4 border border-neutral-200 dark:border-neutral-700">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Mountain className="w-4 h-4 text-neutral-400" />
-                      <span className="text-sm text-neutral-500 dark:text-neutral-400">Elevation profile not available yet</span>
-                    </div>
-                    <button
-                      onClick={handleRefetch}
-                      disabled={refetching}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium transition-colors disabled:opacity-50"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${refetching ? 'animate-spin' : ''}`} />
-                      {refetching ? 'Loading...' : 'Load data'}
-                    </button>
-                  </div>
-                  {refetchMsg && (
-                    <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">{refetchMsg}</p>
-                  )}
-                </div>
-              )}
-              {hasHr && (
-                <MiniChart data={streams!.heartrate_stream} color="#f43f5e" label="Heart Rate" unit="bpm" />
-              )}
-              {hasPower && (
-                <MiniChart data={streams!.watts_stream} color="#f59e0b" label="Power" unit="W" />
-              )}
-              {hasPace && (
-                <PaceChart timeStream={streams!.time_stream} distanceStream={streams!.distance_stream} />
-              )}
-            </>
-          )}
-
-          {/* Time in zones */}
-          <ZoneBar timeInZones={activity.time_in_zones} />
-
-          {/* Pace analysis from splits */}
-          <PaceAnalysis splits={splits} isMetric={isMetric} />
-
-          {/* Splits table */}
-          <SplitsTable splits={splits} isMetric={isMetric} />
-
-          {/* Fused activity note */}
-          {activity.fused_activity_id && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300">
-              <MapPin className="w-3.5 h-3.5" />
-              This Strava activity was matched with a GPS recording from Asciende.
-            </div>
-          )}
         </div>
       </div>
     </div>
