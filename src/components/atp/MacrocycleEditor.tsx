@@ -395,16 +395,20 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
     return <div className="w-2 h-2 rounded-full bg-red-500" />;
   };
 
-  const getMiniSparkline = (weeks: WeeklyLoad[]) => {
+  const getMiniSparkline = (weeks: WeeklyLoad[], macrocycleId: string) => {
     if (weeks.length === 0) return null;
     const max = Math.max(...weeks.map(w => w.estimated_load), 1);
     return (
-      <div className="flex items-end gap-0.5 h-8">
-        {weeks.map((week, idx) => (
-          <div
-            key={idx}
-            className="flex-1 bg-[#fdda36] rounded-t"
-            style={{ height: `${(week.estimated_load / max) * 100}%`, minHeight: '2px' }}
+      <div className="flex items-end gap-1 h-10" aria-label={language === 'es' ? 'Carga semanal de la fase' : 'Weekly phase load'}>
+        {weeks.map((week) => (
+          <button
+            key={week.id}
+            type="button"
+            onClick={() => setExpandedMacro(macrocycleId)}
+            className="flex-1 min-w-1 rounded-t bg-[#fdda36] hover:bg-[#ffd51a] transition-colors"
+            style={{ height: `${Math.max((week.estimated_load / max) * 100, 8)}%` }}
+            title={`${language === 'es' ? 'Semana' : 'Week'} ${week.week_number}: ${week.estimated_load.toFixed(0)} kg`}
+            aria-label={`${language === 'es' ? 'Semana' : 'Week'} ${week.week_number}: ${week.estimated_load.toFixed(0)} kg`}
           />
         ))}
       </div>
@@ -574,7 +578,7 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
                             </span>
                           </div>
                           <div className="mt-3 w-64">
-                            {getMiniSparkline(macroWeeks)}
+                            {getMiniSparkline(macroWeeks, macro.id)}
                           </div>
                         </div>
                         {canEditPlan && (
@@ -582,13 +586,13 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
                             <button
                               onClick={() => handleMoveMacrocycle(macro, -1)}
                               disabled={macroIndex === 0}
-                              className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="p-2 rounded-lg bg-[#514163] text-white hover:bg-[#3f3150] disabled:opacity-30 disabled:cursor-not-allowed"
                               title={language === 'es' ? 'Mover antes en el plan' : 'Move earlier in the plan'}
                             ><ArrowUp className="w-4 h-4" /></button>
                             <button
                               onClick={() => handleMoveMacrocycle(macro, 1)}
                               disabled={macroIndex === orderedMacrocycles.length - 1}
-                              className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="p-2 rounded-lg bg-[#514163] text-white hover:bg-[#3f3150] disabled:opacity-30 disabled:cursor-not-allowed"
                               title={language === 'es' ? 'Mover después en el plan' : 'Move later in the plan'}
                             ><ArrowDown className="w-4 h-4" /></button>
                             <button
@@ -619,11 +623,23 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
                     {isExpanded && (
                       <div className="p-4 space-y-3">
                         {macroMesocycles.length === 0 ? (
-                          <p className="text-center text-gray-500 dark:text-gray-400 py-4">
-                            {language === 'es'
-                              ? 'No hay mesociclos. Agrega uno para organizar las semanas.'
-                              : 'No mesocycles. Add one to organize weeks.'}
-                          </p>
+                          <div className="flex flex-col items-center gap-3 py-4">
+                            <p className="text-center text-gray-500 dark:text-gray-400">
+                              {language === 'es'
+                                ? 'No hay mesociclos. Agrega uno para organizar las semanas.'
+                                : 'No mesocycles. Add one to organize weeks.'}
+                            </p>
+                            {canEditPlan && (
+                              <button
+                                type="button"
+                                onClick={() => handleAddMesocycle(macro.id, macro.start_week, macro.end_week)}
+                                className="inline-flex items-center gap-2 px-3 py-2 bg-[#514163] text-white rounded-lg hover:bg-[#3f3150] transition-colors"
+                              >
+                                <Plus className="w-4 h-4" />
+                                {language === 'es' ? 'Añadir mesociclo' : 'Add mesocycle'}
+                              </button>
+                            )}
+                          </div>
                         ) : (
                           macroMesocycles.map((meso) => {
                             const mesoWeeks = weeklyLoads.filter(
