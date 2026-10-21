@@ -110,6 +110,7 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
   const [loading, setLoading] = useState(true);
 
   const isCoachOrAdmin = profile?.role === 'trainer' || profile?.role === 'admin';
+  const canEditPlan = isCoachOrAdmin || profile?.id === athleteId;
 
   useEffect(() => {
     loadData();
@@ -435,6 +436,15 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {canEditPlan && (
+              <button
+                onClick={handleAddMacrocycle}
+                className="px-4 py-2 bg-[#fdda36] text-[#514163] rounded-lg hover:bg-[#ffd51a] transition-colors flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                {language === 'es' ? 'Añadir macrociclo' : 'Add macrocycle'}
+              </button>
+            )}
             {isCoachOrAdmin && (
               <button
                 onClick={handleAIGenerate}
@@ -467,7 +477,7 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
                     ? 'Comienza agregando tu primera fase de entrenamiento'
                     : 'Start by adding your first training phase'}
                 </p>
-                {isCoachOrAdmin && (
+                {canEditPlan && (
                   <button
                     onClick={handleAddMacrocycle}
                     className="px-4 py-2 bg-[#fdda36] text-[#514163] rounded-lg hover:bg-[#ffd51a] transition-colors inline-flex items-center gap-2"
@@ -567,7 +577,7 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
                             {getMiniSparkline(macroWeeks)}
                           </div>
                         </div>
-                        {isCoachOrAdmin && (
+                        {canEditPlan && (
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => handleMoveMacrocycle(macro, -1)}
@@ -788,7 +798,7 @@ export default function MacrocycleEditor({ atpId, athleteId, onClose, onUpdate }
             )}
           </div>
 
-          {isCoachOrAdmin && macrocycles.length > 0 && (
+          {canEditPlan && macrocycles.length > 0 && (
             <button
               onClick={handleAddMacrocycle}
               className="w-full mt-4 px-4 py-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-[#fdda36] hover:bg-[#fdda36]/10 transition-colors flex items-center justify-center gap-2 text-gray-600 dark:text-gray-400 hover:text-[#fdda36]"
