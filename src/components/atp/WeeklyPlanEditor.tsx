@@ -101,7 +101,7 @@ export default function WeeklyPlanEditor({
         scheduled_date: assignment.scheduled_date,
         assignment_id: assignment.id,
         team_id: assignment.team_id
-      }] : []));
+      }] : []);
       const uniqueSessions = new Map<string, Workout>();
       assignments.forEach((assignment: Workout) => {
         uniqueSessions.set(`${assignment.id}:${assignment.scheduled_date}`, assignment);

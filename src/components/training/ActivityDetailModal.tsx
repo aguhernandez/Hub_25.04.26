@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { ReactNode } from 'react';
-import { X, Activity as ActivityIcon } from 'lucide-react';
+import { X, Activity as ActivityIcon, Check } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, CartesianGrid, XAxis, YAxis,
   Tooltip, ReferenceLine, ResponsiveContainer, Cell,
@@ -162,143 +162,7 @@ function decodePolyline(encoded: string): { latitude: number; longitude: number 
   return points;
 }
 
-function ElevationChart({ distanceStream, altitudeStream }: { distanceStream: number[] | null; altitudeStream: number[] | null }) {
-  const data = useMemo(() => {
-    if (!distanceStream || !altitudeStream || distanceStream.length < 2 || altitudeStream.length < 2) return [];
-    const length = Math.min(distanceStream.length, altitudeStream.length);
-    const step = Math.max(1, Math.floor(length / 240));
-    return Array.from({ length: Math.ceil(length / step) }, (_, i) => {
-      const index = Math.min(i * step, length - 1);
-      return {
-        distance: Number((distanceStream[index] / 1000).toFixed(2)),
-        elevation: Math.round(altitudeStream[index]),
-      };
-    });
-  }, [distanceStream, altitudeStream]);
-
-  if (data.length < 2) return null;
-  const startElevation = data[0].elevation;
-
-  return (
-    <div className="bg-white dark:bg-neutral-800 rounded-xl p-3 border border-neutral-200 dark:border-neutral-700">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">Elevation profile</span>
-        <span className="text-xs text-neutral-500 dark:text-neutral-500">{Math.min(...data.map((p) => p.elevation))}–{Math.max(...data.map((p) => p.elevation))} m</span>
-      </div>
-      <div className="h-56 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="elevationFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10b981" stopOpacity={0.55} />
-                <stop offset="100%" stopColor="#10b981" stopOpacity={0.06} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.2} />
-            <XAxis dataKey="distance" tick={{ fontSize: 10 }} tickFormatter={(value: number) => `${value} km`} />
-            <YAxis tick={{ fontSize: 10 }} width={42} tickFormatter={(value: number) => `${value}m`} />
-            <Tooltip
-              cursor={{ stroke: '#f8fafc', strokeWidth: 2 }}
-              content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null;
-                const elevation = Number(payload[0].value);
-                return (
-                  <div className="rounded-lg bg-neutral-900 px-3 py-2 text-xs text-white shadow-xl">
-                    <p className="font-semibold">{Number(label).toFixed(2)} km</p>
-                    <p>{elevation} m</p>
-                    <p className={elevation - startElevation >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
-                      {elevation - startElevation >= 0 ? '+' : ''}{elevation - startElevation} m from start
-                    </p>
-                  </div>
-                );
-              }}
-            />
-            <Area type="monotone" dataKey="elevation" stroke="#10b981" strokeWidth={2} fill="url(#elevationFill)" activeDot={{ r: 5, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
-
-function MiniChart({
-  data, color, label, unit, height = 120,
-}: {
-  data: number[] | null; color: string; label: string; unit: string; height?: number;
-}) {
-  if (!data || data.length < 2) return null;
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const w = 100;
-  const points = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * w;
-    const y = height - ((v - min) / range) * (height - 4) - 2;
-    return `${x},${y}`;
-  }).join(' ');
-
-  return (
-    <div className="bg-white dark:bg-neutral-800 rounded-xl p-3 border border-neutral-200 dark:border-neutral-700">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">{label}</span>
-        <span className="text-xs text-neutral-500 dark:text-neutral-500">
-          {Math.round(min)} – {Math.round(max)} {unit}
-        </span>
-      </div>
-      <svg viewBox={`0 0 ${w} ${height}`} className="w-full" style={{ height }} preserveAspectRatio="none">
-        <polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" />
-      </svg>
-    </div>
-  );
-}
-
-function PaceChart({
-  timeStream, distanceStream, height = 120,
-}: {
-  timeStream: number[] | null; distanceStream: number[] | null; height?: number;
-}) {
-  const paceData = useMemo(() => {
-    if (!timeStream || !distanceStream || timeStream.length < 3 || distanceStream.length < 3) return null;
-    const paces: number[] = [];
-    const windowSize = Math.max(5, Math.floor(timeStream.length / 50));
-    for (let i = windowSize; i < timeStream.length; i += windowSize) {
-      const dt = timeStream[i] - timeStream[i - windowSize];
-      const dd = distanceStream[i] - distanceStream[i - windowSize];
-      if (dt > 0 && dd > 0) {
-        const speed = dd / dt;
-        if (speed > 0) paces.push(1000 / speed);
-      }
-    }
-    return paces.length > 2 ? paces : null;
-  }, [timeStream, distanceStream]);
-
-  if (!paceData) return null;
-  const min = Math.min(...paceData);
-  const max = Math.max(...paceData);
-  const range = max - min || 1;
-  const w = 100;
-  const points = paceData.map((v, i) => {
-    const x = (i / (paceData.length - 1)) * w;
-    const y = height - ((v - min) / range) * (height - 4) - 2;
-    return `${x},${y}`;
-  }).join(' ');
-
-  return (
-    <div className="bg-white dark:bg-neutral-800 rounded-xl p-3 border border-neutral-200 dark:border-neutral-700">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">Pace</span>
-        <span className="text-xs text-neutral-500 dark:text-neutral-500">
-          {fmtPaceFromSecPerKm(min)} – {fmtPaceFromSecPerKm(max)} /km
-        </span>
-      </div>
-      <svg viewBox={`0 0 ${w} ${height}`} className="w-full" style={{ height }} preserveAspectRatio="none">
-        <polyline points={points} fill="none" stroke="#8B5CF6" strokeWidth={1.5} strokeLinejoin="round" />
-      </svg>
-    </div>
-  );
-}
-
-function buildGpsSplits(streams: ActivityStream | null, isRun: boolean): any[] | null {
+function buildGpsSplits(streams: ActivityStream | null): any[] | null {
   if (!streams?.time_stream || !streams.distance_stream || streams.time_stream.length < 3 || streams.distance_stream.length < 3) return null;
 
   const time = streams.time_stream;
@@ -345,57 +209,84 @@ function buildGpsSplits(streams: ActivityStream | null, isRun: boolean): any[] |
   return splits.length >= 2 ? splits : null;
 }
 
-function SplitsTable({ splits, isMetric }: { splits: any[] | null; isMetric: boolean }) {
+function splitTelemetry(streams: ActivityStream | null, startDistance: number, endDistance: number, zones: ZoneMap) {
+  const times = streams?.time_stream, distances = streams?.distance_stream;
+  if (!times || !distances || times.length < 2 || distances.length < 2) return null;
+  let start = 0;
+  while (start < distances.length - 1 && distances[start] < startDistance) start++;
+  let end = start;
+  while (end < distances.length - 1 && distances[end] < endDistance) end++;
+  const range = (values?: number[] | null) => values ? values.slice(start, end + 1).filter(value => Number.isFinite(value)) : [];
+  const avg = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  const max = (values: number[]) => values.length ? Math.max(...values) : null;
+  const zoneSeconds = (values: number[] | null | undefined, zoneRows: any[]) => {
+    const totals = new Map(zoneRows.map(zone => [zone.zone, 0]));
+    if (values) for (let i = start; i < end && i < values.length - 1; i++) {
+      const delta = times[i + 1] - times[i], value = values[i];
+      if (delta <= 0 || delta > 30 || !Number.isFinite(value)) continue;
+      const zone = zoneRows.find(row => value >= row.min && value <= row.max);
+      if (zone) totals.set(zone.zone, (totals.get(zone.zone) || 0) + delta);
+    }
+    return zoneRows.map(zone => ({ ...zone, seconds: totals.get(zone.zone) || 0 })).filter(zone => zone.seconds > 0);
+  };
+  const heartrate = range(streams.heartrate_stream), power = range(streams.watts_stream), cadence = range(streams.cadence_stream);
+  const heartZones = zoneSeconds(streams.heartrate_stream, zones.hr);
+  const powerZones = zoneSeconds(streams.watts_stream, zones.power);
+  const paceValues = times.slice(start, end + 1).map((_, offset) => {
+    const index = start + offset;
+    const speed = streams.velocity_smooth_stream?.[index] ?? (index > 0 && times[index] > times[index - 1] ? (distances[index] - distances[index - 1]) / (times[index] - times[index - 1]) : 0);
+    return speed > 0 ? 1000 / speed : null;
+  });
+  const paceZones = zoneSeconds(paceValues as number[], zones.pace);
+  return { avgHr: avg(heartrate), maxHr: max(heartrate), avgPower: avg(power), maxPower: max(power), avgCadence: avg(cadence), heartZones, powerZones, paceZones };
+}
+
+function zoneTimeLabel(zones: any[], metric: string) {
+  const label = metric === 'hr' ? 'FC' : metric === 'pace' ? 'Pace' : 'W';
+  return zones.length ? `${label}: ${zones.map(zone => `Z${zone.zone} ${fmtDuration(zone.seconds)}`).join(' · ')}` : '';
+}
+
+function SplitsTable({ splits, isMetric, streams, zones, language }: { splits: any[] | null; isMetric: boolean; streams: ActivityStream | null; zones: ZoneMap; language: 'en' | 'es' }) {
   if (!splits || splits.length === 0) return null;
   const unit = isMetric ? 'km' : 'mi';
   const distFactor = isMetric ? 1000 : 1609.344;
+  const labels = language === 'es'
+    ? { splits: 'Parciales', dist: 'Dist.', time: 'Tiempo', pace: 'Ritmo', elev: 'Desnivel', avgHr: 'FC prom.', maxHr: 'FC máx.', avgP: 'W prom.', maxP: 'W máx.', cad: 'Cadencia', zones: 'Tiempo en zonas' }
+    : { splits: 'Splits', dist: 'Dist.', time: 'Time', pace: 'Pace', elev: 'Elevation', avgHr: 'Avg HR', maxHr: 'Max HR', avgP: 'Avg W', maxP: 'Max W', cad: 'Cadence', zones: 'Time in zones' };
+  const telemetryAvailable = !!streams?.distance_stream?.length;
+  const hasHr = telemetryAvailable || splits.some((split: any) => split.average_heartrate != null);
+  const hasPower = telemetryAvailable && !!streams?.watts_stream?.length || splits.some((split: any) => split.average_watts != null || split.max_watts != null);
+  const hasCadence = telemetryAvailable && !!streams?.cadence_stream?.length || splits.some((split: any) => split.average_cadence != null);
+  const hasZones = zones.hr.length > 0 || zones.pace.length > 0 || zones.power.length > 0;
+  let cumulativeDistance = 0;
 
   return (
     <div className="bg-white dark:bg-neutral-800 rounded-xl p-4 border border-neutral-200 dark:border-neutral-700">
-      <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">Splits ({unit})</h4>
+      <div className="mb-3 flex items-center justify-between gap-2"><h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">{labels.splits} ({unit})</h4><span className="text-[10px] text-neutral-400">{language === 'es' ? 'Datos disponibles · zonas del Pasaporte · Impulse' : 'Available data · Passport zones · Impulse'}</span></div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-xs text-neutral-500 dark:text-neutral-400 border-b border-neutral-200 dark:border-neutral-700">
-              <th className="text-left py-2 px-2">#</th>
-              <th className="text-right py-2 px-2">Dist</th>
-              <th className="text-right py-2 px-2">Time</th>
-              <th className="text-right py-2 px-2">Pace</th>
-              <th className="text-right py-2 px-2">Elev</th>
-              {splits.some((s: any) => s.average_heartrate != null) && (
-                <th className="text-right py-2 px-2">HR</th>
-              )}
-            </tr>
-          </thead>
+        <table className="w-full min-w-[980px] text-xs">
+          <thead><tr className="border-b border-neutral-200 text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"><th className="px-2 py-2 text-left">#</th><th className="px-2 py-2 text-right">{labels.dist}</th><th className="px-2 py-2 text-right">{labels.time}</th><th className="px-2 py-2 text-right">{labels.pace}</th><th className="px-2 py-2 text-right">{labels.elev}</th>{hasHr && <><th className="px-2 py-2 text-right">{labels.avgHr}</th><th className="px-2 py-2 text-right">{labels.maxHr}</th></>}{hasPower && <><th className="px-2 py-2 text-right">{labels.avgP}</th><th className="px-2 py-2 text-right">{labels.maxP}</th></>}{hasCadence && <th className="px-2 py-2 text-right">{labels.cad}</th>}{hasZones && <th className="px-2 py-2 text-left">{labels.zones}</th>}<th className="px-2 py-2 text-right">Impulse</th></tr></thead>
           <tbody>
             {splits.map((split: any, i: number) => {
               const dist = split.distance / distFactor;
               const movingTime = split.moving_time ?? split.elapsed_time ?? 0;
               const paceSecPerKm = movingTime > 0 && dist > 0 ? movingTime / dist : 0;
               const elevDiff = split.elevation_difference ?? 0;
+              const startDistance = cumulativeDistance;
+              cumulativeDistance += Number(split.distance || 0);
+              const metrics = splitTelemetry(streams, startDistance, cumulativeDistance, zones);
               const isFastest = i === splits.reduce((bestIdx: number, s: any, idx: number) => {
                 const sPace = (s.moving_time ?? s.elapsed_time ?? 0) / (s.distance / distFactor);
                 return sPace < (splits[bestIdx].moving_time ?? splits[bestIdx].elapsed_time ?? 0) / (splits[bestIdx].distance / distFactor) ? idx : bestIdx;
               }, 0);
 
-              return (
-                <tr key={i} className="border-b border-neutral-100 dark:border-neutral-700/50">
-                  <td className="py-2 px-2 text-neutral-500 dark:text-neutral-400">{i + 1}</td>
-                  <td className="py-2 px-2 text-right font-medium text-neutral-900 dark:text-white">{dist.toFixed(2)}</td>
-                  <td className="py-2 px-2 text-right text-neutral-700 dark:text-neutral-300">{fmtDuration(movingTime)}</td>
-                  <td className={`py-2 px-2 text-right font-medium ${isFastest ? 'text-emerald-600 dark:text-emerald-400' : 'text-neutral-900 dark:text-white'}`}>
-                    {fmtPaceFromSecPerKm(paceSecPerKm)}
-                  </td>
-                  <td className={`py-2 px-2 text-right ${elevDiff > 0 ? 'text-emerald-600 dark:text-emerald-400' : elevDiff < 0 ? 'text-red-500' : 'text-neutral-500'}`}>
-                    {elevDiff > 0 ? '+' : ''}{Math.round(elevDiff)}m
-                  </td>
-                  {splits.some((s: any) => s.average_heartrate != null) && (
-                    <td className="py-2 px-2 text-right text-rose-600 dark:text-rose-400">
-                      {split.average_heartrate != null ? Math.round(split.average_heartrate) : '—'}
-                    </td>
-                  )}
-                </tr>
-              );
+              const zoneSummary = [zoneTimeLabel(metrics?.heartZones || [], 'hr'), zoneTimeLabel(metrics?.paceZones || [], 'pace'), zoneTimeLabel(metrics?.powerZones || [], 'power')].filter(Boolean).join(' | ');
+              const primaryZones = metrics?.heartZones.length ? metrics.heartZones : metrics?.powerZones || metrics?.paceZones || [];
+              const maxZone = Math.max(1, ...primaryZones.map(zone => zone.zone));
+              const estimatedSplitImpulse = primaryZones.reduce((sum, zone) => sum + zone.seconds / 60 * zone.zone / maxZone, 0);
+              const splitImpulse = Number(split.actual_impulse ?? split.impulse);
+              const impulseValue = Number.isFinite(splitImpulse) && splitImpulse > 0 ? splitImpulse : estimatedSplitImpulse;
+              return <tr key={i} className="border-b border-neutral-100 dark:border-neutral-700/50"><td className="px-2 py-2 text-neutral-500 dark:text-neutral-400">{i + 1}</td><td className="px-2 py-2 text-right font-medium text-neutral-900 dark:text-white">{dist.toFixed(2)}</td><td className="px-2 py-2 text-right text-neutral-700 dark:text-neutral-300">{fmtDuration(movingTime)}</td><td className={`px-2 py-2 text-right font-medium ${isFastest ? 'text-emerald-600 dark:text-emerald-400' : 'text-neutral-900 dark:text-white'}`}>{fmtPaceFromSecPerKm(paceSecPerKm)}</td><td className={`px-2 py-2 text-right ${elevDiff > 0 ? 'text-emerald-600 dark:text-emerald-400' : elevDiff < 0 ? 'text-red-500' : 'text-neutral-500'}`}>{elevDiff > 0 ? '+' : ''}{Math.round(elevDiff)}m</td>{hasHr && <><td className="px-2 py-2 text-right text-rose-600 dark:text-rose-400">{Math.round(Number(split.average_heartrate ?? metrics?.avgHr ?? 0)) || '—'}</td><td className="px-2 py-2 text-right text-rose-600 dark:text-rose-400">{Math.round(Number(split.max_heartrate ?? metrics?.maxHr ?? 0)) || '—'}</td></>}{hasPower && <><td className="px-2 py-2 text-right text-amber-600 dark:text-amber-400">{Math.round(Number(split.average_watts ?? metrics?.avgPower ?? 0)) || '—'}</td><td className="px-2 py-2 text-right text-amber-600 dark:text-amber-400">{Math.round(Number(split.max_watts ?? metrics?.maxPower ?? 0)) || '—'}</td></>}{hasCadence && <td className="px-2 py-2 text-right">{Math.round(Number(split.average_cadence ?? metrics?.avgCadence ?? 0)) || '—'}</td>}{hasZones && <td className="max-w-[440px] px-2 py-2 text-[10px] text-neutral-500">{zoneSummary || '—'}</td>}<td className="px-2 py-2 text-right font-semibold text-purple-600 dark:text-purple-300">{impulseValue > 0 ? impulseValue.toFixed(1) : '—'}</td></tr>;
             })}
           </tbody>
         </table>
@@ -443,7 +334,7 @@ function PaceAnalysis({ splits, isMetric }: { splits: any[] | null; isMetric: bo
             <CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.2} />
             <XAxis dataKey="split" tick={{ fontSize: 10 }} tickFormatter={(value: number) => `${value}`} />
             <YAxis tick={{ fontSize: 10 }} width={42} tickFormatter={(value: number) => fmtPaceFromSecPerKm(value)} domain={['dataMin - 10', 'dataMax + 10']} />
-            <Tooltip formatter={(value: number) => [`${fmtPaceFromSecPerKm(value)} /km`, 'Pace']} labelFormatter={(value) => `Split ${value}`} />
+            <Tooltip formatter={(value) => [`${fmtPaceFromSecPerKm(Number(value))} /km`, 'Pace']} labelFormatter={(value) => `Split ${value}`} />
             <ReferenceLine y={average} stroke="#64748b" strokeDasharray="5 5" label={{ value: 'avg', position: 'insideTopRight', fontSize: 10 }} />
             <Bar dataKey="pace" radius={[3, 3, 0, 0]} animationDuration={700}>
               {chartData.map((split) => <Cell key={split.split} fill={paceColor(split.pace)} />)}
@@ -455,35 +346,179 @@ function PaceAnalysis({ splits, isMetric }: { splits: any[] | null; isMetric: bo
   );
 }
 
-function TelemetryGraph({ streams, distanceMeters, onHover }: { streams: ActivityStream | null; distanceMeters: number; onHover: (index: number | null) => void }) {
-  if (!streams?.time_stream?.length) return null;
-  const length = Math.min(streams.time_stream.length, streams.heartrate_stream?.length || Infinity, streams.altitude_stream?.length || Infinity, streams.distance_stream?.length || Infinity);
+type ZoneMap = { hr: any[]; pace: any[]; power: any[] };
+type ChartMetric = 'pace' | 'hr' | 'elevation' | 'power' | 'cadence';
+const METRIC_META: Record<ChartMetric, { color: string; label: { en: string; es: string }; unit: string }> = {
+  pace: { color: '#8b5cf6', label: { en: 'Pace', es: 'Ritmo' }, unit: '/km' },
+  hr: { color: '#f43f5e', label: { en: 'Heart rate', es: 'Frecuencia cardíaca' }, unit: 'bpm' },
+  elevation: { color: '#10b981', label: { en: 'Elevation', es: 'Elevación' }, unit: 'm' },
+  power: { color: '#f59e0b', label: { en: 'Power', es: 'Potencia' }, unit: 'W' },
+  cadence: { color: '#0ea5e9', label: { en: 'Cadence', es: 'Cadencia' }, unit: 'rpm' },
+};
+const ZONE_COLORS = ['#60a5fa', '#34d399', '#facc15', '#fb923c', '#f87171', '#c084fc', '#f472b6'];
+
+function zoneLabel(zone: any) {
+  return zone.name || `Z${zone.zone}`;
+}
+
+function providerZoneTimes(value: unknown) {
+  if (typeof value === 'string') {
+    try { value = JSON.parse(value); } catch { return []; }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  const source = (value as any).zones7 || (value as any).zones5 || value;
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return [];
+  const rows = Object.entries(source as Record<string, any>).flatMap(([key, raw], index) => {
+    const match = key.match(/(?:zone|z)[_-]?(\d+)/i);
+    const seconds = Number(typeof raw === 'object' && raw !== null ? raw.seconds ?? raw.time_seconds ?? raw.duration_seconds : raw);
+    const zone = Number(match?.[1] ?? index + 1);
+    if (!Number.isFinite(seconds) || seconds <= 0 || !Number.isFinite(zone)) return [];
+    return [{ zone, name: `Z${zone}`, min: Number.NaN, max: Number.NaN, seconds, percent: 0 }];
+  }).sort((a, b) => a.zone - b.zone);
+  const total = rows.reduce((sum, row) => sum + row.seconds, 0);
+  return rows.map(row => ({ ...row, percent: total ? row.seconds / total * 100 : 0 }));
+}
+
+function ZoneTimePanel({ zoneTimes, language }: { zoneTimes: ZoneMap; language: 'en' | 'es' }) {
+  const options = [
+    { key: 'hr' as const, title: language === 'es' ? 'Frecuencia cardíaca' : 'Heart rate' },
+    { key: 'pace' as const, title: language === 'es' ? 'Ritmo' : 'Pace' },
+    { key: 'power' as const, title: language === 'es' ? 'Potencia' : 'Power' },
+  ].filter(option => zoneTimes[option.key].length > 0);
+  const [active, setActive] = useState<'hr' | 'pace' | 'power'>(options[0]?.key || 'hr');
+  const selected = zoneTimes[active];
+  const total = selected.reduce((sum, zone) => sum + zone.seconds, 0);
+  if (!options.length) return null;
+  return <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-800">
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold text-neutral-900 dark:text-white">{language === 'es' ? 'Tiempo en zonas' : 'Time in zones'}</h3><p className="mt-0.5 text-[11px] text-neutral-500">{language === 'es' ? 'Zonas personales del Pasaporte Biológico' : 'Personal zones from the Biological Passport'}</p></div><div className="flex rounded-lg bg-neutral-100 p-1 dark:bg-neutral-900">{options.map(option => <button key={option.key} onClick={() => setActive(option.key)} className={`rounded-md px-2 py-1 text-[11px] font-medium ${active === option.key ? 'bg-white text-neutral-900 shadow dark:bg-neutral-700 dark:text-white' : 'text-neutral-500'}`}>{option.title}</button>)}</div></div>
+    <div className="space-y-2">{selected.map((zone, index) => { const range = Number.isFinite(zone.min) && Number.isFinite(zone.max) && zone.max > zone.min ? (active === 'pace' ? `${fmtPaceFromSecPerKm(zone.min)}–${fmtPaceFromSecPerKm(zone.max)} /km` : `${Math.round(zone.min)}–${Math.round(zone.max)} ${active === 'hr' ? 'bpm' : 'W'}`) : ''; return <div key={`${active}-${zone.zone}`}><div className="mb-1 flex justify-between gap-3 text-xs"><span className="font-medium text-neutral-700 dark:text-neutral-200">{zoneLabel(zone)} {range && <span className="font-normal text-neutral-400">{range}</span>}</span><span className="shrink-0 text-neutral-500">{fmtDuration(zone.seconds)} · {zone.percent.toFixed(0)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-700"><div className="h-full rounded-full" style={{ width: `${total ? zone.seconds / total * 100 : 0}%`, background: ZONE_COLORS[index % ZONE_COLORS.length] }} /></div></div>; })}</div>
+  </section>;
+}
+
+function TelemetryGraph({ streams, distanceMeters, zones, language, onHover }: { streams: ActivityStream | null; distanceMeters: number; zones: ZoneMap; language: 'en' | 'es'; onHover: (index: number | null) => void }) {
+  const available = useMemo(() => {
+    const metrics: ChartMetric[] = [];
+    if (streams?.velocity_smooth_stream?.length || (streams?.time_stream?.length && streams?.distance_stream?.length)) metrics.push('pace');
+    if (streams?.heartrate_stream?.length) metrics.push('hr');
+    if (streams?.altitude_stream?.length) metrics.push('elevation');
+    if (streams?.watts_stream?.length) metrics.push('power');
+    if (streams?.cadence_stream?.length) metrics.push('cadence');
+    return metrics;
+  }, [streams]);
+  const [visible, setVisible] = useState<ChartMetric[]>([]);
+  const [axisMode, setAxisMode] = useState<'time' | 'distance'>('time');
+  useEffect(() => { setVisible(available); }, [available]);
+  if (!streams?.time_stream?.length || !available.length) return null;
+
+  const times = streams.time_stream;
+  const length = times.length;
   const step = Math.max(1, Math.floor(length / 900));
   const indices = Array.from({ length: Math.ceil(length / step) }, (_, i) => Math.min(i * step, length - 1));
-  const lanes = [
-    { label: 'Pace', values: streams.velocity_smooth_stream ? indices.map(index => streams.velocity_smooth_stream![index] > 0 ? 1000 / streams.velocity_smooth_stream![index] : null) : null, color: '#8b5cf6' },
-    { label: 'Heart rate', values: streams.heartrate_stream ? indices.map(index => streams.heartrate_stream![index]) : null, color: '#f43f5e' },
-    { label: 'Elevation', values: streams.altitude_stream ? indices.map(index => streams.altitude_stream![index]) : null, color: '#10b981' },
-  ].filter(lane => lane.values?.some(value => value != null));
-  if (!lanes.length) return null;
-  const width = 1000, laneHeight = 80, gap = 22, height = lanes.length * (laneHeight + gap) + 20;
+  const canUseDistance = !!streams.distance_stream?.length;
+  const width = 1000;
+  const pace = (index: number) => {
+    const speed = streams.velocity_smooth_stream?.[index] ?? ((index > 0 && streams.distance_stream && times[index] > times[index - 1]) ? (streams.distance_stream[index] - streams.distance_stream[index - 1]) / (times[index] - times[index - 1]) : 0);
+    return speed > 0 ? 1000 / speed : null;
+  };
+  const xRaw = (index: number) => axisMode === 'distance' && canUseDistance ? Number(streams.distance_stream?.[index] || 0) : Number(times[index] || 0);
+  const xMin = xRaw(indices[0] || 0), xMax = xRaw(indices[indices.length - 1] || length - 1);
+  const xForSample = (index: number) => (xRaw(index) - xMin) / (xMax - xMin || 1) * width;
+  const makeValues = (metric: ChartMetric) => indices.map(index => metric === 'pace' ? pace(index) : metric === 'hr' ? streams.heartrate_stream?.[index] ?? null : metric === 'elevation' ? streams.altitude_stream?.[index] ?? null : metric === 'power' ? streams.watts_stream?.[index] ?? null : streams.cadence_stream?.[index] ?? null).map(value => value != null && Number.isFinite(value) ? Number(value) : null);
+  const lanes = visible.map(metric => ({ metric, ...METRIC_META[metric], values: makeValues(metric), zones: metric === 'hr' ? zones.hr : metric === 'pace' ? zones.pace : metric === 'power' ? zones.power : [] })).filter(lane => lane.values.some(value => value != null));
+  const laneHeight = 84, gap = 20, height = lanes.length * (laneHeight + gap) + 10;
+  const setMetric = (metric: ChartMetric) => setVisible(current => current.includes(metric) ? current.filter(item => item !== metric) : [...available.filter(item => current.includes(item) || item === metric)]);
+  const xStart = axisMode === 'distance' && canUseDistance ? `${((streams.distance_stream![0] || 0) / 1000).toFixed(1)} km` : '0:00';
+  const xEnd = axisMode === 'distance' && canUseDistance ? `${((streams.distance_stream![length - 1] || distanceMeters) / 1000).toFixed(1)} km` : fmtDuration(times[length - 1] || 0);
   return <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-800">
-    <div className="mb-3 flex flex-wrap gap-4 text-xs">{lanes.map(lane => <span key={lane.label} className="flex items-center gap-1.5 text-neutral-600 dark:text-neutral-300"><i className="h-2 w-2 rounded-full" style={{ background: lane.color }} />{lane.label}</span>)}</div>
-    <svg viewBox={`0 0 ${width} ${height}`} className="w-full touch-none" onPointerLeave={() => onHover(null)} onPointerMove={event => {
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="text-sm font-semibold text-neutral-900 dark:text-white">{language === 'es' ? 'Telemetría sincronizada' : 'Synchronized telemetry'}</h3><p className="mt-0.5 text-[11px] text-neutral-500">{language === 'es' ? 'Elige qué métricas comparar; el cursor sigue el recorrido del mapa.' : 'Choose which metrics to compare; the cursor follows the route on the map.'}</p></div><div className="flex flex-wrap items-center gap-2"><div className="flex rounded-lg bg-neutral-100 p-1 dark:bg-neutral-900"><button type="button" onClick={() => setAxisMode('time')} className={`rounded-md px-2 py-1 text-[11px] ${axisMode === 'time' ? 'bg-white font-semibold text-neutral-900 shadow dark:bg-neutral-700 dark:text-white' : 'text-neutral-500'}`}>{language === 'es' ? 'Tiempo' : 'Time'}</button><button type="button" disabled={!canUseDistance} onClick={() => setAxisMode('distance')} className={`rounded-md px-2 py-1 text-[11px] disabled:opacity-40 ${axisMode === 'distance' ? 'bg-white font-semibold text-neutral-900 shadow dark:bg-neutral-700 dark:text-white' : 'text-neutral-500'}`}>{language === 'es' ? 'Distancia' : 'Distance'}</button></div><div className="flex flex-wrap gap-1.5">{available.map(metric => { const active = visible.includes(metric); const meta = METRIC_META[metric]; return <button type="button" key={metric} aria-pressed={active} onClick={() => setMetric(metric)} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${active ? 'border-transparent text-white' : 'border-neutral-200 text-neutral-500 dark:border-neutral-600'}`} style={active ? { backgroundColor: meta.color } : undefined}>{active && <Check className="h-3 w-3" />}{meta.label[language]}</button>; })}</div></div></div>
+    {lanes.length ? <svg viewBox={`0 0 ${width} ${height}`} className="w-full touch-none" onPointerLeave={() => onHover(null)} onPointerMove={event => {
       const rect = event.currentTarget.getBoundingClientRect();
       const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-      const sampleIndex = indices[Math.round(ratio * (indices.length - 1))] || 0;
+      const targetX = ratio * width;
+      const sampleIndex = indices.reduce((best, candidate) => Math.abs(xForSample(candidate) - targetX) < Math.abs(xForSample(best) - targetX) ? candidate : best, indices[0] || 0);
       onHover(distanceMeters > 0 && streams.distance_stream?.length ? Math.round(sampleIndex / (streams.distance_stream.length - 1) * 10000) : Math.round(ratio * 10000));
     }}>
       {lanes.map((lane, laneIndex) => {
-        const values = lane.values!.filter((value): value is number => value != null && Number.isFinite(value));
-        const min = Math.min(...values), max = Math.max(...values), span = max - min || 1, top = laneIndex * (laneHeight + gap) + 10;
-        const points = lane.values!.map((value, index) => value == null ? null : `${(index / (lane.values!.length - 1)) * width},${top + laneHeight - 4 - ((value - min) / span) * (laneHeight - 8)}`).filter(Boolean).join(' ');
-        return <g key={lane.label}><text x="0" y={top - 1} fontSize="12" fill="#64748b">{lane.label}</text><polyline points={points} fill="none" stroke={lane.color} strokeWidth="2.5" strokeLinejoin="round" /></g>;
+        const values = lane.values.filter((value): value is number => value != null && Number.isFinite(value));
+        const min = Math.min(...values), max = Math.max(...values), span = max - min || 1, top = laneIndex * (laneHeight + gap) + 12;
+        const y = (value: number) => lane.metric === 'pace'
+          ? top + 7 + ((value - min) / span) * (laneHeight - 12)
+          : top + laneHeight - 5 - ((value - min) / span) * (laneHeight - 12);
+        const points = lane.values.map((value, index) => value == null ? null : `${xForSample(indices[index] || 0)},${y(value)}`).filter(Boolean).join(' ');
+        return <g key={lane.metric}><line x1="0" x2={width} y1={top + laneHeight} y2={top + laneHeight} stroke="#94a3b8" strokeOpacity=".25" />{lane.zones.filter((zone: any) => Number.isFinite(zone.min) && Number.isFinite(zone.max) && zone.max > zone.min).map((zone: any, zoneIndex: number) => {
+          const y1 = y(Math.max(min, Math.min(max, zone.max))), y2 = y(Math.max(min, Math.min(max, zone.min)));
+          return <rect key={zone.zone} x="0" y={Math.min(y1, y2)} width={width} height={Math.max(2, Math.abs(y2 - y1))} fill={ZONE_COLORS[zoneIndex % ZONE_COLORS.length]} opacity=".09" />;
+        })}<text x="2" y={top - 1} fontSize="12" fontWeight="600" fill={lane.color}>{lane.label[language]} <tspan fill="#94a3b8">{lane.unit}</tspan></text><text x={width - 2} y={top + 12} textAnchor="end" fontSize="10" fill="#94a3b8">{metricValueLabel(lane.metric, max)} – {metricValueLabel(lane.metric, min)}</text><polyline points={points} fill="none" stroke={lane.color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" /></g>;
       })}
-    </svg>
-    <p className="mt-1 text-[11px] text-neutral-500">{streams.time_stream.length ? fmtDuration(streams.time_stream[streams.time_stream.length - 1]) : ''} · Hover to follow position on map</p>
+      <text x="0" y={height - 1} fontSize="10" fill="#64748b">{xStart}</text><text x={width} y={height - 1} textAnchor="end" fontSize="10" fill="#64748b">{xEnd}</text>
+    </svg> : <p className="py-8 text-center text-sm text-neutral-500">{language === 'es' ? 'Elige al menos una métrica disponible.' : 'Select at least one available metric.'}</p>}
   </section>;
+}
+
+function metricValueLabel(metric: ChartMetric, value: number) {
+  if (metric === 'pace') return fmtPaceFromSecPerKm(value);
+  return Math.round(value).toString();
+}
+
+function PeakProfileChart({ title, unit, data, color, pace = false }: { title: string; unit: string; data: Array<{ label: string; value: number }>; color: string; pace?: boolean }) {
+  if (data.length < 2) return null;
+  return <section className="rounded-xl border border-neutral-200 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-800"><h4 className="mb-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-200">{title}</h4><div className="h-48 w-full"><ResponsiveContainer width="100%" height="100%"><AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 4 }}><defs><linearGradient id={`fill-${title.replace(/\W/g, '')}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={0.58} /><stop offset="100%" stopColor={color} stopOpacity={0.08} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="#94a3b8" opacity={0.25} /><XAxis dataKey="label" tick={{ fontSize: 9 }} /><YAxis reversed={pace} width={48} tick={{ fontSize: 9 }} tickFormatter={value => pace ? fmtPaceFromSecPerKm(value) : `${Math.round(value)}`} domain={pace ? ['dataMin - 10', 'dataMax + 10'] : ['auto', 'auto']} /><Tooltip formatter={(value) => [pace ? `${fmtPaceFromSecPerKm(Number(value))} /km` : `${Math.round(Number(value))} ${unit}`, title]} /><Area type="monotone" dataKey="value" stroke={color} fill={`url(#fill-${title.replace(/\W/g, '')})`} strokeWidth={2} /></AreaChart></ResponsiveContainer></div></section>;
+}
+
+function calculatePeakProfile(values: Array<number | null> | null | undefined, times: number[] | null | undefined, windows: number[]) {
+  if (!values || !times || values.length < 2 || times.length < 2) return [];
+  const length = Math.min(values.length, times.length);
+  const sums = new Array(length + 1).fill(0), counts = new Array(length + 1).fill(0);
+  for (let i = 0; i < length; i++) {
+    const present = values[i] != null && Number.isFinite(values[i]);
+    sums[i + 1] = sums[i] + (present ? Number(values[i]) : 0);
+    counts[i + 1] = counts[i] + (present ? 1 : 0);
+  }
+  return windows.map(window => {
+    let start = 0, best = 0;
+    for (let end = 1; end < length; end++) {
+      while (start < end && times[end] - times[start] > window) start++;
+      if (times[end] - times[start] < window * 0.8) continue;
+      const sum = sums[end + 1] - sums[start], count = counts[end + 1] - counts[start];
+      if (count) best = Math.max(best, sum / count);
+    }
+    return best > 0 ? { window, value: best } : null;
+  }).filter((row): row is { window: number; value: number } => row !== null);
+}
+
+function PeakAnalysis({ streams, language }: { streams: ActivityStream | null; language: 'en' | 'es' }) {
+  const time = useMemo(() => streams?.time_stream || [], [streams]);
+  const pace = useMemo(() => {
+    if (!streams?.distance_stream || time.length < 2) return [];
+    return time.map((_, i) => {
+      if (!i || streams.distance_stream![i] == null || streams.distance_stream![i - 1] == null || time[i] <= time[i - 1]) return null;
+      const speed = (streams.distance_stream![i] - streams.distance_stream![i - 1]) / (time[i] - time[i - 1]);
+      return speed > 0 ? speed : null;
+    });
+  }, [streams, time]);
+  const durationWindows = [5, 20, 60, 120, 300, 600, 1200, 1800, 3600, 7200];
+  const labelDuration = (seconds: number) => seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${seconds / 60}min` : `${seconds / 3600}h`;
+  const paceProfile = calculatePeakProfile(pace, time, durationWindows).filter(point => point.value > 0).map(point => ({ label: labelDuration(point.window), value: 1000 / point.value }));
+  const hrProfile = calculatePeakProfile(streams?.heartrate_stream, time, durationWindows).map(point => ({ label: labelDuration(point.window), value: point.value }));
+  const cadenceProfile = calculatePeakProfile(streams?.cadence_stream, time, durationWindows).map(point => ({ label: labelDuration(point.window), value: point.value }));
+  const paceDistanceProfile = useMemo(() => {
+    const distances = streams?.distance_stream;
+    if (!distances || !time.length) return [];
+    const targets = [400, 800, 1000, 1600, 3000, 5000, 10000, 21097, 42195];
+    return targets.flatMap(target => {
+      let start = 0, fastest = Infinity;
+      for (let end = 1; end < distances.length && end < time.length; end++) {
+        while (start < end && distances[end] - distances[start] > target) start++;
+        const covered = distances[end] - distances[start];
+        const elapsed = time[end] - time[start];
+        if (covered >= target * 0.98 && elapsed > 0) fastest = Math.min(fastest, elapsed / (covered / 1000));
+      }
+      return Number.isFinite(fastest) ? [{ label: target >= 1000 ? `${target / 1000}km` : `${target}m`, value: fastest }] : [];
+    });
+  }, [streams, time]);
+  if (!paceProfile.length && !hrProfile.length && !cadenceProfile.length && !paceDistanceProfile.length) return null;
+  const es = language === 'es';
+  return <section className="space-y-3"><div><h3 className="text-sm font-semibold text-neutral-900 dark:text-white">{es ? 'Récords de la actividad' : 'Activity peak profiles'}</h3><p className="mt-0.5 text-[11px] text-neutral-500">{es ? 'Mejor promedio sostenido por duración y distancia.' : 'Best sustained average by duration and distance.'}</p></div><div className="grid grid-cols-1 gap-3 md:grid-cols-2">{paceProfile.length > 1 && <PeakProfileChart title={es ? 'Ritmo máximo por duración' : 'Peak pace by duration'} unit="/km" data={paceProfile} color="#4f7fa3" pace />}{paceDistanceProfile.length > 1 && <PeakProfileChart title={es ? 'Ritmo máximo por distancia' : 'Peak pace by distance'} unit="/km" data={paceDistanceProfile} color="#4f7fa3" pace />}{hrProfile.length > 1 && <PeakProfileChart title={es ? 'Frecuencia cardíaca máxima' : 'Peak heart rate'} unit="bpm" data={hrProfile} color="#d46e62" />}{cadenceProfile.length > 1 && <PeakProfileChart title={es ? 'Cadencia máxima' : 'Peak cadence'} unit="rpm" data={cadenceProfile} color="#f4b449" />}</div></section>;
 }
 
 export function ActivityDetailModal({ activity, onClose, onBack, athleteId, wearableDetails, wearableLoading = false, isWearable = false, actions, language: languageProp }: Props) {
@@ -506,7 +541,7 @@ export function ActivityDetailModal({ activity, onClose, onBack, athleteId, wear
     const distance = extract(/distance/i);
     const speed = extract(/speed|velocity/i);
     const cadence = extract(/cadence/i);
-    const anchor = hr.length ? hr : power.length ? power : altitude.length ? altitude : speed;
+    const anchor = hr.length ? hr : power.length ? power : altitude.length ? altitude : speed.length ? speed : cadence.length ? cadence : distance;
     if (!anchor.length) return null;
     const times = toTime(anchor);
     const interpolate = (rows: any[], field: string) => rows.length ? times.map(time => {
@@ -542,7 +577,7 @@ export function ActivityDetailModal({ activity, onClose, onBack, athleteId, wear
     if (!id) { setPassport(null); return; }
     let cancelled = false;
     supabase.from('biological_passports')
-      .select('ftp_watts, critical_power, lt1_power, lt2_power, lt1_hr, lt2_hr, running_threshold_pace, hr_zones_json, power_zones_json, training_zones, measurement_date')
+      .select('ftp_watts, critical_power, lt1_power, lt2_power, lt1_hr, lt2_hr, running_threshold_pace, hr_zones_json, power_zones_json, training_zones, lab_payload, measurement_date')
       .eq('athlete_id', id).eq('status', 'active').order('measurement_date', { ascending: false }).limit(1).maybeSingle()
       .then(({ data }) => { if (!cancelled) setPassport(data || null); });
     return () => { cancelled = true; };
@@ -563,11 +598,12 @@ export function ActivityDetailModal({ activity, onClose, onBack, athleteId, wear
 
     const loadAll = async () => {
       // Load stored telemetry for imported activities.
-      const { data: streamData } = await supabase
+      const { data: rawStreamData } = await supabase
         .from('activity_streams')
         .select('*')
         .eq('activity_id', activity.id)
         .maybeSingle();
+      const streamData = rawStreamData as any;
 
       if (streamData) {
         setStreams(streamData as ActivityStream);
@@ -614,11 +650,12 @@ export function ActivityDetailModal({ activity, onClose, onBack, athleteId, wear
 
       // Fused activity GPS points (if still no points)
       if (activity.source !== 'asciende_gps' && activity.fused_activity_id) {
-        const { data: fusedActivity } = await supabase
+        const { data: rawFusedActivity } = await supabase
           .from('external_activities')
           .select('id, raw_data')
           .eq('id', activity.fused_activity_id)
           .maybeSingle();
+        const fusedActivity = rawFusedActivity as any;
 
         if (fusedActivity?.raw_data?.activity_id) {
           const { data: gpsData } = await supabase
@@ -641,33 +678,47 @@ export function ActivityDetailModal({ activity, onClose, onBack, athleteId, wear
   if (!activity) return null;
 
   const hasMap = detailGpsPoints.length >= 2;
-  const hasElevation = detailStreams?.altitude_stream && detailStreams.altitude_stream.length > 1 && detailStreams.distance_stream && detailStreams.distance_stream.length > 1;
-  const hasHr = detailStreams?.heartrate_stream && detailStreams.heartrate_stream.length > 1;
-  const hasPower = detailStreams?.watts_stream && detailStreams.watts_stream.length > 1;
-  const hasPace = detailStreams?.time_stream && detailStreams?.distance_stream && detailStreams.time_stream.length > 3 && detailStreams.distance_stream.length > 3;
   const avgSpeed = activity.average_speed_mps > 0
     ? activity.average_speed_mps
     : (activity.duration_seconds > 0 ? activity.distance_meters / activity.duration_seconds : 0);
 
   const isRun = isRunLike(activity.sport_type);
   const startDate = new Date(activity.start_time);
-  const splits = activity.splits_metric || activity.splits_standard || buildGpsSplits(detailStreams, isRun);
+  const splits = activity.splits_metric || activity.splits_standard || buildGpsSplits(detailStreams);
   const isMetric = true;
 
   const hrZones = getPassportZones(passport, 'hr');
   const powerZones = getPassportZones(passport, 'power');
+  const paceZones = getPassportZones(passport, 'pace');
+  const thresholdPace = parseThresholdPace(passport?.running_threshold_pace);
+  const thresholdPower = Number(passport?.ftp_watts || passport?.critical_power || 0);
+  const thresholdHr = Number(passport?.lt2_hr || 0);
+  const averageHr = activity.average_heartrate ?? wearableDetails?.average_heartrate ?? wearableDetails?.avg_hr ?? null;
+  const averagePower = activity.average_watts ?? wearableDetails?.average_watts ?? wearableDetails?.avg_power ?? null;
   const timeStream = detailStreams?.time_stream || [];
+  const paceStream = detailStreams?.velocity_smooth_stream?.map(speed => speed > 0 ? 1000 / speed : null)
+    || (detailStreams?.distance_stream && timeStream.length ? timeStream.map((time, index) => index > 0 && time > timeStream[index - 1] ? 1000 * (time - timeStream[index - 1]) / (detailStreams.distance_stream![index] - detailStreams.distance_stream![index - 1]) : null) : null);
+  const calculatedHrZones = calculateZoneTimes(detailStreams?.heartrate_stream, timeStream, hrZones);
+  const calculatedPaceZones = calculateZoneTimes(paceStream, timeStream, paceZones);
+  const calculatedPowerZones = calculateZoneTimes(detailStreams?.watts_stream, timeStream, powerZones);
+  const storedZones = activity.time_in_zones || {};
+  const zoneTimes: ZoneMap = {
+    hr: calculatedHrZones.length ? calculatedHrZones : providerZoneTimes(wearableDetails?.hr_zone_seconds ?? storedZones.hr ?? storedZones.heart_rate),
+    pace: calculatedPaceZones.length ? calculatedPaceZones : providerZoneTimes(storedZones.pace),
+    power: calculatedPowerZones.length ? calculatedPowerZones : providerZoneTimes(wearableDetails?.power_zone_seconds ?? storedZones.power ?? storedZones.watts),
+  };
   const gapPace = isRun ? calculateGapPace(timeStream, detailStreams?.distance_stream, detailStreams?.altitude_stream) : null;
   const intensityFactor = Number(wearableDetails?.power_metrics?.intensity_factor)
-    || (activity.weighted_avg_watts && Number(passport?.ftp_watts || passport?.critical_power) ? activity.weighted_avg_watts / Number(passport.ftp_watts || passport.critical_power) : 0)
-    || (activity.average_heartrate && Number(passport?.lt2_hr) ? activity.average_heartrate / Number(passport.lt2_hr) : 0)
-    || (isRun && parseThresholdPace(passport?.running_threshold_pace) && avgSpeed > 0 ? avgSpeed / (1000 / parseThresholdPace(passport.running_threshold_pace)!) : 0);
-  const impulse = wearableDetails?.power_metrics?.tss ?? activity.raw_data?.tss ?? activity.suffer_score;
-  const zoneBasis = hasPower && powerZones.length ? 'power' : 'hr';
-  const zoneData = zoneBasis === 'power'
-    ? calculateZoneTimes(detailStreams?.watts_stream, timeStream, powerZones)
-    : calculateZoneTimes(detailStreams?.heartrate_stream, timeStream, hrZones);
-  const zoneMax = Math.max(1, ...zoneData.map(zone => zone.seconds));
+    || ((activity.weighted_avg_watts || averagePower) && thresholdPower ? Number(activity.weighted_avg_watts || averagePower) / thresholdPower : 0)
+    || (averageHr && thresholdHr ? Number(averageHr) / thresholdHr : 0)
+    || (isRun && thresholdPace && avgSpeed > 0 ? avgSpeed / (1000 / thresholdPace) : 0);
+  const explicitImpulse = wearableDetails?.session_impulse ?? wearableDetails?.impulse ?? wearableDetails?.load_metrics?.impulse ?? wearableDetails?.activity_metrics?.impulse
+    ?? activity.raw_data?.actual_impulse ?? activity.raw_data?.session_impulse ?? activity.raw_data?.impulse ?? activity.raw_data?.asciende_impulse ?? activity.raw_data?.training_impulse;
+  const impulseZones = zoneTimes.hr.length ? zoneTimes.hr : zoneTimes.power.length ? zoneTimes.power : zoneTimes.pace;
+  const impulseZoneMax = Math.max(1, ...impulseZones.map(zone => zone.zone));
+  const estimatedImpulse = impulseZones.length ? impulseZones.reduce((sum, zone) => sum + zone.seconds / 60 * zone.zone / impulseZoneMax, 0) : null;
+  const impulse = Number.isFinite(Number(explicitImpulse)) && explicitImpulse != null ? Number(explicitImpulse) : estimatedImpulse;
+  const impulseIsEstimate = explicitImpulse == null && estimatedImpulse != null;
   const activeMapIndex = activePointIndex == null ? null : Math.round(activePointIndex / 10000 * Math.max(0, detailGpsPoints.length - 1));
   const statCard = (label: string, value: string, color = 'text-neutral-900 dark:text-white') => <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-800"><p className="text-xs text-neutral-500 dark:text-neutral-400">{label}</p><p className={`mt-1 text-lg font-bold ${color}`}>{value}</p></div>;
 
@@ -683,18 +734,15 @@ export function ActivityDetailModal({ activity, onClose, onBack, athleteId, wear
           <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,7fr)_minmax(300px,3fr)]">
             <main className="min-w-0 space-y-4 xl:col-start-1 xl:row-start-1">
               {hasMap ? <div className="overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700"><ActivityMapViewer gpsPoints={detailGpsPoints} activePointIndex={activeMapIndex} /></div> : <div className="flex h-[38vh] min-h-64 items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 text-sm text-neutral-500 dark:border-neutral-700 dark:bg-neutral-800">{mapError || 'No GPS track available for this activity'}</div>}
-              {loadingStreams || wearableLoading ? <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-500" /></div> : <TelemetryGraph streams={detailStreams} distanceMeters={activity.distance_meters} onHover={setActivePointIndex} />}
-              {hasElevation && <ElevationChart distanceStream={detailStreams!.distance_stream} altitudeStream={detailStreams!.altitude_stream} />}
-              {hasPace && <PaceChart timeStream={detailStreams!.time_stream} distanceStream={detailStreams!.distance_stream} />}
-              {hasPower && <MiniChart data={detailStreams!.watts_stream} color="#f59e0b" label="Power" unit="W" height={150} />}
+              {loadingStreams || wearableLoading ? <div className="flex justify-center py-8"><div className="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-500" /></div> : <TelemetryGraph streams={detailStreams} distanceMeters={activity.distance_meters} zones={zoneTimes} language={language} onHover={setActivePointIndex} />}
+              {!loadingStreams && !wearableLoading && <ZoneTimePanel zoneTimes={zoneTimes} language={language} />}
+              {!loadingStreams && !wearableLoading && <PeakAnalysis streams={detailStreams} language={language} />}
+              {splits?.length ? <SplitsTable splits={splits} isMetric={isMetric} streams={detailStreams} zones={zoneTimes} language={language} /> : <PaceAnalysis splits={splits} isMetric={isMetric} />}
+              {splits?.length && <PaceAnalysis splits={splits} isMetric={isMetric} />}
             </main>
             <aside className="min-w-0 space-y-4 xl:col-start-2 xl:row-start-1">
-              <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-800"><h3 className="mb-3 text-sm font-semibold text-neutral-800 dark:text-white">{language === 'es' ? 'Métricas principales' : 'Activity summary'}</h3><div className="grid grid-cols-2 gap-2">{statCard(language === 'es' ? 'Distancia' : 'Distance', fmtDistance(activity.distance_meters))}{statCard(language === 'es' ? 'Tiempo mov.' : 'Moving time', fmtDuration(activity.duration_seconds))}{statCard(isRun ? (language === 'es' ? 'Ritmo promedio' : 'Avg pace') : (language === 'es' ? 'Velocidad prom.' : 'Avg speed'), isRun ? fmtPace(avgSpeed) : fmtSpeed(avgSpeed))}{statCard(language === 'es' ? 'Desnivel +' : 'Elevation gain', `${Math.round(activity.elevation_gain_meters || wearableDetails?.elevation_gain_m || 0)} m`)}{isRun && statCard('GAP estimado', gapPace ? `${fmtPaceFromSecPerKm(gapPace)} /km` : '—')}{isRun && statCard(language === 'es' ? 'Ritmo vs. GAP' : 'Pace vs. GAP', gapPace ? `${fmtPace(avgSpeed)} · ${fmtPaceFromSecPerKm(gapPace)}` : '—')}</div></section>
-              <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-800"><h3 className="mb-3 text-sm font-semibold text-neutral-800 dark:text-white">{language === 'es' ? 'Carga y esfuerzo' : 'Load & effort'}</h3><div className="grid grid-cols-2 gap-2">{statCard('Impulse', impulse == null ? '—' : `${Math.round(Number(impulse))} pts`, 'text-purple-600 dark:text-purple-300')}{statCard('IF', intensityFactor > 0 ? intensityFactor.toFixed(2) : '—', 'text-blue-600 dark:text-blue-300')}{statCard('VAM', activity.duration_seconds > 0 ? `${Math.round((activity.elevation_gain_meters || wearableDetails?.elevation_gain_m || 0) / (activity.duration_seconds / 3600))} m/h` : '—')}{statCard(language === 'es' ? 'Cadencia prom.' : 'Avg cadence', activity.average_cadence == null ? '—' : `${Math.round(activity.average_cadence)} spm`)}{activity.average_heartrate != null && statCard(language === 'es' ? 'FC prom. / máx.' : 'Avg / max HR', `${Math.round(activity.average_heartrate)} / ${activity.max_heartrate ?? '—'} bpm`, 'text-rose-600 dark:text-rose-300')}{activity.average_watts != null && statCard(language === 'es' ? 'Potencia prom.' : 'Avg power', `${Math.round(activity.average_watts)} W`, 'text-amber-600 dark:text-amber-300')}</div>{passport?.measurement_date && <p className="mt-2 text-[11px] text-neutral-500">{language === 'es' ? 'Pasaporte biológico' : 'Biological Passport'} · {passport.measurement_date}</p>}</section>
-              <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-800"><h3 className="mb-3 text-sm font-semibold text-neutral-800 dark:text-white">{language === 'es' ? 'Distribución por zonas' : 'Zone distribution'} {zoneData.length ? `· ${zoneBasis === 'power' ? (language === 'es' ? 'Potencia' : 'Power') : (language === 'es' ? 'FC' : 'HR')}` : ''}</h3>{zoneData.length ? <div className="space-y-2">{zoneData.map(zone => <div key={zone.zone}><div className="mb-1 flex justify-between text-xs"><span>{zone.name} <span className="text-neutral-400">{Math.round(zone.min)}–{Math.round(zone.max)}</span></span><span>{zone.percent.toFixed(0)}% · {fmtDuration(zone.seconds)}</span></div><div className="h-2 overflow-hidden rounded bg-neutral-100 dark:bg-neutral-700"><div className="h-full rounded bg-blue-500" style={{ width: `${zone.seconds / zoneMax * 100}%` }} /></div></div>)}</div> : <p className="text-xs text-neutral-500">{language === 'es' ? 'Sin series o zonas configuradas en el Pasaporte Biológico.' : 'No telemetry or Biological Passport zones available.'}</p>}</section>
-              {hasHr && <MiniChart data={detailStreams!.heartrate_stream} color="#f43f5e" label={language === 'es' ? 'Frecuencia cardíaca' : 'Heart rate'} unit="bpm" height={130} />}
-              {splits?.length ? <SplitsTable splits={splits} isMetric={isMetric} /> : <PaceAnalysis splits={splits} isMetric={isMetric} />}
-              {splits?.length && <PaceAnalysis splits={splits} isMetric={isMetric} />}
+              <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-800"><h3 className="mb-3 text-sm font-semibold text-neutral-800 dark:text-white">{language === 'es' ? 'Métricas principales' : 'Activity summary'}</h3><div className="grid grid-cols-2 gap-2">{statCard(language === 'es' ? 'Distancia' : 'Distance', fmtDistance(activity.distance_meters))}{statCard(language === 'es' ? 'Tiempo mov.' : 'Moving time', fmtDuration(activity.duration_seconds))}{statCard(isRun ? (language === 'es' ? 'Ritmo promedio' : 'Avg pace') : (language === 'es' ? 'Velocidad prom.' : 'Avg speed'), isRun ? fmtPace(avgSpeed) : fmtSpeed(avgSpeed))}{isRun && thresholdPace && statCard(language === 'es' ? 'Ritmo / umbral' : 'Pace / threshold', `${fmtPace(avgSpeed)} / ${fmtPaceFromSecPerKm(thresholdPace)}`)}{statCard(language === 'es' ? 'Desnivel +' : 'Elevation gain', `${Math.round(activity.elevation_gain_meters || wearableDetails?.elevation_gain_m || 0)} m`)}{isRun && statCard('GAP estimado', gapPace ? `${fmtPaceFromSecPerKm(gapPace)} /km` : '—')}{isRun && statCard(language === 'es' ? 'Ritmo vs. GAP' : 'Pace vs. GAP', gapPace ? `${fmtPace(avgSpeed)} · ${fmtPaceFromSecPerKm(gapPace)}` : '—')}</div></section>
+              <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-800"><div className="mb-3 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-neutral-800 dark:text-white">{language === 'es' ? 'Carga y esfuerzo' : 'Load & effort'}</h3>{impulseIsEstimate && <span title={language === 'es' ? 'Estimación: minutos × zona / zona máxima configurada. No es TSS.' : 'Estimate: minutes × zone / highest configured zone. This is not TSS.'} className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">{language === 'es' ? 'estimado' : 'estimated'}</span>}</div><div className="grid grid-cols-2 gap-2">{statCard('Impulse', impulse == null ? '—' : `${Math.round(Number(impulse))} pts`, 'text-purple-600 dark:text-purple-300')}{statCard('IF', intensityFactor > 0 ? intensityFactor.toFixed(2) : '—', 'text-blue-600 dark:text-blue-300')}{statCard('VAM', activity.duration_seconds > 0 ? `${Math.round((activity.elevation_gain_meters || wearableDetails?.elevation_gain_m || 0) / (activity.duration_seconds / 3600))} m/h` : '—')}{statCard(language === 'es' ? 'Cadencia prom.' : 'Avg cadence', activity.average_cadence == null ? '—' : `${Math.round(activity.average_cadence)} spm`)}{averageHr != null && statCard(language === 'es' ? 'FC prom. / máx.' : 'Avg / max HR', `${Math.round(Number(averageHr))} / ${activity.max_heartrate ?? wearableDetails?.max_heartrate ?? '—'} bpm`, 'text-rose-600 dark:text-rose-300')}{thresholdHr > 0 && averageHr != null && statCard(language === 'es' ? 'FC prom. / LT2' : 'Avg HR / LT2', `${Math.round(Number(averageHr))} / ${thresholdHr} bpm`, 'text-rose-600 dark:text-rose-300')}{averagePower != null && statCard(language === 'es' ? 'Potencia prom.' : 'Avg power', `${Math.round(Number(averagePower))} W`, 'text-amber-600 dark:text-amber-300')}{thresholdPower > 0 && averagePower != null && statCard(language === 'es' ? 'Potencia / FTP' : 'Power / FTP', `${Math.round(Number(averagePower))} / ${Math.round(thresholdPower)} W`, 'text-amber-600 dark:text-amber-300')}</div>{passport?.measurement_date && <p className="mt-2 text-[11px] text-neutral-500">{language === 'es' ? 'Pasaporte biológico' : 'Biological Passport'} · {passport.measurement_date}</p>}{impulseIsEstimate && <p className="mt-2 text-[10px] text-neutral-500">{language === 'es' ? 'Estimación por zonas personales; no se utiliza TSS.' : 'Estimated from personal zones; TSS is not used.'}</p>}</section>
               {activity.calories != null && <p className="px-1 text-xs text-neutral-500">{Math.round(activity.calories)} kcal{activity.device_name ? ` · ${activity.device_name}` : ''}</p>}
               {activity.fused_activity_id && <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">{language === 'es' ? 'Actividad GPS vinculada con esta actividad importada.' : 'This imported activity is matched with an Asciende GPS recording.'}</p>}
             </aside>

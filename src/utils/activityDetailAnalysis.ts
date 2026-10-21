@@ -1,3 +1,5 @@
+export type ActivityMetric = 'hr' | 'power' | 'pace';
+
 export interface ActivityZone {
   zone: number;
   name: string;
@@ -19,21 +21,40 @@ function objectValue(value: unknown): Record<string, any> | null {
     : null;
 }
 
-function zoneRows(value: unknown, kind: 'hr' | 'power'): ActivityZone[] {
+function paceSeconds(value: unknown): number {
+  if (typeof value === 'string' && value.includes(':')) {
+    const [minutes, seconds] = value.split(':').map(Number);
+    return Number.isFinite(minutes) && Number.isFinite(seconds) ? minutes * 60 + seconds : NaN;
+  }
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? (numeric > 0 && numeric < 30 ? numeric * 60 : numeric) : NaN;
+}
+
+function zoneRows(value: unknown, kind: ActivityMetric): ActivityZone[] {
   if (typeof value === 'string') {
     try { value = JSON.parse(value); } catch { return []; }
   }
   if (!Array.isArray(value)) return [];
   return value.map((row: any, index): ActivityZone | null => {
     const zone = Number(row?.zone ?? index + 1);
-    const min = Number(row?.[kind === 'hr' ? 'min_bpm' : 'min_watts'] ?? row?.min ?? row?.low);
-    const max = Number(row?.[kind === 'hr' ? 'max_bpm' : 'max_watts'] ?? row?.max ?? row?.high);
+    const minValue = kind === 'hr'
+      ? row?.min_bpm ?? row?.min
+      : kind === 'power'
+        ? row?.min_watts ?? row?.min
+        : row?.min_sec_per_km ?? row?.min_pace ?? row?.pace_min ?? row?.min ?? row?.low;
+    const maxValue = kind === 'hr'
+      ? row?.max_bpm ?? row?.max
+      : kind === 'power'
+        ? row?.max_watts ?? row?.max
+        : row?.max_sec_per_km ?? row?.max_pace ?? row?.pace_max ?? row?.max ?? row?.high;
+    const min = kind === 'pace' ? paceSeconds(minValue) : Number(minValue ?? row?.low);
+    const max = kind === 'pace' ? paceSeconds(maxValue) : Number(maxValue ?? row?.high);
     if (!Number.isFinite(zone) || !Number.isFinite(min) || !Number.isFinite(max)) return null;
     return { zone, name: String(row?.name || `Z${zone}`), min, max };
   }).filter((row): row is ActivityZone => row !== null).sort((a, b) => a.zone - b.zone);
 }
 
-export function getPassportZones(passport: any, kind: 'hr' | 'power'): ActivityZone[] {
+export function getPassportZones(passport: any, kind: ActivityMetric): ActivityZone[] {
   if (!passport) return [];
   const training = objectValue(passport.training_zones);
   const displayCount = training?.default_display === '7' ? 7 : 5;
@@ -43,7 +64,8 @@ export function getPassportZones(passport: any, kind: 'hr' | 'power'): ActivityZ
       ?? training?.[`${kind}_zones_${count}`]
       ?? training?.[`${kind}_zones${count}`]
       ?? (kind === 'hr' ? training?.[`heart_rate_zones_${count}`] : undefined);
-    return zoneRows(flat ?? set?.[kind] ?? set?.[kind === 'hr' ? 'heart_rate' : 'watts'], kind);
+    const aliases = kind === 'hr' ? ['heart_rate'] : kind === 'power' ? ['watts'] : ['pace', 'running_pace'];
+    return zoneRows(flat ?? set?.[kind] ?? aliases.map(key => set?.[key]).find(Boolean), kind);
   };
   const defaultRows = nestedZones(displayCount);
   if (defaultRows.length) return defaultRows;
@@ -51,11 +73,15 @@ export function getPassportZones(passport: any, kind: 'hr' | 'power'): ActivityZ
   if (zones5.length) return zones5;
   const zones7 = nestedZones(7);
   if (zones7.length) return zones7;
-  return zoneRows(kind === 'hr' ? passport.hr_zones_json : passport.power_zones_json, kind);
+  const labPayload = objectValue(passport.lab_payload);
+  const labRoot = objectValue(labPayload?.data) ?? objectValue(labPayload?.payload) ?? labPayload;
+  const physiology = objectValue(labRoot?.physiological);
+  const legacy = kind === 'hr' ? passport.hr_zones_json : kind === 'power' ? passport.power_zones_json : physiology?.pace_zones_json ?? passport.pace_zones_json;
+  return zoneRows(legacy, kind);
 }
 
 export function calculateZoneTimes(
-  values: number[] | null | undefined,
+  values: Array<number | null> | null | undefined,
   times: number[] | null | undefined,
   zones: ActivityZone[],
 ): ActivityZoneTime[] {
