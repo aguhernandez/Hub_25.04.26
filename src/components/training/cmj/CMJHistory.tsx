@@ -10,7 +10,6 @@ interface SessionRecord {
   protocol: string;
   best_height_cm: number;
   avg_height_cm: number;
-  fatigue_index_pct: number;
   total_jumps: number;
   body_mass_kg: number;
   notes: string;
@@ -37,14 +36,8 @@ export default function CMJHistory() {
     best: language === 'es' ? 'Mejor' : 'Best',
     jumps: language === 'es' ? 'saltos' : 'jumps',
     average: language === 'es' ? 'Promedio' : 'Average',
-    fatigue: language === 'es' ? 'Fatiga' : 'Fatigue',
     mass: language === 'es' ? 'Masa' : 'Mass',
     notes: language === 'es' ? 'Notas' : 'Notes',
-    protocolLabels: {
-      standard: language === 'es' ? 'Estandar' : 'Standard',
-      fatigue: language === 'es' ? 'Fatiga' : 'Fatigue',
-      reactive: language === 'es' ? 'Reactivo' : 'Reactive',
-    },
   };
 
   useEffect(() => {
@@ -85,10 +78,6 @@ export default function CMJHistory() {
   const trend = sessions.length >= 2
     ? sessions[0].best_height_cm - sessions[sessions.length - 1].best_height_cm
     : 0;
-
-  const getProtocolLabel = (protocol: string) => {
-    return txt.protocolLabels[protocol as keyof typeof txt.protocolLabels] || protocol;
-  };
 
   return (
     <div className="space-y-4">
@@ -155,7 +144,7 @@ export default function CMJHistory() {
                     })}
                   </span>
                   <span className="text-xs bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full border border-gray-700/50">
-                    {getProtocolLabel(s.protocol)}
+                    {s.jump_type ?? 'cmj'}
                   </span>
                   {s.best_height_cm === best && (
                     <Trophy className="w-3.5 h-3.5 text-primary" />
@@ -181,15 +170,6 @@ export default function CMJHistory() {
                 <div className="text-xs">
                   <span className="text-gray-500">{txt.average}: </span>
                   <span className="text-gray-300">{s.avg_height_cm?.toFixed(1)} cm</span>
-                </div>
-                <div className="text-xs">
-                  <span className="text-gray-500">{txt.fatigue}: </span>
-                  <span className={
-                    s.fatigue_index_pct > 10 ? 'text-red-400' :
-                    s.fatigue_index_pct > 5 ? 'text-yellow-400' : 'text-green-400'
-                  }>
-                    {s.fatigue_index_pct?.toFixed(1)}%
-                  </span>
                 </div>
                 {s.body_mass_kg && (
                   <div className="text-xs">

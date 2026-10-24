@@ -46,7 +46,6 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
   const [inputMode, setInputMode] = useState<InputMode>('manual');
   const [jumps, setJumps] = useState<CMJJump[]>([]);
   const [bodyMassKg, setBodyMassKg] = useState<string>('');
-  const [protocol, setProtocol] = useState<'standard' | 'fatigue' | 'reactive'>('standard');
   const [jumpType, setJumpType] = useState<JumpType>('cmj');
   const [loadKg, setLoadKg] = useState('');
   const [boxCm, setBoxCm] = useState('');
@@ -67,10 +66,6 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
     sessionConfig: language === 'es' ? 'Configuracion de sesion' : 'Session configuration',
     bodyMass: language === 'es' ? 'Masa corporal (kg)' : 'Body mass (kg)',
     bodyMassPlaceholder: language === 'es' ? 'ej: 75' : 'e.g. 75',
-    protocol: language === 'es' ? 'Protocolo' : 'Protocol',
-    protocolStandard: language === 'es' ? 'Estandar (3 saltos)' : 'Standard (3 jumps)',
-    protocolFatigue: language === 'es' ? 'Fatiga (5-6 saltos)' : 'Fatigue (5-6 jumps)',
-    protocolReactive: language === 'es' ? 'Reactivo' : 'Reactive',
     manual: 'Manual',
     camera: language === 'es' ? 'Camara' : 'Camera',
     recordingInstructions: language === 'es' ? 'Instrucciones de grabacion:' : 'Recording instructions:',
@@ -239,18 +234,6 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
                 {jumpType === 'dj' && <div><label className="block text-xs mb-1.5 text-gray-500">Altura del cajón (cm)</label><input type="number" value={boxCm} onChange={(event) => { setBoxCm(event.target.value); setSaved(false); }} className="w-full rounded-xl px-3 py-2 text-sm bg-gray-800 border border-gray-700 text-white" /></div>}
                 {jumpType === 'cmj_unilateral' && <div><label className="block text-xs mb-1.5 text-gray-500">Lado</label><select value={side} onChange={(event) => setSide(event.target.value as 'left' | 'right' | '')} className="w-full rounded-xl px-3 py-2 text-sm bg-gray-800 border border-gray-700 text-white"><option value="">Seleccionar</option><option value="left">Izquierdo</option><option value="right">Derecho</option></select></div>}
                 <div><label className="block text-xs mb-1.5 text-gray-500">hPO (m, opcional)</label><input type="number" step="0.01" value={hpoM} onChange={(event) => { setHpoM(event.target.value); setSaved(false); }} className="w-full rounded-xl px-3 py-2 text-sm bg-gray-800 border border-gray-700 text-white" /></div>
-                <div>
-                  <label className={`block text-xs mb-1.5 ${isDark ? 'text-gray-500' : 'text-gray-700'}`}>{txt.protocol}</label>
-                  <select
-                    value={protocol}
-                    onChange={(e) => setProtocol(e.target.value as typeof protocol)}
-                    className={`w-full rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary/50 transition-colors border ${isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900'}`}
-                  >
-                    <option value="standard">{txt.protocolStandard}</option>
-                    <option value="fatigue">{txt.protocolFatigue}</option>
-                    <option value="reactive">{txt.protocolReactive}</option>
-                  </select>
-                </div>
               </div>
             </div>
 
