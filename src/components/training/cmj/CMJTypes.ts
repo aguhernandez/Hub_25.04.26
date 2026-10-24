@@ -1,3 +1,5 @@
+import { flightMsToHeightCm, sayersPeakPowerSJ, summarizeSession } from '../jumpCore';
+
 export interface CMJJump {
   jumpNumber: number;
   flightTimeMs: number;
@@ -8,7 +10,6 @@ export interface CMJJump {
   fps?: number;
   isValid: boolean;
 }
-
 export interface CMJSession {
   id?: string;
   sessionDate: string;
@@ -35,24 +36,23 @@ export interface VideoFrameAnalysis {
   fps: number;
   totalFrames: number;
   flightTimeMs: number;
+  takeoffMs?: number;
+  landingMs?: number;
+  effectiveFps?: number;
+  skippedFrames?: number;
 }
 
 export function calculateJumpHeight(flightTimeMs: number): number {
-  const t = flightTimeMs / 1000;
-  return ((9.81 * t * t) / 8) * 100;
+  return flightMsToHeightCm(flightTimeMs);
 }
 
 export function calculateSayersPower(
   jumpHeightCm: number,
   bodyMassKg: number
 ): number {
-  return 60.7 * jumpHeightCm + 45.3 * bodyMassKg - 2055;
+  return sayersPeakPowerSJ(jumpHeightCm, bodyMassKg);
 }
 
 export function calculateFatigueIndex(jumps: CMJJump[]): number {
-  const validJumps = jumps.filter((j) => j.isValid);
-  if (validJumps.length < 2) return 0;
-  const best = Math.max(...validJumps.map((j) => j.jumpHeightCm));
-  const last = validJumps[validJumps.length - 1].jumpHeightCm;
-  return ((best - last) / best) * 100;
+  return summarizeSession(jumps.filter((j) => j.isValid).map((j) => j.jumpHeightCm)).dropFromBestPct;
 }

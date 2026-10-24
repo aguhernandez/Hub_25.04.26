@@ -1,5 +1,6 @@
-import { Trophy, Zap, Timer, ArrowUp, AlertTriangle, CheckCircle } from 'lucide-react';
-import { CMJJump, calculateFatigueIndex } from './CMJTypes';
+import { Trophy, Zap, Timer, ArrowUp } from 'lucide-react';
+import { CMJJump } from './CMJTypes';
+import { summarizeSession } from '../jumpCore';
 import { useLanguage } from '../../../contexts/LanguageContext';
 
 interface CMJResultsPanelProps {
@@ -7,29 +8,24 @@ interface CMJResultsPanelProps {
   bodyMassKg?: number;
 }
 
-export default function CMJResultsPanel({ jumps, bodyMassKg }: CMJResultsPanelProps) {
+export default function CMJResultsPanel({ jumps }: CMJResultsPanelProps) {
   const { language } = useLanguage();
   const validJumps = jumps.filter((j) => j.isValid);
   if (validJumps.length === 0) return null;
 
   const best = Math.max(...validJumps.map((j) => j.jumpHeightCm));
   const avg = validJumps.reduce((a, b) => a + b.jumpHeightCm, 0) / validJumps.length;
-  const fatigueIndex = calculateFatigueIndex(validJumps);
+  const summary = summarizeSession(validJumps.map((jump) => jump.jumpHeightCm));
   const bestJump = validJumps.find((j) => j.jumpHeightCm === best);
   const maxHeight = Math.max(best * 1.2, 60);
 
-  const fatigueColor = fatigueIndex < 5 ? 'text-green-400' : fatigueIndex < 10 ? 'text-yellow-400' : 'text-red-400';
-  const fatigueBg = fatigueIndex < 5 ? 'bg-green-500/10 border-green-500/20' : fatigueIndex < 10 ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-red-500/10 border-red-500/20';
 
   const txt = {
     bestJump: language === 'es' ? 'Mejor salto' : 'Best jump',
     average: language === 'es' ? 'Promedio' : 'Average',
     flightBest: language === 'es' ? 'T. vuelo (mejor)' : 'Flight (best)',
     powerBest: language === 'es' ? 'Potencia (mejor)' : 'Power (best)',
-    fatigueIndex: language === 'es' ? 'indice de fatiga' : 'fatigue index',
-    fatigueGood: language === 'es' ? 'Rendimiento neuromuscular estable. Excelente.' : 'Stable neuromuscular performance. Excellent.',
-    fatigueMedium: language === 'es' ? 'Fatiga moderada. Normal en protocolos de alta intensidad.' : 'Moderate fatigue. Normal in high-intensity protocols.',
-    fatigueHigh: language === 'es' ? 'Fatiga significativa detectada. Considera reducir la carga.' : 'Significant fatigue detected. Consider reducing load.',
+    drop: language === 'es' ? 'Caída respecto al mejor' : 'Drop from best',
     progression: language === 'es' ? 'Evolucion por salto' : 'Jump progression',
     jumpDetail: language === 'es' ? 'Detalle de saltos' : 'Jump detail',
     methodology: language === 'es' ? 'Metodologia de calculo' : 'Calculation method',
@@ -79,24 +75,7 @@ export default function CMJResultsPanel({ jumps, bodyMassKg }: CMJResultsPanelPr
         )}
       </div>
 
-      {validJumps.length >= 2 && (
-        <div className={`flex items-center gap-3 p-3 rounded-2xl border ${fatigueBg}`}>
-          {fatigueIndex < 5 ? (
-            <CheckCircle className={`w-5 h-5 shrink-0 ${fatigueColor}`} />
-          ) : (
-            <AlertTriangle className={`w-5 h-5 shrink-0 ${fatigueColor}`} />
-          )}
-          <div>
-            <div className="flex items-baseline gap-1.5">
-              <span className={`text-lg font-bold ${fatigueColor}`}>{fatigueIndex.toFixed(1)}%</span>
-              <span className="text-xs text-gray-500">{txt.fatigueIndex}</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {fatigueIndex < 5 ? txt.fatigueGood : fatigueIndex < 10 ? txt.fatigueMedium : txt.fatigueHigh}
-            </p>
-          </div>
-        </div>
-      )}
+      {validJumps.length >= 2 && <div className="bg-gray-900 border border-gray-800/60 rounded-2xl p-3 text-xs text-gray-400">{txt.drop}: {summary.dropFromBestPct.toFixed(1)}% · CV: {summary.cvPct === null ? '—' : `${summary.cvPct.toFixed(1)}%`}</div>}
 
       <div className="bg-gray-900 rounded-2xl p-4 border border-gray-800/60">
         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
@@ -161,9 +140,8 @@ export default function CMJResultsPanel({ jumps, bodyMassKg }: CMJResultsPanelPr
 
       <div className="text-xs text-gray-600 bg-gray-900/60 rounded-xl p-3 border border-gray-800/40">
         <p className="font-medium text-gray-500 mb-1">{txt.methodology}</p>
-        <p>h = (9.81 × t²) / 8 — Sayers et al. (1999)</p>
-        {bodyMassKg && <p>P = 60.7 × h(cm) + 45.3 × mass(kg) − 2055</p>}
-        <p>{language === 'es' ? 'Fatiga' : 'Fatigue'}: ((best − last) / best) × 100</p>
+        <p>Altura = g·t²/8. La potencia Samozino requiere hPO; esta vista no la estima sin ese dato.</p>
+        <p>{txt.drop}: ((mejor − último) / mejor) × 100. Descripción de la variación de la sesión.</p>
       </div>
     </div>
   );

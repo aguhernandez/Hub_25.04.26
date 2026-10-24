@@ -14,6 +14,9 @@ interface SessionRecord {
   total_jumps: number;
   body_mass_kg: number;
   notes: string;
+  jump_type?: string | null;
+  load_kg?: number | null;
+  box_cm?: number | null;
 }
 
 export default function CMJHistory() {
@@ -22,6 +25,7 @@ export default function CMJHistory() {
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState('all');
 
   const txt = {
     noSessions: language === 'es' ? 'Sin sesiones registradas aun.' : 'No sessions recorded yet.',
@@ -46,7 +50,7 @@ export default function CMJHistory() {
   useEffect(() => {
     if (!user) return;
     const fetchSessions = async () => {
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from('cmj_sessions')
         .select('*')
         .eq('athlete_id', user.id)
@@ -77,16 +81,20 @@ export default function CMJHistory() {
   }
 
   const best = Math.max(...sessions.map((s) => s.best_height_cm || 0));
+  const visibleSessions = sessions.filter((session) => typeFilter === 'all' || (session.jump_type ?? 'cmj') === typeFilter);
   const trend = sessions.length >= 2
     ? sessions[0].best_height_cm - sessions[sessions.length - 1].best_height_cm
     : 0;
 
   const getProtocolLabel = (protocol: string) => {
-    return (txt.protocolLabels as any)[protocol] || protocol;
+    return txt.protocolLabels[protocol as keyof typeof txt.protocolLabels] || protocol;
   };
 
   return (
     <div className="space-y-4">
+      <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="bg-gray-800 text-gray-300 rounded-lg px-3 py-2 text-xs">
+        <option value="all">Todos los tipos</option><option value="cmj">CMJ</option><option value="cmj_free_arms">CMJ brazos libres</option><option value="sj">SJ</option><option value="dj">DJ</option><option value="rj">RJ</option><option value="cmj_unilateral">Unilateral</option>
+      </select>
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-gray-900 border border-primary/20 rounded-2xl p-3 text-center">
           <Trophy className="w-4 h-4 text-primary mx-auto mb-1" />
@@ -115,7 +123,7 @@ export default function CMJHistory() {
             {txt.progression(Math.min(sessions.length, 10))}
           </h4>
           <div className="flex items-end gap-1.5 h-14">
-            {[...sessions].reverse().slice(-10).map((s, idx) => {
+            {[...visibleSessions].reverse().slice(-10).map((s, idx) => {
               const pct = (s.best_height_cm / (best * 1.1)) * 100;
               return (
                 <div key={idx} className="flex-1 flex flex-col items-center gap-0.5">
@@ -131,7 +139,7 @@ export default function CMJHistory() {
       )}
 
       <div className="space-y-2">
-        {sessions.map((s) => (
+        {visibleSessions.map((s) => (
           <div key={s.id} className="bg-gray-900 border border-gray-800/60 rounded-2xl overflow-hidden">
             <button
               onClick={() => setExpanded(expanded === s.id ? null : s.id)}

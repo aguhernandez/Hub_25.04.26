@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { Timer, ArrowUp, Zap } from 'lucide-react';
-import { calculateJumpHeight, calculateSayersPower, CMJJump } from './CMJTypes';
+import { calculateJumpHeight, CMJJump } from './CMJTypes';
 import { useLanguage } from '../../../contexts/LanguageContext';
 
 interface CMJManualInputProps {
   jumpNumber: number;
-  bodyMassKg?: number;
   onJumpAdded: (jump: CMJJump) => void;
 }
 
-export default function CMJManualInput({ jumpNumber, bodyMassKg, onJumpAdded }: CMJManualInputProps) {
+export default function CMJManualInput({ jumpNumber, onJumpAdded }: CMJManualInputProps) {
   const { language } = useLanguage();
   const [inputMode, setInputMode] = useState<'time' | 'height'>('time');
   const [flightTimeMs, setFlightTimeMs] = useState('');
@@ -42,12 +41,11 @@ export default function CMJManualInput({ jumpNumber, bodyMassKg, onJumpAdded }: 
 
   const handleAdd = () => {
     if (!preview) return;
-    const power = bodyMassKg && bodyMassKg > 0 ? calculateSayersPower(preview.height, bodyMassKg) : undefined;
     onJumpAdded({
       jumpNumber,
       flightTimeMs: preview.time,
       jumpHeightCm: preview.height,
-      estimatedPowerW: power && power > 0 ? power : undefined,
+      estimatedPowerW: undefined,
       isValid: true,
     });
     setFlightTimeMs('');
@@ -114,14 +112,6 @@ export default function CMJManualInput({ jumpNumber, bodyMassKg, onJumpAdded }: 
             <div className="text-xs text-gray-500 mb-0.5">{txt.flightTimeShort}</div>
             <div className="text-sm font-bold text-gray-200">{preview.time.toFixed(0)} ms</div>
           </div>
-          {bodyMassKg && bodyMassKg > 0 && (
-            <div className="bg-gray-800 rounded-xl p-2.5 text-center border border-gray-700/50">
-              <div className="text-xs text-gray-500 mb-0.5">{txt.power}</div>
-              <div className="text-sm font-bold text-orange-400">
-                {Math.max(0, calculateSayersPower(preview.height, bodyMassKg)).toFixed(0)} W
-              </div>
-            </div>
-          )}
         </div>
       )}
 

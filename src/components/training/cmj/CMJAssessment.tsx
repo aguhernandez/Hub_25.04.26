@@ -23,9 +23,10 @@ import {
   CMJJump,
   VideoFrameAnalysis,
   calculateJumpHeight,
-  calculateSayersPower,
-  calculateFatigueIndex,
 } from './CMJTypes';
+import { computeAttempt } from '../jumpCore';
+import { JumpType } from '../jumpCore';
+import { downloadJumpCsv } from '../jump/JumpExport';
 
 type Tab = 'assess' | 'history';
 type InputMode = 'video' | 'manual';
@@ -46,6 +47,12 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
   const [jumps, setJumps] = useState<CMJJump[]>([]);
   const [bodyMassKg, setBodyMassKg] = useState<string>('');
   const [protocol, setProtocol] = useState<'standard' | 'fatigue' | 'reactive'>('standard');
+  const [jumpType, setJumpType] = useState<JumpType>('cmj');
+  const [loadKg, setLoadKg] = useState('');
+  const [boxCm, setBoxCm] = useState('');
+  const [hpoM, setHpoM] = useState('');
+  const [side, setSide] = useState<'left' | 'right' | ''>('');
+  const [clientSessionId] = useState(() => crypto.randomUUID());
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -95,24 +102,26 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
 
   const handleJumpDetectedFromVideo = useCallback(
     (flightTimeMs: number, analysis: VideoFrameAnalysis) => {
-      const height = calculateJumpHeight(flightTimeMs);
       const mass = parseFloat(bodyMassKg);
-      const power = !isNaN(mass) && mass > 0 ? calculateSayersPower(height, mass) : undefined;
+      const result = analysis.takeoffMs !== undefined && analysis.landingMs !== undefined
+        ? computeAttempt(jumpType, { takeoffMs: analysis.takeoffMs, landingMs: analysis.landingMs }, { massKg: mass, fps: analysis.effectiveFps ?? analysis.fps, loadKg: Number(loadKg) || undefined, boxCm: Number(boxCm) || undefined, hpoM: Number(hpoM) || undefined })
+        : null;
+      const height = result?.heightCm ?? calculateJumpHeight(flightTimeMs);
 
       const jump: CMJJump = {
         jumpNumber: jumps.length + 1,
         flightTimeMs,
         jumpHeightCm: height,
-        estimatedPowerW: power && power > 0 ? power : undefined,
+        estimatedPowerW: undefined,
         takeoffFrame: analysis.takeoffFrameIndex,
         landingFrame: analysis.landingFrameIndex,
         fps: analysis.fps,
-        isValid: true,
+        isValid: result?.ok ?? false,
       };
 
       setJumps((prev) => [...prev, jump]);
     },
-    [jumps.length, bodyMassKg]
+    [jumps.length, bodyMassKg, jumpType, loadKg, boxCm, hpoM]
   );
 
   const handleJumpAdded = useCallback((jump: CMJJump) => {
@@ -133,43 +142,15 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
 
     try {
       const validJumps = jumps.filter((j) => j.isValid);
-      const best = Math.max(...validJumps.map((j) => j.jumpHeightCm));
-      const avg = validJumps.reduce((a, b) => a + b.jumpHeightCm, 0) / validJumps.length;
-      const fatigueIndex = calculateFatigueIndex(validJumps);
       const mass = parseFloat(bodyMassKg);
-
-      const { data: session, error: sessionErr } = await (supabase as any)
-        .from('cmj_sessions')
-        .insert({
-          athlete_id: user.id,
-          session_date: new Date().toISOString().split('T')[0],
-          protocol,
-          body_mass_kg: !isNaN(mass) && mass > 0 ? mass : null,
-          notes: notes.trim() || null,
-          best_height_cm: best,
-          avg_height_cm: avg,
-          fatigue_index_pct: fatigueIndex,
-          total_jumps: validJumps.length,
-        })
-        .select()
-        .single();
-
-      if (sessionErr) throw sessionErr;
-
-      const jumpRows = validJumps.map((j) => ({
-        session_id: (session as any).id,
-        jump_number: j.jumpNumber,
-        flight_time_ms: j.flightTimeMs,
-        jump_height_cm: j.jumpHeightCm,
-        estimated_power_w: j.estimatedPowerW || null,
-        takeoff_frame: j.takeoffFrame || null,
-        landing_frame: j.landingFrame || null,
-        fps: j.fps || null,
-        is_valid: j.isValid,
-      }));
-
-      const { error: jumpsErr } = await (supabase as any).from('cmj_jumps').insert(jumpRows);
-      if (jumpsErr) throw jumpsErr;
+      if (!(mass > 0)) throw new Error('Masa corporal inválida');
+      const { error: saveError } = await supabase.rpc('save_jump_session', { p_session: {
+        client_session_id: clientSessionId, athlete_id: user.id, session_date: new Date().toISOString().split('T')[0], jump_type: jumpType,
+        body_mass_kg: mass, load_kg: Number(loadKg) || null, box_cm: Number(boxCm) || null, hpo_m: Number(hpoM) || null, side: side || null,
+        effective_fps: validJumps.find((jump) => jump.fps)?.fps ?? 0, source: validJumps.some((jump) => jump.takeoffFrame !== undefined) ? 'video' : 'manual', algorithm_version: 'jump-core-1', notes: notes.trim() || null,
+        attempts: validJumps.map((jump) => ({ index: jump.jumpNumber, marks: { takeoffMs: null, landingMs: null }, source: jump.takeoffFrame !== undefined ? 'video' : 'manual', flight_ms: jump.flightTimeMs, height_cm: jump.jumpHeightCm, flags: [], reasons: [] })),
+      } });
+      if (saveError) throw saveError;
 
       setSaved(true);
     } catch {
@@ -249,6 +230,16 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
                   />
                 </div>
                 <div>
+                  <label className={`block text-xs mb-1.5 ${isDark ? 'text-gray-500' : 'text-gray-700'}`}>Tipo de salto</label>
+                  <select value={jumpType} onChange={(event) => { setJumpType(event.target.value as JumpType); setSaved(false); }} className={`w-full rounded-xl px-3 py-2 text-sm border ${isDark ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900'}`}>
+                    <option value="cmj">CMJ</option><option value="cmj_free_arms">CMJ brazos libres</option><option value="sj">SJ</option><option value="dj">DJ</option><option value="rj">RJ</option><option value="cmj_unilateral">CMJ unilateral</option>
+                  </select>
+                </div>
+                {(jumpType === 'cmj' || jumpType === 'sj') && <div><label className="block text-xs mb-1.5 text-gray-500">Carga externa (kg)</label><input type="number" value={loadKg} onChange={(event) => { setLoadKg(event.target.value); setSaved(false); }} className="w-full rounded-xl px-3 py-2 text-sm bg-gray-800 border border-gray-700 text-white" /></div>}
+                {jumpType === 'dj' && <div><label className="block text-xs mb-1.5 text-gray-500">Altura del cajón (cm)</label><input type="number" value={boxCm} onChange={(event) => { setBoxCm(event.target.value); setSaved(false); }} className="w-full rounded-xl px-3 py-2 text-sm bg-gray-800 border border-gray-700 text-white" /></div>}
+                {jumpType === 'cmj_unilateral' && <div><label className="block text-xs mb-1.5 text-gray-500">Lado</label><select value={side} onChange={(event) => setSide(event.target.value as 'left' | 'right' | '')} className="w-full rounded-xl px-3 py-2 text-sm bg-gray-800 border border-gray-700 text-white"><option value="">Seleccionar</option><option value="left">Izquierdo</option><option value="right">Derecho</option></select></div>}
+                <div><label className="block text-xs mb-1.5 text-gray-500">hPO (m, opcional)</label><input type="number" step="0.01" value={hpoM} onChange={(event) => { setHpoM(event.target.value); setSaved(false); }} className="w-full rounded-xl px-3 py-2 text-sm bg-gray-800 border border-gray-700 text-white" /></div>
+                <div>
                   <label className={`block text-xs mb-1.5 ${isDark ? 'text-gray-500' : 'text-gray-700'}`}>{txt.protocol}</label>
                   <select
                     value={protocol}
@@ -317,7 +308,6 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
             {inputMode === 'manual' && canAddMore && (
               <CMJManualInput
                 jumpNumber={jumps.length + 1}
-                bodyMassKg={bodyMassKg ? parseFloat(bodyMassKg) : undefined}
                 onJumpAdded={handleJumpAdded}
               />
             )}
@@ -348,6 +338,7 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
                   jumps={validJumps}
                   bodyMassKg={bodyMassKg ? parseFloat(bodyMassKg) : undefined}
                 />
+                <button onClick={() => downloadJumpCsv({ clientSessionId, athleteId: user?.id ?? '', sessionDate: new Date().toISOString().split('T')[0], jumpType, bodyMassKg: Number(bodyMassKg), loadKg: Number(loadKg) || null, boxCm: Number(boxCm) || null, hpoM: Number(hpoM) || null, side: side || null, effectiveFps: validJumps.find((jump) => jump.fps)?.fps ?? 0, source: validJumps.some((jump) => jump.takeoffFrame !== undefined) ? 'video' : 'manual', algorithmVersion: 'jump-core-1', attempts: validJumps.map((jump) => ({ index: jump.jumpNumber, marks: { takeoffMs: 0, landingMs: jump.flightTimeMs }, result: null, source: jump.takeoffFrame !== undefined ? 'video' : 'manual', flags: [], reasons: [] })), saved })} className="w-full rounded-xl border border-gray-700 text-gray-300 py-2 text-xs">Exportar CSV</button>
 
                 <div>
                   <label className={`block text-xs mb-1.5 ${isDark ? 'text-gray-500' : 'text-gray-700'}`}>{txt.sessionNotes}</label>
