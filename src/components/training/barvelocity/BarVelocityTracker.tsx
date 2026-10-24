@@ -29,12 +29,11 @@ import VBTLoadPrescriptionPanel from './VBTLoadPrescriptionPanel';
 import {
   BarRep,
   CalibrationData,
-  calcVelocityLoss,
-  calcPeakVelocity,
 } from './BarVelocityTypes';
 import { analyzeBarVideo, analyzeBarStream } from './BarVideoAnalyzer';
 import { requestCameraPermission } from '../../../utils/cameraPermission';
 import { LV1RMEstimate } from './LVProfile';
+import { buildBarSessionPayload, createManualRep, persistBarSession } from './BarSessionPersistence';
 
 type AppTab = 'session' | 'history';
 type SessionStep = 'setup' | 'calibration' | 'recording' | 'analyzing' | 'manual' | 'results';
@@ -59,7 +58,10 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
   const [captureMode, setCaptureMode] = useState<CaptureMode>('video');
 
   const [exerciseName, setExerciseName] = useState('');
-  const [loadKg, setLoadKg] = useState('');
+  const [nextLoadKg, setNextLoadKg] = useState('');
+  const [performedLoadKg, setPerformedLoadKg] = useState<number | null>(null);
+  const loadKg = performedLoadKg === null ? nextLoadKg : String(performedLoadKg);
+  const [clientSessionId, setClientSessionId] = useState(() => crypto.randomUUID());
   const [notes, setNotes] = useState('');
 
   const [calibration, setCalibration] = useState<CalibrationData | null>(null);
@@ -70,9 +72,15 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
 
   const [reps, setReps] = useState<BarRep[]>([]);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [savedFingerprint, setSavedFingerprint] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [lvEstimate, setLvEstimate] = useState<LV1RMEstimate | null>(null);
+  const sessionDateRef = useRef(new Date().toISOString().split('T')[0]);
+  const payload = buildBarSessionPayload({ clientSessionId, sessionDate: sessionDateRef.current,
+    exerciseName, loadKg: performedLoadKg, notes, fps: actualFps,
+    source: captureMode === 'manual' ? 'manual' : 'video', reps });
+  const fingerprint = JSON.stringify(payload);
+  const saved = savedFingerprint === fingerprint;
 
   const txt = {
     title: 'Bar Velocity Tracker',
@@ -340,58 +348,8 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
     setError('');
 
     try {
-      const validReps = reps.filter((r) => r.isValid);
-      const allSamples = validReps.flatMap((r) => r.velocitySamples);
-      const peakV = calcPeakVelocity(allSamples);
-      const meanV =
-        validReps.reduce((s, r) => s + r.meanConcentricVelocityMs, 0) / validReps.length;
-      const velocityLoss = calcVelocityLoss(validReps);
-      const avgPower =
-        validReps.filter((r) => r.estimatedPowerW).reduce((s, r) => s + (r.estimatedPowerW || 0), 0) /
-        Math.max(1, validReps.filter((r) => r.estimatedPowerW).length);
-      const mass = parseFloat(loadKg);
-
-      const { data: session, error: sessionErr } = await (supabase as any)
-        .from('bar_velocity_sessions')
-        .insert({
-          athlete_id: user.id,
-          session_date: new Date().toISOString().split('T')[0],
-          exercise_name: exerciseName.trim() || null,
-          load_kg: !isNaN(mass) && mass > 0 ? mass : null,
-          total_reps: validReps.length,
-          peak_velocity_ms: peakV,
-          mean_concentric_velocity_ms: meanV,
-          velocity_loss_pct: velocityLoss,
-          estimated_power_w: avgPower > 0 ? avgPower : null,
-          fps: actualFps,
-          notes: notes.trim() || null,
-        })
-        .select()
-        .single();
-
-      if (sessionErr) throw sessionErr;
-
-      const repRows = validReps.map((r) => ({
-        session_id: (session as any).id,
-        rep_number: r.repNumber,
-        mean_concentric_velocity_ms: r.meanConcentricVelocityMs,
-        peak_velocity_ms: r.peakVelocityMs,
-        mean_eccentric_velocity_ms: r.meanEccentricVelocityMs,
-        concentric_duration_ms: r.concentricDurationMs,
-        eccentric_duration_ms: r.eccentricDurationMs,
-        displacement_mm: r.displacementMm,
-        estimated_power_w: r.estimatedPowerW || null,
-        velocity_samples: r.velocitySamples,
-        timestamps_ms: r.timestampsMs,
-        is_valid: r.isValid,
-      }));
-
-      const { error: repsErr } = await (supabase as any)
-        .from('bar_velocity_reps')
-        .insert(repRows);
-
-      if (repsErr) throw repsErr;
-      setSaved(true);
+      await persistBarSession(supabase, payload);
+      setSavedFingerprint(fingerprint);
     } catch {
       setError(txt.saveError);
     } finally {
@@ -402,22 +360,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
   const addManualRep = () => {
     const v = parseFloat(manualVelocityInput);
     if (isNaN(v) || v <= 0 || v > 5) return;
-    const mass = loadKg ? parseFloat(loadKg) : undefined;
-    const power = mass && mass > 0 ? mass * 9.81 * v : undefined;
-    const sampleVelocities = [v * 0.8, v, v * 1.1, v * 1.15, v * 1.0, v * 0.9, v * 0.7];
-    const newRep: BarRep = {
-      repNumber: reps.length + 1,
-      meanConcentricVelocityMs: v,
-      peakVelocityMs: v * 1.15,
-      meanEccentricVelocityMs: v * 0.6,
-      concentricDurationMs: 600,
-      eccentricDurationMs: 900,
-      displacementMm: 400,
-      estimatedPowerW: power,
-      velocitySamples: sampleVelocities.map((vel, i) => ({ timeMs: i * 100, velocityMs: vel, positionPx: i * 50 })),
-      timestampsMs: [0, 100, 200, 300, 400, 500, 600],
-      isValid: true,
-    };
+    const newRep = createManualRep(reps.length + 1, v);
     setReps(prev => [...prev, newRep]);
     setManualVelocityInput('');
   };
@@ -426,7 +369,10 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
     setStep('setup');
     setReps([]);
     setCalibration(null);
-    setSaved(false);
+    setSavedFingerprint(null);
+    setPerformedLoadKg(null);
+    setClientSessionId(crypto.randomUUID());
+    sessionDateRef.current = new Date().toISOString().split('T')[0];
     setError('');
     setIsRecording(false);
     setLiveVelocity(0);
@@ -493,8 +439,8 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                     <label className={`block text-xs mb-1 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>{txt.load}</label>
                     <input
                       type="number"
-                      value={loadKg}
-                      onChange={(e) => setLoadKg(e.target.value)}
+                      value={nextLoadKg}
+                      onChange={(e) => setNextLoadKg(e.target.value)}
                       placeholder={txt.loadPlaceholder}
                       min="0"
                       className={`w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary/50 border ${isDark ? 'bg-gray-700/60 border-gray-600/50 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'}`}
@@ -525,7 +471,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                       </div>
                     </button>
                     <button
-                      onClick={() => setCaptureMode('live')}
+                      disabled
                       className={`flex flex-col items-center gap-2 p-3 rounded-2xl border transition-colors ${
                         captureMode === 'live'
                           ? 'bg-green-500/15 border-green-500/40 text-green-400'
@@ -535,7 +481,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                       <Camera className="w-5 h-5" />
                       <div className="text-center">
                         <div className="text-xs font-medium">{txt.realTime}</div>
-                        <div className="text-xs opacity-70">{txt.instantFeedback}</div>
+                        <div className="text-xs opacity-70">{language === 'es' ? 'Próximamente' : 'Coming soon'}</div>
                       </div>
                     </button>
                     <button
@@ -574,7 +520,11 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                 )}
 
                 <button
-                  onClick={() => captureMode === 'manual' ? setStep('manual') : setStep('calibration')}
+                  onClick={() => {
+                    const configuredLoad = Number(nextLoadKg);
+                    setPerformedLoadKg(Number.isFinite(configuredLoad) && configuredLoad > 0 ? configuredLoad : 0);
+                    setStep(captureMode === 'manual' ? 'manual' : 'calibration');
+                  }}
                   className={`w-full flex items-center justify-center gap-2 font-semibold py-3 rounded-xl transition-colors ${
                     captureMode === 'manual'
                       ? 'bg-blue-500 hover:bg-blue-600 text-white'
@@ -616,7 +566,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                         <input
                           type="number"
                           value={loadKg}
-                          onChange={(e) => setLoadKg(e.target.value)}
+                          onChange={(e) => setNextLoadKg(e.target.value)}
                           placeholder={txt.loadPlaceholder}
                           min="0"
                           className={`w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary/50 border pr-9 ${isDark ? 'bg-gray-700/60 border-gray-600/50 text-white placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'}`}
@@ -703,7 +653,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                     currentReps={reps}
                     loadKg={loadKg ? parseFloat(loadKg) : 0}
                     estimate={lvEstimate}
-                    onLoadChange={(kg) => setLoadKg(String(kg))}
+                    onLoadChange={(kg) => setNextLoadKg(String(kg))}
                     isLive
                   />
                 )}
@@ -796,11 +746,12 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                   <div className="space-y-2">
                     {!isRecording ? (
                       <button
+                        disabled
                         onClick={startLiveTracking}
                         className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-xl transition-colors"
                       >
                         <Play className="w-4 h-4" />
-                        {txt.startLive}
+                        {language === 'es' ? 'Próximamente' : 'Coming soon'}
                       </button>
                     ) : (
                       <button
@@ -827,7 +778,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                       currentReps={reps}
                       loadKg={loadKg ? parseFloat(loadKg) : 0}
                       estimate={lvEstimate}
-                      onLoadChange={(kg) => setLoadKg(String(kg))}
+                      onLoadChange={(kg) => setNextLoadKg(String(kg))}
                       isLive
                     />
                   </>
@@ -882,7 +833,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                           currentReps={reps}
                           loadKg={parseFloat(loadKg)}
                           estimate={lvEstimate}
-                          onLoadChange={(kg) => setLoadKg(String(kg))}
+                          onLoadChange={(kg) => setNextLoadKg(String(kg))}
                           isLive={false}
                         />
                       </>

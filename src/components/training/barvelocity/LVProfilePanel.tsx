@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { supabase } from '../../../lib/supabase';
@@ -22,11 +22,11 @@ import {
   linearRegression,
   estimate1RM,
   filterOutliers,
-  getMVT,
   pct1RMColor,
   pct1RMLabel,
   MIN_POINTS,
   MVT_PRESETS,
+  identifyExercise,
 } from './LVProfile';
 import LoadVelocityProfileChart from './LoadVelocityProfileChart';
 
@@ -43,9 +43,10 @@ interface LVProfilePanelProps {
 
 interface StoredLVPoint {
   load_kg: number;
-  mean_velocity_ms: number;
+  mean_concentric_velocity_ms: number;
   session_date: string;
   exercise_name: string;
+  exercise_id?: string | null;
 }
 
 export default function LVProfilePanel({
@@ -60,21 +61,18 @@ export default function LVProfilePanel({
   const { user } = useAuth();
 
   const [historicPoints, setHistoricPoints] = useState<LVDataPoint[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(true);
   const [showChart, setShowChart] = useState(true);
   const [showInfo, setShowInfo] = useState(false);
   const [mvtOverride, setMvtOverride] = useState<number | null>(null);
-  const prevLoadRef = useRef<number>(0);
 
   // ── Fetch historic load-velocity data from Supabase
   useEffect(() => {
-    if (!user || !exerciseName) { setLoadingHistory(false); return; }
+    if (!user || !exerciseName) return;
     const fetch = async () => {
-      const { data } = await (supabase as any)
+      const { data } = await supabase
         .from('bar_velocity_sessions')
-        .select('load_kg, mean_concentric_velocity_ms, session_date, exercise_name')
+        .select('load_kg, mean_concentric_velocity_ms, session_date, exercise_name, exercise_id')
         .eq('athlete_id', user.id)
-        .ilike('exercise_name', `%${exerciseName.split(' ')[0]}%`)
         .not('load_kg', 'is', null)
         .not('mean_concentric_velocity_ms', 'is', null)
         .order('session_date', { ascending: false })
@@ -83,27 +81,26 @@ export default function LVProfilePanel({
       if (data) {
         const pts: LVDataPoint[] = (data as StoredLVPoint[]).map((d) => ({
           loadKg: d.load_kg,
-          meanVelocityMs: d.mean_velocity_ms,
+          meanVelocityMs: d.mean_concentric_velocity_ms,
           label: new Date(d.session_date).toLocaleDateString(),
         }));
-        setHistoricPoints(filterOutliers(pts));
+        setHistoricPoints(filterOutliers(pts.filter(p => Number.isFinite(p.loadKg) && p.loadKg > 0 && Number.isFinite(p.meanVelocityMs) && p.meanVelocityMs > 0)));
       }
-      setLoadingHistory(false);
     };
     fetch();
   }, [user, exerciseName]);
 
   // ── Build current-set points from reps
-  const currentSetPoints: LVDataPoint[] = currentReps
-    .filter((r) => r.isValid && r.meanConcentricVelocityMs > 0 && loadKg > 0)
+  const currentSetPoints = useMemo((): LVDataPoint[] => currentReps
+    .filter((r) => r.isValid && Number.isFinite(r.meanConcentricVelocityMs) && r.meanConcentricVelocityMs > 0 && Number.isFinite(loadKg) && loadKg > 0)
     .map((r) => ({
       loadKg,
       meanVelocityMs: r.meanConcentricVelocityMs,
       label: `Rep ${r.repNumber}`,
-    }));
+    })), [currentReps, loadKg]);
 
   // ── Merge historic + current-set points, deduplicate by load (use mean velocity per load)
-  const mergePoints = useCallback((): LVDataPoint[] => {
+  const allPoints = useMemo((): LVDataPoint[] => {
     const all = [...historicPoints];
     // Add current-set as the aggregate (mean velocity at current load)
     if (currentSetPoints.length > 0 && loadKg > 0) {
@@ -116,17 +113,16 @@ export default function LVProfilePanel({
     return all;
   }, [historicPoints, currentSetPoints, loadKg, language]);
 
-  const allPoints = mergePoints();
 
   // ── Regression + 1RM
-  const mvt = mvtOverride ?? getMVT(exerciseName);
-  const reg: LVRegressionResult = linearRegression(allPoints);
-  const est: LV1RMEstimate | null = allPoints.length >= MIN_POINTS
+  const mvt = mvtOverride ?? identifyExercise(exerciseName).mvt;
+  const reg = useMemo((): LVRegressionResult => linearRegression(allPoints), [allPoints]);
+  const est = useMemo((): LV1RMEstimate | null => allPoints.length >= MIN_POINTS
     ? estimate1RM(allPoints, loadKg, exerciseName)
-    : null;
+    : null, [allPoints, loadKg, exerciseName]);
 
   // Override MVT if user changed it
-  const estWithOverride: LV1RMEstimate | null = est && mvtOverride
+  const estWithOverride = useMemo((): LV1RMEstimate | null => est && mvtOverride
     ? (() => {
         if (!reg.valid || reg.a >= 0) return null;
         const rm = (mvtOverride - reg.b) / reg.a;
@@ -138,11 +134,15 @@ export default function LVProfilePanel({
           mvt: mvtOverride,
         };
       })()
-    : est;
+    : est, [est, mvtOverride, reg, loadKg]);
 
   // ── Propagate estimate to parent
+  const lastNotifiedValue = useRef<string>();
   useEffect(() => {
-    onEstimateChange?.(estWithOverride);
+    const value = JSON.stringify(estWithOverride);
+    if (!onEstimateChange || lastNotifiedValue.current === value) return;
+    lastNotifiedValue.current = value;
+    onEstimateChange(estWithOverride);
   }, [estWithOverride, onEstimateChange]);
 
   // ── Latest rep (for live feedback)

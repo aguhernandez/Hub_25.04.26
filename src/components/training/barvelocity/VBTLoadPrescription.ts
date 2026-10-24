@@ -15,6 +15,8 @@
 
 export type TrainingGoal = 'strength' | 'power' | 'hypertrophy';
 
+import { velocityLossPct as calculateVelocityLossPct } from './vbtCore';
+
 export interface GoalProfile {
   goal: TrainingGoal;
   labelEs: string;
@@ -93,14 +95,6 @@ export function roundToPlate(kg: number, increment = 2.5): number {
   return Math.round(kg / increment) * increment;
 }
 
-/** Calculate load adjustment step based on %1RM */
-function loadStep(currentLoad: number, estimated1RM: number): number {
-  const pct = (currentLoad / estimated1RM) * 100;
-  if (pct >= 85) return 2.5;
-  if (pct >= 70) return 5;
-  return 5;
-}
-
 /**
  * Recommend initial load for a goal and estimated 1RM.
  * Uses midpoint of %1RM range, then rounds to plate increment.
@@ -147,7 +141,7 @@ export function evaluateSet(
 ): SetFeedback {
   const profile = GOAL_PROFILES[goal];
   const { min: vMin, max: vMax } = profile.velocityZone;
-  const step = loadStep(currentLoadKg, estimated1RMkg);
+  const adjustedCurrentLoad = roundToPlate(Math.max(0, currentLoadKg * sessionModifier));
   const fatigue = fatigueStatus(velocityLossPct, goal);
 
   // ── Expected velocity midpoint
@@ -157,46 +151,47 @@ export function evaluateSet(
 
   let decision: LoadDecision;
   let adjustPct = 0;
-  let nextLoad = currentLoadKg;
+  let nextLoad = adjustedCurrentLoad;
   let reason = '';
 
   // Stop set takes priority
   if (fatigue === 'critical' || velocityLossPct >= profile.fatigueCutoffPct) {
     decision = 'stop_set';
-    nextLoad = currentLoadKg;
+    nextLoad = adjustedCurrentLoad;
     reason = 'velocity_loss_exceeded';
   } else if (actualMeanVelocity < vMin * 0.95) {
     // Too slow → decrease
     decision = 'decrease';
     adjustPct = actualMeanVelocity < vMin * 0.85 ? -5 : -2.5;
-    nextLoad = roundToPlate(currentLoadKg + (currentLoadKg * adjustPct) / 100);
+    nextLoad = roundToPlate(adjustedCurrentLoad + (adjustedCurrentLoad * adjustPct) / 100);
     reason = 'velocity_below_zone';
   } else if (actualMeanVelocity > vMax * 1.05) {
     // Too fast → increase
     decision = 'increase';
     adjustPct = relDev > 0.20 ? 5 : 2.5;
-    nextLoad = roundToPlate(currentLoadKg + (currentLoadKg * adjustPct) / 100);
+    nextLoad = roundToPlate(adjustedCurrentLoad + (adjustedCurrentLoad * adjustPct) / 100);
     reason = 'velocity_above_zone';
   } else {
     decision = 'maintain';
     adjustPct = 0;
-    nextLoad = currentLoadKg;
+    nextLoad = adjustedCurrentLoad;
     reason = 'velocity_in_zone';
   }
 
-  // Apply session modifier (if session modifier < 1 → athlete is underperforming globally)
-  nextLoad = roundToPlate(nextLoad * sessionModifier);
-
   // Clamp to safe range
-  nextLoad = Math.max(20, Math.min(nextLoad, estimated1RMkg * 1.05));
+  nextLoad = Math.max(0, Math.min(nextLoad, estimated1RMkg * 1.05));
+  adjustPct = adjustedCurrentLoad > 0 ? ((nextLoad - adjustedCurrentLoad) / adjustedCurrentLoad) * 100 : 0;
 
   // Estimate reps remaining at next load (based on velocity-load linear relationship)
   // Simple heuristic: more load → fewer reps within zone
   const nextPct = (nextLoad / estimated1RMkg) * 100;
-  const repsRemaining = Math.max(
-    profile.repRange.min,
-    Math.round(profile.repRange.max - ((nextPct - profile.pct1RMRange.min) / (profile.pct1RMRange.max - profile.pct1RMRange.min)) * (profile.repRange.max - profile.repRange.min))
+  const rawReps = Math.round(
+    profile.repRange.max - ((nextPct - profile.pct1RMRange.min) / (profile.pct1RMRange.max - profile.pct1RMRange.min)) * (profile.repRange.max - profile.repRange.min)
   );
+  const repsRemaining = Math.min(profile.repRange.max, Math.max(
+    profile.repRange.min,
+    rawReps,
+  ));
 
   return {
     decision,
@@ -246,9 +241,8 @@ export function repFeedback(
     return { action: 'ok', velocityLossPct: 0, fatigueStatus: 'fresh', stopSet: false, message: '' };
   }
 
-  const best = Math.max(...valid.map((r) => r.meanConcentricVelocityMs));
   const current = valid[valid.length - 1].meanConcentricVelocityMs;
-  const lossPct = best > 0 ? ((best - current) / best) * 100 : 0;
+  const lossPct = calculateVelocityLossPct(valid.map((r) => r.meanConcentricVelocityMs), 'best');
   const fatigue = fatigueStatus(lossPct, goal);
   const profile = GOAL_PROFILES[goal];
   const { min: vMin, max: vMax } = profile.velocityZone;

@@ -26,12 +26,13 @@ interface SessionRecord {
   exercise_name: string;
   load_kg: number;
   total_reps: number;
-  peak_velocity_ms: number;
+  peak_velocity_ms: number | null;
   mean_concentric_velocity_ms: number;
   velocity_loss_pct: number;
   estimated_power_w: number;
   fps: number;
   notes: string;
+  source: 'manual' | 'video' | null;
 }
 
 type DateRange = '7d' | '30d' | '90d' | 'all';
@@ -103,7 +104,7 @@ function TrendSparkline({
 function exportCSV(sessions: SessionRecord[], fileName: string) {
   const header = [
     'date', 'exercise', 'load_kg', 'total_reps',
-    'peak_velocity_ms', 'mean_concentric_velocity_ms',
+    'source', 'peak_velocity_ms', 'mean_concentric_velocity_ms',
     'velocity_loss_pct', 'estimated_power_w', 'fps', 'notes',
   ].join(',');
   const rows = sessions.map((s) => [
@@ -111,6 +112,7 @@ function exportCSV(sessions: SessionRecord[], fileName: string) {
     `"${s.exercise_name || ''}"`,
     s.load_kg ?? '',
     s.total_reps ?? '',
+    s.source ?? '',
     s.peak_velocity_ms?.toFixed(4) ?? '',
     s.mean_concentric_velocity_ms?.toFixed(4) ?? '',
     s.velocity_loss_pct?.toFixed(2) ?? '',
@@ -227,7 +229,7 @@ export default function BarVelocityHistory() {
   const byExercise = filterExercise === 'all' ? sessions : sessions.filter((s) => s.exercise_name === filterExercise);
   const filtered = applyDateFilter(byExercise);
 
-  const allPeaks = filtered.map((s) => s.peak_velocity_ms).filter(Boolean);
+  const allPeaks = filtered.map((s) => s.peak_velocity_ms).filter((v): v is number => v != null && Number.isFinite(v));
   const allMeans = filtered.map((s) => s.mean_concentric_velocity_ms).filter(Boolean);
   const allLoss = filtered.map((s) => s.velocity_loss_pct).filter((v) => v != null);
   const record = allPeaks.length > 0 ? Math.max(...allPeaks) : 0;
@@ -238,7 +240,7 @@ export default function BarVelocityHistory() {
     (a, b) => new Date(a.session_date).getTime() - new Date(b.session_date).getTime()
   );
   const meanTrend = chronological.map((s) => s.mean_concentric_velocity_ms || 0);
-  const peakTrend = chronological.map((s) => s.peak_velocity_ms || 0);
+  const peakTrend = chronological.map((s) => s.peak_velocity_ms).filter((v): v is number => v != null && Number.isFinite(v));
   const lossTrend = chronological.map((s) => s.velocity_loss_pct || 0);
 
   const exportFileName = `vbt_${filterExercise !== 'all' ? filterExercise.replace(/\s+/g, '_') + '_' : ''}${dateRange}`;
@@ -252,11 +254,11 @@ export default function BarVelocityHistory() {
     <div className="space-y-4 font-body">
       {/* ── Top stats */}
       <div className="grid grid-cols-3 gap-3">
-        <div className={`rounded-2xl p-3 text-center border ${isDark ? 'bg-primary/10 border-primary/20' : 'bg-amber-50 border-amber-200'}`}>
+        {allPeaks.length > 0 && (<div className={`rounded-2xl p-3 text-center border ${isDark ? 'bg-primary/10 border-primary/20' : 'bg-amber-50 border-amber-200'}`}>
           <Trophy className="w-4 h-4 text-primary mx-auto mb-1" />
           <div className="text-lg font-bold text-primary">{record.toFixed(2)}</div>
           <div className={`text-xs ${textSec}`}>{txt.record}</div>
-        </div>
+        </div>)}
         <div className={`rounded-2xl p-3 text-center border ${cardBg}`}>
           <Calendar className={`w-4 h-4 mx-auto mb-1 ${isDark ? 'text-gray-300' : 'text-gray-600'}`} />
           <div className={`text-lg font-bold ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>{filtered.length}</div>
@@ -364,7 +366,7 @@ export default function BarVelocityHistory() {
             </div>
 
             {/* Peak velocity trend */}
-            <div className="space-y-1">
+            {peakTrend.length > 0 && (<div className="space-y-1">
               <div className="flex items-center gap-1.5">
                 <Trophy className="w-3 h-3 text-emerald-400" />
                 <span className={`text-[10px] ${textSec}`}>{language === 'es' ? 'Vel. pico' : 'Peak vel.'}</span>
@@ -373,7 +375,7 @@ export default function BarVelocityHistory() {
               <div className="text-xs font-bold text-emerald-400">
                 {peakTrend[peakTrend.length - 1]?.toFixed(2)} m/s
               </div>
-            </div>
+            </div>)}
 
             {/* Velocity loss trend */}
             <div className="space-y-1">
@@ -406,7 +408,7 @@ export default function BarVelocityHistory() {
                       style={{
                         height: `${pct}%`,
                         minHeight: 3,
-                        background: zone.color,
+                        background: zone?.color ?? '#6b7280',
                         opacity: 0.8,
                       }}
                     />
@@ -427,7 +429,7 @@ export default function BarVelocityHistory() {
       <div className="space-y-2">
         {filtered.map((s) => {
           const zone = getVBTZone(s.mean_concentric_velocity_ms || 0);
-          const zoneLabel = language === 'es' ? zone.labelEs : zone.labelEn;
+          const zoneLabel = zone ? (language === 'es' ? zone.labelEs : zone.labelEn) : (language === 'es' ? 'Fuera de rango' : 'Out of range');
           const isExpanded = expanded === s.id;
           const lossColor = repFatigueColor(s.velocity_loss_pct || 0);
 
@@ -471,7 +473,7 @@ export default function BarVelocityHistory() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0 ml-2">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: zone.color }} />
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: zone?.color ?? '#6b7280' }} />
                   {isExpanded ? (
                     <ChevronUp className={`w-4 h-4 ${textSec}`} />
                   ) : (
@@ -485,10 +487,10 @@ export default function BarVelocityHistory() {
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                     <div className="flex items-center gap-2">
                       <Trophy className="w-3.5 h-3.5 text-primary shrink-0" />
-                      <div>
+                      {s.peak_velocity_ms != null && (<div>
                         <div className={`text-[10px] ${textSec}`}>{txt.peakVel}</div>
-                        <div className="text-sm font-semibold text-primary">{(s.peak_velocity_ms || 0).toFixed(2)} m/s</div>
-                      </div>
+                        <div className="text-sm font-semibold text-primary">{s.peak_velocity_ms.toFixed(2)} m/s</div>
+                      </div>)}
                     </div>
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="w-3.5 h-3.5 shrink-0" style={{ color: lossColor }} />
@@ -509,10 +511,10 @@ export default function BarVelocityHistory() {
                       </div>
                     )}
                     <div className="flex items-center gap-2">
-                      <Activity className="w-3.5 h-3.5 shrink-0" style={{ color: zone.color }} />
+                      <Activity className="w-3.5 h-3.5 shrink-0" style={{ color: zone?.color ?? '#6b7280' }} />
                       <div>
                         <div className={`text-[10px] ${textSec}`}>{txt.zone}</div>
-                        <div className="text-sm font-medium" style={{ color: zone.color }}>{zoneLabel}</div>
+                        <div className="text-sm font-medium" style={{ color: zone?.color ?? '#6b7280' }}>{zoneLabel}</div>
                       </div>
                     </div>
                     {s.fps > 0 && (

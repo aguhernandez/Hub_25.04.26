@@ -365,10 +365,10 @@ export function analyzeTrack(samples: TrackSample[], opt: VbtOptions): VbtAnalys
  * Pérdida de velocidad dentro de la serie, respecto a la repetición MÁS RÁPIDA
  * (definición habitual en la literatura de VBT). Devuelve % (0–100).
  */
-export function velocityLossPct(mcvs: number[], ref: 'best' | 'first' = 'best'): number {
+export function velocityLossPct(mcvs: number[], ref: 'best' = 'best'): number {
   const v = mcvs.filter((x) => Number.isFinite(x) && x > 0);
   if (v.length < 2) return 0;
-  const base = ref === 'best' ? Math.max(...v) : v[0];
+  const base = Math.max(...v);
   const last = v[v.length - 1];
   return Math.max(0, ((base - last) / base) * 100);
 }
@@ -383,7 +383,6 @@ export function summarizeSet(reps: VbtRep[]) {
     meanMcv: mcvs.length ? mcvs.reduce((s, x) => s + x, 0) / mcvs.length : 0,
     lastMcv: mcvs.length ? mcvs[mcvs.length - 1] : 0,
     lossBestPct: velocityLossPct(mcvs, 'best'),
-    lossFirstPct: velocityLossPct(mcvs, 'first'),
   };
 }
 

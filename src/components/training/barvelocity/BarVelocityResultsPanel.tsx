@@ -2,7 +2,8 @@ import { Trophy, Zap, Activity, AlertTriangle, CheckCircle, ChevronDown, Chevron
 import { useState } from 'react';
 import { useLanguage } from '../../../contexts/LanguageContext';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { BarRep, calcVelocityLoss, getVBTZone, VBT_ZONES } from './BarVelocityTypes';
+import { BarRep, getVBTZone, VBT_ZONES } from './BarVelocityTypes';
+import { velocityLossPct } from './vbtCore';
 import BarVelocityChart from './BarVelocityChart';
 import VBTVelocityLossGraph, { repFatigueColor, repFatigueLabel, FATIGUE_THRESHOLDS } from './VBTVelocityLossGraph';
 
@@ -39,7 +40,7 @@ export default function BarVelocityResultsPanel({
     meanVel: language === 'es' ? 'Vel. media concentrica' : 'Mean concentric vel.',
     avgPower: language === 'es' ? 'Potencia promedio' : 'Average power',
     vbtZone: language === 'es' ? 'Zona VBT' : 'VBT Zone',
-    velocityLoss: language === 'es' ? 'perdida de velocidad' : 'velocity loss',
+    velocityLoss: language === 'es' ? 'perdida de velocidad (vs. mejor repetición)' : 'velocity loss (vs. best rep)',
     minLoss: language === 'es' ? 'Perdida minima. Serie de alta calidad neuromuscular.' : 'Minimal loss. High-quality neuromuscular set.',
     modLoss: language === 'es' ? 'Perdida moderada. Considera terminar la serie aqui.' : 'Moderate loss. Consider ending the set here.',
     sigLoss: language === 'es' ? 'Perdida significativa. Alta fatiga acumulada.' : 'Significant loss. High accumulated fatigue.',
@@ -49,11 +50,11 @@ export default function BarVelocityResultsPanel({
     concentric: language === 'es' ? 'Concentrica' : 'Concentric',
     eccentric: language === 'es' ? 'Excentrica' : 'Eccentric',
     displacement: language === 'es' ? 'Desplaz.' : 'Displ.',
-    estimatedPower: language === 'es' ? 'Potencia estimada:' : 'Estimated power:',
+    estimatedPower: language === 'es' ? 'Potencia de la carga (m·g·v):' : 'Load power (m·g·v):',
     vbtRef: language === 'es' ? 'Zonas VBT de referencia' : 'VBT reference zones',
     formula: language === 'es'
-      ? 'Potencia: P = F × v = (masa × 9.81) × vel. media concentrica'
-      : 'Power: P = F × v = (mass × 9.81) × mean concentric vel.',
+      ? 'Potencia de la carga: P = m·g·v'
+      : 'Load power: P = m·g·v',
     validReps: language === 'es' ? 'Reps validas' : 'Valid reps',
     bestRep: language === 'es' ? 'Mejor rep' : 'Best rep',
     totalLoss: language === 'es' ? 'Perdida total' : 'Total loss',
@@ -75,9 +76,9 @@ export default function BarVelocityResultsPanel({
   );
   const bestVelocity = bestRep.meanConcentricVelocityMs;
   const meanV = validReps.reduce((s, r) => s + r.meanConcentricVelocityMs, 0) / validReps.length;
-  const velocityLoss = calcVelocityLoss(validReps);
+  const velocityLoss = velocityLossPct(validReps.map((rep) => rep.meanConcentricVelocityMs), 'best');
   const bestZone = getVBTZone(bestRep.meanConcentricVelocityMs);
-  const zoneLabel = language === 'es' ? bestZone.labelEs : bestZone.labelEn;
+  const zoneLabel = bestZone ? (language === 'es' ? bestZone.labelEs : bestZone.labelEn) : (language === 'es' ? 'Fuera de rango' : 'Out of range');
   const avgPowerReps = validReps.filter((r) => r.estimatedPowerW);
   const avgPower = avgPowerReps.length > 0
     ? avgPowerReps.reduce((s, r) => s + (r.estimatedPowerW || 0), 0) / avgPowerReps.length
@@ -88,7 +89,7 @@ export default function BarVelocityResultsPanel({
   const lossColor = velocityLoss < 10 ? 'text-green-400' : velocityLoss < 20 ? 'text-yellow-400' : 'text-red-400';
   const lossBg = velocityLoss < 10 ? 'bg-green-500/10 border-green-500/20' : velocityLoss < 20 ? 'bg-yellow-500/10 border-yellow-500/20' : 'bg-red-500/10 border-red-500/20';
 
-  const allSamples = validReps.flatMap((r) => r.velocitySamples);
+  const allSamples = validReps.flatMap((r) => r.velocitySamples ?? []);
 
   // Tag fatigued reps
   const repsWithFatigue = validReps.map((rep) => {
@@ -112,14 +113,14 @@ export default function BarVelocityResultsPanel({
 
       {/* ── Summary grid */}
       <div className="grid grid-cols-2 gap-3">
-        <div className={`rounded-xl p-4 border ${isDark ? 'bg-gradient-to-br from-primary/15 to-primary/5 border-primary/20' : 'bg-amber-50 border-amber-200'}`}>
+        {bestRep.peakVelocityMs != null && (<div className={`rounded-xl p-4 border ${isDark ? 'bg-gradient-to-br from-primary/15 to-primary/5 border-primary/20' : 'bg-amber-50 border-amber-200'}`}>
           <div className="flex items-center gap-2 mb-1">
             <Trophy className="w-4 h-4 text-primary" />
             <span className={`text-xs ${textSec}`}>{txt.peakVel}</span>
           </div>
           <div className="text-2xl font-bold text-primary">{bestRep.peakVelocityMs.toFixed(2)}</div>
           <div className={`text-xs ${textSec}`}>m/s</div>
-        </div>
+        </div>)}
 
         <div className={`rounded-xl p-4 border ${isDark ? 'bg-gray-800/40 border-gray-700/30' : 'bg-gray-50 border-gray-200'}`}>
           <div className="flex items-center gap-2 mb-1">
@@ -143,10 +144,10 @@ export default function BarVelocityResultsPanel({
 
         <div
           className="rounded-xl p-4 border"
-          style={{ background: `${bestZone.color}12`, borderColor: `${bestZone.color}30` }}
+          style={{ background: `${bestZone?.color ?? '#6b7280'}12`, borderColor: `${bestZone?.color ?? '#6b7280'}30` }}
         >
           <div className="flex items-center gap-2 mb-1">
-            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: bestZone.color }} />
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: bestZone?.color ?? '#6b7280' }} />
             <span className={`text-xs ${textSec}`}>{txt.vbtZone}</span>
           </div>
           <div className={`text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{zoneLabel}</div>
@@ -270,14 +271,14 @@ export default function BarVelocityResultsPanel({
               <span className={textSec}>{language === 'es' ? 'Media' : 'Mean'}</span>
               <div className="font-bold text-primary">{hoveredRep.meanConcentricVelocityMs.toFixed(3)} m/s</div>
             </div>
-            <div>
+            {hoveredRep.peakVelocityMs != null && (<div>
               <span className={textSec}>{language === 'es' ? 'Pico' : 'Peak'}</span>
               <div className={`font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{hoveredRep.peakVelocityMs.toFixed(3)} m/s</div>
-            </div>
-            <div>
+            </div>)}
+            {hoveredRep.displacementMm != null && (<div>
               <span className={textSec}>{language === 'es' ? 'Desplaz.' : 'Displ.'}</span>
               <div className={`font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{hoveredRep.displacementMm.toFixed(0)} mm</div>
-            </div>
+            </div>)}
           </div>
         </div>
       )}
@@ -297,7 +298,7 @@ export default function BarVelocityResultsPanel({
         <h4 className={`text-xs font-medium uppercase tracking-wide ${textSec}`}>{txt.repDetail}</h4>
         {repsWithFatigue.map((rep) => {
           const zone = getVBTZone(rep.meanConcentricVelocityMs);
-          const zoneL = language === 'es' ? zone.labelEs : zone.labelEn;
+          const zoneL = zone ? (language === 'es' ? zone.labelEs : zone.labelEn) : (language === 'es' ? 'Fuera de rango' : 'Out of range');
           const isExpanded = expandedRep === rep.repNumber;
           const fatigueColor = repFatigueColor(rep.lossPct);
           const isBest = rep.repNumber === bestRep.repNumber;
@@ -354,18 +355,18 @@ export default function BarVelocityResultsPanel({
               {isExpanded && (
                 <div className={`px-3 pb-3 border-t pt-2 space-y-2 ${isDark ? 'border-gray-700/30' : 'border-gray-200'}`}>
                   <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div className={`rounded-lg p-2 ${isDark ? 'bg-gray-900/50' : 'bg-white'}`}>
+                    {rep.concentricDurationMs != null && (<div className={`rounded-lg p-2 ${isDark ? 'bg-gray-900/50' : 'bg-white'}`}>
                       <div className={`mb-0.5 ${textSec}`}>{txt.concentric}</div>
                       <div className={`font-semibold ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>{(rep.concentricDurationMs / 1000).toFixed(2)}s</div>
-                    </div>
-                    <div className={`rounded-lg p-2 ${isDark ? 'bg-gray-900/50' : 'bg-white'}`}>
+                    </div>)}
+                    {rep.eccentricDurationMs != null && (<div className={`rounded-lg p-2 ${isDark ? 'bg-gray-900/50' : 'bg-white'}`}>
                       <div className={`mb-0.5 ${textSec}`}>{txt.eccentric}</div>
                       <div className={`font-semibold ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>{(rep.eccentricDurationMs / 1000).toFixed(2)}s</div>
-                    </div>
-                    <div className={`rounded-lg p-2 ${isDark ? 'bg-gray-900/50' : 'bg-white'}`}>
+                    </div>)}
+                    {rep.displacementMm != null && (<div className={`rounded-lg p-2 ${isDark ? 'bg-gray-900/50' : 'bg-white'}`}>
                       <div className={`mb-0.5 ${textSec}`}>{txt.displacement}</div>
                       <div className={`font-semibold ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>{rep.displacementMm.toFixed(0)} mm</div>
-                    </div>
+                    </div>)}
                   </div>
                   {rep.estimatedPowerW && rep.estimatedPowerW > 0 && (
                     <div className="flex items-center gap-2 text-xs text-orange-400">
@@ -373,10 +374,10 @@ export default function BarVelocityResultsPanel({
                       {txt.estimatedPower} <span className="font-bold">{rep.estimatedPowerW.toFixed(0)} W</span>
                     </div>
                   )}
-                  {rep.velocitySamples.length > 3 && (
+                  {rep.velocitySamples && rep.velocitySamples.length > 3 && (
                     <BarVelocityChart samples={rep.velocitySamples} height={80} />
                   )}
-                  <div className="text-xs" style={{ color: zone.color }}>{zoneL}</div>
+                  <div className="text-xs" style={{ color: zone?.color ?? '#6b7280' }}>{zoneL}</div>
                 </div>
               )}
             </div>

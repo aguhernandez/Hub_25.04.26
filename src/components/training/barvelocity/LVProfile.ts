@@ -1,3 +1,5 @@
+import { fitLoadVelocity, estimate1RM as estimateCore } from './vbtCore';
+
 /**
  * Load-Velocity Profile engine.
  * All calculations are local — no backend needed.
@@ -46,17 +48,32 @@ export const MVT_DEFAULT = 0.20;
 export const MIN_POINTS  = 3;
 export const MAX_CV      = 0.25; // max coefficient of variation to keep a point (outlier guard)
 
+export type ExerciseId = 'squat' | 'bench_press' | 'overhead_press' | 'deadlift' | 'romanian_deadlift' | 'hip_thrust' | 'other';
+export interface ExerciseIdentity { exerciseId: ExerciseId; variant: string; mvt: number; }
+
+const EXERCISES: Array<{ id: ExerciseId; mvt: number; names: string[] }> = [
+  { id: 'romanian_deadlift', mvt: 0.14, names: ['romanian deadlift', 'peso muerto rumano', 'rdl'] },
+  { id: 'squat', mvt: 0.30, names: ['back squat', 'front squat', 'sentadilla', 'squat'] },
+  { id: 'bench_press', mvt: 0.17, names: ['bench press', 'press banca', 'bench'] },
+  { id: 'overhead_press', mvt: 0.15, names: ['overhead press', 'press militar', 'ohp'] },
+  { id: 'deadlift', mvt: 0.12, names: ['deadlift', 'peso muerto'] },
+  { id: 'hip_thrust', mvt: 0.25, names: ['hip thrust', 'empuje de cadera'] },
+];
+
+export function identifyExercise(exerciseName: string): ExerciseIdentity {
+  const name = exerciseName.toLocaleLowerCase().trim();
+  const found = EXERCISES.find((exercise) => exercise.names.some((alias) => name === alias || name.includes(alias)));
+  return found ? { exerciseId: found.id, variant: exerciseName.trim(), mvt: found.mvt } : { exerciseId: 'other', variant: exerciseName.trim(), mvt: MVT_DEFAULT };
+}
+
 /** Detect the MVT for an exercise name (case-insensitive partial match). */
 export function getMVT(exerciseName: string): number {
-  const lower = exerciseName.toLowerCase().trim();
-  for (const key of Object.keys(MVT_PRESETS)) {
-    if (lower.includes(key)) return MVT_PRESETS[key];
-  }
-  return MVT_DEFAULT;
+  return identifyExercise(exerciseName).mvt;
 }
 
 /** Simple ordinary-least-squares linear regression on (load, velocity) pairs. */
 export function linearRegression(points: LVDataPoint[]): LVRegressionResult {
+  points = points.filter(p => Number.isFinite(p.loadKg) && p.loadKg > 0 && Number.isFinite(p.meanVelocityMs) && p.meanVelocityMs > 0);
   const n = points.length;
   if (n < 2) return { a: 0, b: 0, r2: 0, valid: false };
 
@@ -107,6 +124,19 @@ export function estimate1RM(
     mvt,
     regression: reg,
   };
+}
+
+export interface LVDecisionProfile {
+  fit: import('./vbtCore').LvFit | null;
+  estimate: ReturnType<typeof estimateCore>;
+  reason?: string;
+}
+
+export function buildDecisionProfile(points: LVDataPoint[], exerciseName: string): LVDecisionProfile {
+  const finite = points.filter((p) => Number.isFinite(p.loadKg) && p.loadKg > 0 && Number.isFinite(p.meanVelocityMs) && p.meanVelocityMs > 0);
+  const result = fitLoadVelocity(finite.map((p) => ({ loadKg: p.loadKg, mcvMs: p.meanVelocityMs })));
+  if (!result.fit) return { fit: null, estimate: null, reason: result.reason ?? 'Se requieren al menos 3 cargas distintas, rango ≥20% y pendiente negativa.' };
+  return { fit: result.fit, estimate: estimateCore(result.fit, identifyExercise(exerciseName).mvt) };
 }
 
 /**

@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { Target, CheckCircle, AlertCircle, Move } from 'lucide-react';
-import { CalibrationData, DISC_DIAMETER_MM } from './BarVelocityTypes';
+import { CalibrationData } from './BarVelocityTypes';
+import { pxPerMmFromPlate } from './plateTracker';
 import { useLanguage } from '../../../contexts/LanguageContext';
 
 interface BarCalibrationProps {
@@ -37,7 +38,7 @@ export default function BarCalibration({ videoRef, onCalibrated }: BarCalibratio
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    const update = () => setVideoHeight(video.clientHeight);
+    const update = () => setVideoHeight(video.videoHeight || 300);
     update();
     video.addEventListener('resize', update);
     return () => video.removeEventListener('resize', update);
@@ -48,8 +49,8 @@ export default function BarCalibration({ videoRef, onCalibrated }: BarCalibratio
     const video = videoRef.current;
     if (!canvas || !video) return;
     const ctx = canvas.getContext('2d')!;
-    canvas.width = video.clientWidth;
-    canvas.height = video.clientHeight;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -128,13 +129,19 @@ export default function BarCalibration({ videoRef, onCalibrated }: BarCalibratio
     const topY = (barTop / 100) * canvas.height;
     const botY = (barBottom / 100) * canvas.height;
     const diameterPx = botY - topY;
-    const pixelsPerMm = diameterPx / DISC_DIAMETER_MM;
+    const radiusPx = diameterPx / 2;
+    const pixelsPerMm = pxPerMmFromPlate(radiusPx);
 
     onCalibrated({
       barTopY: topY,
       barBottomY: botY,
       barDiameterPx: diameterPx,
       pixelsPerMm,
+      centerX: canvas.width / 2,
+      centerY: (topY + botY) / 2,
+      radiusPx,
+      processingWidth: canvas.width,
+      processingHeight: canvas.height,
     });
     setCalibrated(true);
   };
@@ -189,7 +196,7 @@ export default function BarCalibration({ videoRef, onCalibrated }: BarCalibratio
           <div>
             <p className="text-sm font-semibold text-green-400">{txt.confirmed}</p>
             <p className="text-xs text-green-400/70">
-              {txt.scale}: {((barBottom - barTop) / 100 * 300 / DISC_DIAMETER_MM).toFixed(3)} px/mm
+              {txt.scale}: {((barBottom - barTop) / 100 * videoHeight / 450).toFixed(3)} px/mm
             </p>
           </div>
         </div>

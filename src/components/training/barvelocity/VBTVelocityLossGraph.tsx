@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useLanguage } from '../../../contexts/LanguageContext';
-import { BarRep, getVBTZone } from './BarVelocityTypes';
+import { BarRep } from './BarVelocityTypes';
 
 interface VBTVelocityLossGraphProps {
   reps: BarRep[];
@@ -334,10 +334,10 @@ export default function VBTVelocityLossGraph({
               <span className="text-gray-400">{language === 'es' ? 'Media' : 'Mean'}</span>
               <span className="font-semibold text-white">{tooltip.rep.meanConcentricVelocityMs.toFixed(3)} m/s</span>
             </div>
-            <div className="flex justify-between gap-3">
+            {tooltip.rep.peakVelocityMs != null && (<div className="flex justify-between gap-3">
               <span className="text-gray-400">{language === 'es' ? 'Pico' : 'Peak'}</span>
               <span className="font-semibold text-white">{tooltip.rep.peakVelocityMs.toFixed(3)} m/s</span>
-            </div>
+            </div>)}
             {tooltip.lossPct > 0 && (
               <div className="flex justify-between gap-3">
                 <span className="text-gray-400">{language === 'es' ? 'Perdida' : 'Loss'}</span>

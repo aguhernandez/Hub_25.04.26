@@ -4,21 +4,26 @@ export interface VelocitySample {
   positionPx: number;
 }
 
+export type BarSource = 'manual' | 'video';
+
 export interface BarRep {
+  source: BarSource;
   repNumber: number;
   meanConcentricVelocityMs: number;
-  peakVelocityMs: number;
-  meanEccentricVelocityMs: number;
-  concentricDurationMs: number;
-  eccentricDurationMs: number;
-  displacementMm: number;
-  estimatedPowerW?: number;
-  velocitySamples: VelocitySample[];
-  timestampsMs: number[];
+  peakVelocityMs: number | null;
+  meanEccentricVelocityMs: number | null;
+  concentricDurationMs: number | null;
+  eccentricDurationMs: number | null;
+  displacementMm: number | null;
+  estimatedPowerW?: number | null;
+  velocitySamples: VelocitySample[] | null;
+  timestampsMs: number[] | null;
   isValid: boolean;
 }
 
 export interface BarSession {
+  source: BarSource;
+  clientSessionId: string;
   id?: string;
   sessionDate: string;
   exerciseName: string;
@@ -27,7 +32,7 @@ export interface BarSession {
   peakVelocityMs?: number;
   meanConcentricVelocityMs?: number;
   velocityLossPct?: number;
-  estimatedPowerW?: number;
+  estimatedPowerW?: number | null;
   fps?: number;
   notes?: string;
 }
@@ -37,6 +42,11 @@ export interface CalibrationData {
   barBottomY: number;
   barDiameterPx: number;
   pixelsPerMm: number;
+  centerX?: number;
+  centerY?: number;
+  radiusPx?: number;
+  processingWidth?: number;
+  processingHeight?: number;
 }
 
 export type TrackerPhase =
@@ -68,14 +78,6 @@ export function calcEstimatedPower(meanVelocityMs: number, loadKg: number): numb
   return force * meanVelocityMs;
 }
 
-export function calcVelocityLoss(reps: BarRep[]): number {
-  const valid = reps.filter((r) => r.isValid && r.meanConcentricVelocityMs > 0);
-  if (valid.length < 2) return 0;
-  const first = valid[0].meanConcentricVelocityMs;
-  const last = valid[valid.length - 1].meanConcentricVelocityMs;
-  return ((first - last) / first) * 100;
-}
-
 export const VBT_ZONES = [
   { labelEs: 'Fuerza maxima', labelEn: 'Max strength', min: 0, max: 0.35, color: '#ef4444' },
   { labelEs: 'Fuerza-velocidad', labelEn: 'Strength-speed', min: 0.35, max: 0.6, color: '#f97316' },
@@ -85,7 +87,7 @@ export const VBT_ZONES = [
 ];
 
 export function getVBTZone(velocity: number) {
-  return VBT_ZONES.find((z) => velocity >= z.min && velocity < z.max) || VBT_ZONES[0];
+  return VBT_ZONES.find((z) => velocity >= z.min && velocity < z.max) ?? null;
 }
 
 export const DISC_DIAMETER_MM = 450;

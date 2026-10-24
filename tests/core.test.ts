@@ -1,5 +1,5 @@
-import { analyzeTrack, velocityLossPct, fitLoadVelocity, estimate1RM, summarizeSet } from './vbtCore.ts';
-import type { TrackSample } from './vbtCore.ts';
+import { analyzeTrack, velocityLossPct, fitLoadVelocity, estimate1RM, summarizeSet } from '../src/components/training/barvelocity/vbtCore.ts';
+import type { TrackSample } from '../src/components/training/barvelocity/vbtCore.ts';
 
 // RNG determinista + gauss
 function rng(seed: number) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
@@ -126,7 +126,6 @@ prof = parab;
 
 // ---- 3) Pérdida de velocidad y LV ----
 check('pérdida 0,60→0,80→0,60 = 25 % (ref. mejor)', Math.abs(velocityLossPct([0.6, 0.8, 0.6]) - 25) < 1e-9);
-check('mismo caso, ref. primera = 0 %', velocityLossPct([0.6, 0.8, 0.6], 'first') === 0);
 {
   const pts = [{ loadKg: 60, mcvMs: 0.95 }, { loadKg: 80, mcvMs: 0.72 }, { loadKg: 100, mcvMs: 0.50 }, { loadKg: 110, mcvMs: 0.39 }];
   const { fit, warnings } = fitLoadVelocity(pts);

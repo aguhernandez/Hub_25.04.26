@@ -1,6 +1,6 @@
-import { PlateTracker, pxPerMmFromPlate } from './plateTracker.ts';
-import { analyzeTrack } from './vbtCore.ts';
-import type { TrackSample } from './vbtCore.ts';
+import { PlateTracker, pxPerMmFromPlate } from '../src/components/training/barvelocity/plateTracker.ts';
+import { analyzeTrack } from '../src/components/training/barvelocity/vbtCore.ts';
+import type { TrackSample } from '../src/components/training/barvelocity/vbtCore.ts';
 
 function rng(seed: number) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
 function gauss(r: () => number) { return Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.cos(2 * Math.PI * r()); }
