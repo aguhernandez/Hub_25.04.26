@@ -40,8 +40,9 @@ verify_jwt = false
 [functions.hub-data-proxy]
 verify_jwt = false
 
+# Authentication is checked in the handler; Performance satellite JWTs are read-only.
 [functions.open-wearables]
-verify_jwt = true
+verify_jwt = false
 
 [functions.push-notification-trigger]
 verify_jwt = false
@@ -56,4 +57,8 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.satellite-login-widget]
+verify_jwt = false
+
+# Performance verifies Hub session signatures and planner tokens in the handler.
+[functions.performance-hub-bridge]
 verify_jwt = false

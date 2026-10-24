@@ -1,3 +1,4 @@
+import { performanceReadActor } from '../_shared/performance-read-auth.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import {
   buildMatchDecisions,
@@ -17,7 +18,7 @@ const CONSENT_VERSION = '2026-10-10-v1';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey, X-Planner-Token',
 };
 
 function response(body: unknown, status = 200) {
@@ -538,12 +539,13 @@ Deno.serve(async (req) => {
     const service = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const userClient = createClient(url, anon, { global: { headers: { Authorization: `Bearer ${token}` } } });
     const { data: authData, error: authError } = await userClient.auth.getUser(token);
-    if (authError || !authData.user) return response({ error: 'Invalid session' }, 401);
-    const admin = createClient(url, service);
-    const { data: profile } = await admin.from('profiles').select('id, email, full_name, role, timezone, assigned_trainer_id').eq('id', authData.user.id).maybeSingle();
-    if (!profile) return response({ error: 'Profile not found' }, 403);
     const body = await req.json();
     const action = body.action as string;
+    const admin = createClient(url, service);
+    const userId = !authError && authData.user ? authData.user.id : await performanceReadActor(req, action, admin);
+    if (!userId) return response({ error: 'Invalid session' }, 401);
+    const { data: profile } = await admin.from('profiles').select('id, email, full_name, role, timezone, assigned_trainer_id').eq('id', userId).maybeSingle();
+    if (!profile) return response({ error: 'Profile not found' }, 403);
     const requireAdmin = () => { if (profile.role !== 'admin') throw Object.assign(new Error('Admin access required'), { status: 403 }); };
     const getLink = async (userId = profile.id) => {
       const { data, error } = await admin.from('wearable_links').select('*').eq('asciende_user_id', userId).maybeSingle();
