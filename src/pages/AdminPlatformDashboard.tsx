@@ -1,413 +1,78 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Activity, AlertTriangle, Clock3, Database, Globe2, Link2, RefreshCw, ShieldAlert, Users } from 'lucide-react';
 import AdminLayout from '../components/AdminLayout';
-import {
-  Users,
-  TrendingUp,
-  DollarSign,
-  Globe,
-  Dumbbell,
-  Apple,
-  Package,
-  Briefcase,
-  Heart,
-  Activity,
-  UserPlus,
-  Award,
-  BarChart3
-} from 'lucide-react';
+import RoleGuard from '../components/RoleGuard';
+import { useLanguage } from '../contexts/LanguageContext';
+import { supabase } from '../lib/supabase';
 
-interface PlatformStats {
-  total_users: number;
-  athletes: number;
-  trainers: number;
-  admins: number;
-  new_users_this_month: number;
-  total_workouts: number;
-  total_programs: number;
-  total_exercises: number;
-  total_foods: number;
-  active_brands: number;
-  active_projects: number;
-  total_revenue: number;
-}
+interface ProfileRow { id: string; role: string; created_at: string; is_active: boolean | null; assigned_trainer_id: string | null; assigned_nutritionist_id: string | null; membership_plan: string | null; membership_status: string | null; membership_end_date: string | null; country: string | null; }
+interface PaymentRow { amount: number | null; currency: string | null; status: string | null; created_at: string; }
+interface AccessRow { user_id: string; status: string | null; end_date: string | null; membership?: { slug?: string | null; name?: string | null } | null; }
+interface ServiceRow { payment_status: string | null; status: string | null; expires_at: string | null; }
+interface ActivityRow { user_id: string; start_time: string | null; source: string | null; }
+interface TeamRow { athlete_id: string; teams?: { coach_id: string } | { coach_id: string }[] | null; }
+interface WearableState { connected: number; errors: number; stale: number; latestSync: string | null; available: boolean; }
+interface DashboardData { profiles: ProfileRow[]; payments: PaymentRow[]; access: AccessRow[]; services: ServiceRow[]; activities: ActivityRow[]; teams: TeamRow[]; webhookErrors: number | null; wearable: WearableState; errors: string[]; }
 
-interface RecentActivity {
-  id: string;
-  type: string;
-  message: string;
-  created_at: string;
-  icon: string;
-}
+const asRows = <T,>(value: unknown): T[] => Array.isArray(value) ? value as T[] : [];
+const day = (offset: number) => { const d = new Date(); d.setDate(d.getDate() + offset); return d; };
+const iso = (d: Date) => d.toISOString();
+const monthStart = () => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return iso(d); };
+const isPro = (p: ProfileRow, access: AccessRow[]) => p.membership_plan?.toLowerCase().includes('pro') || access.some((x) => x.user_id === p.id && (x.membership?.slug?.toLowerCase().includes('pro') || x.membership?.name?.toLowerCase().includes('pro')) && x.status === 'active');
 
-interface GeographicData {
-  country: string;
-  count: number;
-}
-
-export default function AdminPlatformDashboard() {
-  const [stats, setStats] = useState<PlatformStats>({
-    total_users: 0,
-    athletes: 0,
-    trainers: 0,
-    admins: 0,
-    new_users_this_month: 0,
-    total_workouts: 0,
-    total_programs: 0,
-    total_exercises: 0,
-    total_foods: 0,
-    active_brands: 0,
-    active_projects: 0,
-    total_revenue: 0
-  });
-
-  const [geoData, setGeoData] = useState<GeographicData[]>([]);
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  const loadDashboardData = async () => {
+function AdminPlatformDashboardContent() {
+  const { language } = useLanguage(); const es = language === 'es';
+  const [data, setData] = useState<DashboardData | null>(null); const [loading, setLoading] = useState(true);
+  const load = useCallback(async () => {
     setLoading(true);
-
-    try {
-      const { count: totalUsers } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true });
-
-      const { count: athletes } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('role', 'athlete');
-
-      const { count: trainers } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('role', 'trainer');
-
-      const { count: admins } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('role', 'admin');
-
-      const firstDayOfMonth = new Date();
-      firstDayOfMonth.setDate(1);
-      firstDayOfMonth.setHours(0, 0, 0, 0);
-
-      const { count: newUsers } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', firstDayOfMonth.toISOString());
-
-      const { count: totalWorkouts } = await supabase
-        .from('workouts')
-        .select('*', { count: 'exact', head: true });
-
-      const { count: totalPrograms } = await supabase
-        .from('training_programs')
-        .select('*', { count: 'exact', head: true });
-
-      const { count: totalExercises } = await supabase
-        .from('exercises')
-        .select('*', { count: 'exact', head: true });
-
-      const { count: totalFoods } = await supabase
-        .from('foods')
-        .select('*', { count: 'exact', head: true });
-
-      // Brands and support projects features coming soon
-      const activeBrands = 0;
-      const activeProjects = 0;
-
-      const totalRevenue = 12450;
-
-      setStats({
-        total_users: totalUsers || 0,
-        athletes: athletes || 0,
-        trainers: trainers || 0,
-        admins: admins || 0,
-        new_users_this_month: newUsers || 0,
-        total_workouts: totalWorkouts || 0,
-        total_programs: totalPrograms || 0,
-        total_exercises: totalExercises || 0,
-        total_foods: totalFoods || 0,
-        active_brands: activeBrands,
-        active_projects: activeProjects,
-        total_revenue: totalRevenue
+    const profilesResult = await supabase.from('profiles').select('id,role,created_at,is_active,assigned_trainer_id,assigned_nutritionist_id,membership_plan,membership_status,membership_end_date,country');
+    const profiles = asRows<ProfileRow>(profilesResult.data);
+    const ids = profiles.map((p) => p.id);
+    const [paymentsResult, accessResult, servicesResult, activitiesResult, teamsResult, webhookResult, wearableResult] = await Promise.all([
+      supabase.from('payments').select('amount,currency,status,created_at').gte('created_at', monthStart()).order('created_at', { ascending: false }),
+      supabase.from('membership_access').select('user_id,status,end_date,membership:memberships(slug,name)').in('user_id', ids),
+      supabase.from('service_enrollments').select('payment_status,status,expires_at').in('athlete_id', ids),
+      supabase.from('external_activities').select('user_id,start_time,source').in('user_id', ids).gte('start_time', iso(day(-28))).is('deleted_at', null),
+      supabase.from('team_members').select('athlete_id,teams!inner(coach_id)'),
+      supabase.from('stripe_webhook_logs').select('id').gte('created_at', iso(day(-30))).or('processed.eq.false,error_message.not.is.null'),
+      supabase.functions.invoke('open-wearables', { body: { action: 'admin-overview' } }),
+    ]);
+    const errors: string[] = [];
+    [profilesResult, paymentsResult, accessResult, servicesResult, activitiesResult, teamsResult, webhookResult].forEach((result, index) => { if (result.error) errors.push(['profiles', 'payments', 'membership', 'services', 'activities', 'teams', 'webhooks'][index]); });
+    const wearable = { connected: 0, errors: 0, stale: 0, latestSync: null, available: !wearableResult.error } as WearableState;
+    const wearableUsers = asRows<Record<string, unknown>>((wearableResult.data as { users?: unknown[] } | null)?.users);
+    wearableUsers.forEach((entry) => {
+      const connections = Array.isArray(entry.connections) ? entry.connections as Record<string, unknown>[] : [];
+      if (connections.length) wearable.connected += 1;
+      connections.forEach((connection) => {
+        if (connection.last_error || entry.error) wearable.errors += 1;
+        const sync = typeof connection.last_synced_at === 'string' ? connection.last_synced_at : null;
+        if (sync && (!wearable.latestSync || sync > wearable.latestSync)) wearable.latestSync = sync;
+        if (!sync || Date.now() - new Date(sync).getTime() > 48 * 60 * 60 * 1000) wearable.stale += 1;
       });
+    });
+    setData({ profiles, payments: asRows<PaymentRow>(paymentsResult.data), access: asRows<AccessRow>(accessResult.data), services: asRows<ServiceRow>(servicesResult.data), activities: asRows<ActivityRow>(activitiesResult.data), teams: asRows<TeamRow>(teamsResult.data), webhookErrors: webhookResult.error ? null : asRows<{ id: string }>(webhookResult.data).length, wearable, errors: [...errors, ...(wearableResult.error ? ['wearables'] : [])] }); setLoading(false);
+  }, []);
+  useEffect(() => { void load(); }, [load]);
 
-      const { data: geoDataResult } = await supabase
-        .from('profiles')
-        .select('country')
-        .not('country', 'is', null);
+  const empty = es ? 'Sin datos' : 'No data'; const proUsers = useMemo(() => data ? data.profiles.filter((p) => isPro(p, data.access)) : [], [data]); const roleCounts = useMemo(() => { const result: Record<string, number> = {}; data?.profiles.forEach((p) => { result[p.role] = (result[p.role] ?? 0) + 1; }); return result; }, [data]);
+  const active7 = useMemo(() => { if (!data) return null; const cutoff = day(-7).getTime(); return new Set(data.activities.filter((x) => x.start_time && new Date(x.start_time).getTime() >= cutoff).map((x) => x.user_id)).size; }, [data]);
+  const falling = useMemo(() => { if (!data) return []; const cutoff = day(-14).getTime(); const prior = day(-28).getTime(); const grouped = new Map<string, { recent: number; old: number }>(); data.activities.forEach((x) => { if (!x.start_time) return; const t = new Date(x.start_time).getTime(); const item = grouped.get(x.user_id) ?? { recent: 0, old: 0 }; if (t >= cutoff) item.recent += 1; else if (t >= prior) item.old += 1; grouped.set(x.user_id, item); }); return proUsers.filter((p) => { const item = grouped.get(p.id); return item && item.old > 0 && item.recent < item.old; }); }, [data, proUsers]);
+  if (loading || !data) return <AdminLayout currentPage="admin"><div className="flex min-h-[420px] items-center justify-center text-sm text-gray-500">{es ? 'Cargando panel admin...' : 'Loading admin dashboard...'}</div></AdminLayout>;
 
-      if (geoDataResult) {
-        const countryCount: Record<string, number> = {};
-        geoDataResult.forEach(item => {
-          if (item.country) {
-            countryCount[item.country] = (countryCount[item.country] || 0) + 1;
-          }
-        });
-
-        const sortedGeoData = Object.entries(countryCount)
-          .map(([country, count]) => ({ country, count }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 10);
-
-        setGeoData(sortedGeoData);
-      }
-
-      setRecentActivity([
-        {
-          id: '1',
-          type: 'user_signup',
-          message: 'New athlete registered: John Doe (Argentina)',
-          created_at: new Date().toISOString(),
-          icon: '👤'
-        },
-        {
-          id: '2',
-          type: 'program_created',
-          message: 'Program approved: "Endurance Builder"',
-          created_at: new Date(Date.now() - 3600000).toISOString(),
-          icon: '📦'
-        },
-        {
-          id: '3',
-          type: 'brand_request',
-          message: 'Brand request: Nike Argentina',
-          created_at: new Date(Date.now() - 7200000).toISOString(),
-          icon: '🏢'
-        }
-      ]);
-
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <AdminLayout currentPage="admin">
-        <div className="flex items-center justify-center p-12">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-            <p className="text-gray-600 dark:text-gray-400">Loading admin dashboard...</p>
-          </div>
-        </div>
-      </AdminLayout>
-    );
-  }
-
-  return (
-    <AdminLayout currentPage="admin">
-      <div className="space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Platform overview and management</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <Users className="w-6 h-6 text-blue-600" />
-              </div>
-              <span className="text-sm font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                +{stats.new_users_this_month} this month
-              </span>
-            </div>
-            <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{stats.total_users.toLocaleString()}</h3>
-            <p className="text-sm text-gray-600 mt-1">Total Users</p>
-            <div className="mt-4 flex items-center gap-4 text-sm">
-              <div>
-                <span className="text-gray-600 dark:text-gray-400">Athletes:</span>
-                <span className="ml-1 font-semibold text-gray-900 dark:text-white">{stats.athletes}</span>
-              </div>
-              <div>
-                <span className="text-gray-600 dark:text-gray-400">Trainers:</span>
-                <span className="ml-1 font-semibold text-gray-900 dark:text-white">{stats.trainers}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="p-3 bg-purple-100 rounded-xl w-fit mb-4">
-              <Package className="w-6 h-6 text-purple-600" />
-            </div>
-            <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{stats.total_programs.toLocaleString()}</h3>
-            <p className="text-sm text-gray-600 mt-1">Training Programs</p>
-            <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
-              <div className="flex items-center justify-between">
-                <span>Workouts:</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{stats.total_workouts}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="p-3 bg-green-100 rounded-xl w-fit mb-4">
-              <Dumbbell className="w-6 h-6 text-green-600" />
-            </div>
-            <h3 className="text-3xl font-bold text-gray-900 dark:text-white">{stats.total_exercises.toLocaleString()}</h3>
-            <p className="text-sm text-gray-600 mt-1">Exercises in Library</p>
-            <div className="mt-4 flex items-center gap-2 text-sm">
-              <Apple className="w-4 h-4 text-green-600" />
-              <span className="text-gray-600 dark:text-gray-400">Foods:</span>
-              <span className="font-semibold text-gray-900 dark:text-white">{stats.total_foods}</span>
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl shadow-lg p-6 text-white">
-            <div className="p-3 bg-white/20 rounded-xl w-fit mb-4">
-              <DollarSign className="w-6 h-6 text-white" />
-            </div>
-            <h3 className="text-3xl font-bold">${stats.total_revenue.toLocaleString()}</h3>
-            <p className="text-green-100 mt-1">Monthly Revenue</p>
-            <div className="mt-4 flex items-center gap-2 text-sm text-green-100">
-              <TrendingUp className="w-4 h-4" />
-              <span>+12% vs last month</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <Briefcase className="w-5 h-5 text-orange-600" />
-              </div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">Active Brands</h3>
-            </div>
-            <div className="text-3xl font-bold text-gray-900 dark:text-white">{stats.active_brands}</div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-pink-100 rounded-lg">
-                <Heart className="w-5 h-5 text-pink-600" />
-              </div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">Support Projects</h3>
-            </div>
-            <div className="text-3xl font-bold text-gray-900 dark:text-white">{stats.active_projects}</div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <Award className="w-5 h-5 text-yellow-600" />
-              </div>
-              <h3 className="font-semibold text-gray-900 dark:text-white">Partnerships</h3>
-            </div>
-            <div className="text-3xl font-bold text-gray-900 dark:text-white">23</div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Globe className="w-6 h-6 text-blue-600" />
-                Geographic Distribution
-              </h3>
-            </div>
-
-            {geoData.length === 0 ? (
-              <p className="text-gray-600 text-center py-8">No geographic data available</p>
-            ) : (
-              <div className="space-y-3">
-                {geoData.map((item) => {
-                  const maxCount = Math.max(...geoData.map(d => d.count));
-                  const percentage = (item.count / maxCount) * 100;
-
-                  return (
-                    <div key={item.country}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{item.country}</span>
-                        <span className="text-sm text-gray-600 dark:text-gray-400">{item.count} users</span>
-                      </div>
-                      <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 transition-all duration-500"
-                          style={{ width: `${percentage}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <BarChart3 className="w-6 h-6 text-purple-600" />
-                Recent Activity
-              </h3>
-            </div>
-
-            {recentActivity.length === 0 ? (
-              <p className="text-gray-600 text-center py-8">No recent activity</p>
-            ) : (
-              <div className="space-y-4">
-                {recentActivity.map(activity => (
-                  <div key={activity.id} className="flex items-start gap-3 pb-4 border-b border-gray-100 last:border-0">
-                    <div className="text-2xl">{activity.icon}</div>
-                    <div className="flex-1">
-                      <p className="text-sm text-gray-900 dark:text-white">{activity.message}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {new Date(activity.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-8">
-          <h3 className="text-2xl font-bold text-white mb-6">Quick Actions</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'admin-users' }))}
-              className="bg-white/10 backdrop-blur hover:bg-white/20 text-white rounded-xl p-4 transition-all"
-            >
-              <UserPlus className="w-6 h-6 mx-auto mb-2" />
-              <span className="text-sm font-medium">Add User</span>
-            </button>
-
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'exercises' }))}
-              className="bg-white/10 backdrop-blur hover:bg-white/20 text-white rounded-xl p-4 transition-all"
-            >
-              <Dumbbell className="w-6 h-6 mx-auto mb-2" />
-              <span className="text-sm font-medium">Add Exercise</span>
-            </button>
-
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'admin-foods' }))}
-              className="bg-white/10 backdrop-blur hover:bg-white/20 text-white rounded-xl p-4 transition-all"
-            >
-              <Apple className="w-6 h-6 mx-auto mb-2" />
-              <span className="text-sm font-medium">Add Food</span>
-            </button>
-
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent('navigate', { detail: 'brand-requests' }))}
-              className="bg-white/10 backdrop-blur hover:bg-white/20 text-white rounded-xl p-4 transition-all"
-            >
-              <Briefcase className="w-6 h-6 mx-auto mb-2" />
-              <span className="text-sm font-medium">Brand Requests</span>
-            </button>
-          </div>
-        </div>
-      </div>
-    </AdminLayout>
-  );
+  const users7 = data.profiles.filter((p) => new Date(p.created_at).getTime() >= day(-7).getTime()).length; const users30 = data.profiles.filter((p) => new Date(p.created_at).getTime() >= day(-30).getTime()).length; const linked = data.profiles.filter((p) => p.assigned_trainer_id || p.assigned_nutritionist_id).length; const firstActivity = new Set(data.activities.map((x) => x.user_id)).size; const paidByCurrency = data.payments.filter((p) => p.status === 'succeeded').reduce<Record<string, number>>((acc, p) => { const currency = p.currency ?? 'unknown'; acc[currency] = (acc[currency] ?? 0) + Number(p.amount ?? 0); return acc; }, {}); const pendingPayments = data.payments.filter((p) => p.status === 'pending' || p.status === 'failed').length + data.services.filter((s) => s.payment_status === 'overdue' || s.payment_status === 'pending_confirmation' || s.status === 'overdue' || s.status === 'payment_due').length; const renewals = data.access.filter((x) => x.end_date && new Date(x.end_date).getTime() >= Date.now() && new Date(x.end_date).getTime() <= day(14).getTime()).length + data.services.filter((s) => s.expires_at && new Date(s.expires_at).getTime() >= Date.now() && new Date(s.expires_at).getTime() <= day(14).getTime()).length;
+  const professionalRows = data.profiles.filter((p) => ['trainer', 'nutritionist', 'head_coach'].includes(p.role)).map((p) => { const directIds = data.profiles.filter((a) => a.assigned_trainer_id === p.id || a.assigned_nutritionist_id === p.id).map((a) => a.id); const teamIds = data.teams.filter((m) => { const teams = Array.isArray(m.teams) ? m.teams : m.teams ? [m.teams] : []; return teams.some((t) => t.coach_id === p.id); }).map((m) => m.athlete_id); return { p, count: new Set([...directIds, ...teamIds]).size }; });
+  const withoutAthletes = professionalRows.filter((x) => x.count === 0); const proAthletes = proUsers.filter((p) => p.role === 'athlete').length; const proProfessionals = proUsers.filter((p) => ['trainer', 'nutritionist', 'head_coach'].includes(p.role)).length; const freeAthletes = (roleCounts.athlete ?? 0) - proAthletes; const freeProfessionals = (roleCounts.trainer ?? 0) + (roleCounts.nutritionist ?? 0) + (roleCounts.head_coach ?? 0) - proProfessionals; const countries = Object.entries(data.profiles.reduce<Record<string, number>>((acc, p) => { if (p.country) acc[p.country] = (acc[p.country] ?? 0) + 1; return acc; }, {})).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const kpis = [[es ? 'Usuarios totales' : 'Total users', data.profiles.length], [es ? 'Altas últimos 7 días' : 'New users, 7 days', users7], [es ? 'Altas últimos 30 días' : 'New users, 30 days', users30], [es ? 'Activos últimos 7 días' : 'Active, 7 days', active7 == null ? empty : active7], [es ? 'Pagos pendientes/fallidos' : 'Pending/failed payments', pendingPayments]];
+  const goUsers = () => window.dispatchEvent(new CustomEvent('navigate', { detail: 'admin-users' }));
+  const proAthleteCount = proUsers.filter((p) => p.role === 'athlete').length;
+  const stravaUsers = new Set(data.activities.filter((a) => a.source === 'strava').map((a) => a.user_id)).size;
+  return <AdminLayout currentPage="admin"><div className="space-y-6"><header className="flex items-center justify-between"><div><h1 className="text-3xl font-bold text-gray-900 dark:text-white">{es ? 'Salud de plataforma' : 'Platform health'}</h1><p className="mt-1 text-sm text-gray-500">{es ? 'Negocio, usuarios e ingesta en una sola vista' : 'Business, users and ingestion in one view'}</p></div><button onClick={() => void load()} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-300"><RefreshCw className="h-4 w-4" />{es ? 'Actualizar' : 'Refresh'}</button></header>
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">{kpis.map(([label, value]) => <div key={String(label)} className="rounded-2xl border bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900"><div className="text-xs text-gray-500">{label}</div><div className="mt-1 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{value}</div></div>)}</div>
+    <div className="grid gap-6 lg:grid-cols-2"><section className="rounded-2xl border bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900"><h2 className="font-semibold text-gray-900 dark:text-white">{es ? 'Ingresos registrados del mes' : 'Registered revenue this month'}</h2><p className="mb-4 text-xs text-gray-500">{es ? 'Payments pagados, sin conversión de moneda.' : 'Succeeded payments, without currency conversion.'}</p>{Object.keys(paidByCurrency).length ? Object.entries(paidByCurrency).map(([currency, amount]) => <div key={currency} className="flex justify-between border-b py-2 text-sm dark:border-gray-800"><span>{currency.toUpperCase()}</span><strong className="tabular-nums">{amount.toFixed(2)}</strong></div>) : <p className="text-sm text-gray-500">{empty}</p>}<p className="mt-4 text-sm">{es ? 'Free/pro:' : 'Free/pro:'} {roleCounts.athlete ?? 0} {es ? 'atletas' : 'athletes'} · {proAthleteCount} pro · {freeAthletes} free · {proProfessionals} {es ? 'profesionales pro' : 'pro professionals'} · {freeProfessionals} {es ? 'profesionales free' : 'free professionals'}</p></section><section className="rounded-2xl border bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900"><h2 className="font-semibold text-gray-900 dark:text-white">{es ? 'Embudo derivable' : 'Derivable funnel'}</h2><div className="mt-4 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">{[[es ? 'Registro' : 'Registered', data.profiles.length], [es ? 'Vinculados' : 'Linked', linked], [es ? 'Primera actividad' : 'First activity', firstActivity], [es ? 'Membresía pro' : 'Pro membership', proUsers.length]].map(([label, value]) => <div key={String(label)} className="rounded-xl bg-gray-50 p-3 dark:bg-gray-800"><div className="text-xs text-gray-500">{label}</div><div className="mt-1 text-xl font-semibold tabular-nums">{value}</div></div>)}</div></section></div>
+    <div className="grid gap-6 lg:grid-cols-2"><section className="rounded-2xl border bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900"><h2 className="mb-4 font-semibold text-gray-900 dark:text-white">{es ? 'Profesionales' : 'Professionals'}</h2><div className="max-h-72 space-y-2 overflow-y-auto">{professionalRows.map((x) => <div key={x.p.id} className="flex justify-between rounded-lg border p-3 dark:border-gray-800"><span className="text-sm">{x.p.role}: {x.p.id.slice(0, 8)}</span><strong className="tabular-nums">{x.count}</strong></div>)}</div><p className="mt-3 text-xs text-gray-500">{withoutAthletes.length} {es ? 'sin atletas. No hay límite de plan confiable.' : 'without athletes. No reliable plan limit exists.'}</p></section><section className="rounded-2xl border bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900"><h2 className="mb-4 font-semibold text-gray-900 dark:text-white">{es ? 'Ingesta de datos' : 'Data ingestion'}</h2><div className="grid grid-cols-2 gap-3 text-sm"><div><div className="text-xs text-gray-500">Open Wearables</div><strong>{data.wearable.available ? data.wearable.connected : empty}</strong></div><div><div className="text-xs text-gray-500">Strava</div><strong>{stravaUsers || empty}</strong></div><div><div className="text-xs text-gray-500">{es ? 'Errores' : 'Errors'}</div><strong>{data.wearable.available ? data.wearable.errors : empty}</strong></div><div><div className="text-xs text-gray-500">{es ? 'Último sync' : 'Last sync'}</div><strong>{data.wearable.latestSync ? new Date(data.wearable.latestSync).toLocaleString() : empty}</strong></div></div><button onClick={goUsers} className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:underline"><Users className="h-4 w-4" />{es ? 'Abrir tabla de usuarios y filtros' : 'Open users table and filters'}</button></section></div>
+    <section className="rounded-2xl border bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900"><h2 className="mb-4 font-semibold text-gray-900 dark:text-white">{es ? 'Atención del admin' : 'Admin attention'}</h2><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><div className="rounded-xl bg-rose-50 p-4 dark:bg-rose-900/20"><AlertTriangle className="h-5 w-5 text-rose-600" /><p className="mt-2 text-sm">{pendingPayments} {es ? 'pagos pendientes/fallidos' : 'pending/failed payments'}</p></div><div className="rounded-xl bg-amber-50 p-4 dark:bg-amber-900/20"><Clock3 className="h-5 w-5 text-amber-600" /><p className="mt-2 text-sm">{renewals} {es ? 'renovaciones ≤14 días' : 'renewals ≤14 days'}</p></div><div className="rounded-xl bg-orange-50 p-4 dark:bg-orange-900/20"><Activity className="h-5 w-5 text-orange-600" /><p className="mt-2 text-sm">{falling.length} {es ? 'pro con actividad en caída' : 'pro users with falling activity'}</p></div><div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-800"><Users className="h-5 w-5 text-slate-600" /><p className="mt-2 text-sm">{withoutAthletes.length} {es ? 'profesionales sin atletas' : 'professionals without athletes'}</p></div></div></section>
+    <section className="rounded-2xl border bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900"><h2 className="mb-4 font-semibold text-gray-900 dark:text-white">{es ? 'Salud técnica' : 'Technical health'}</h2>{data.webhookErrors == null && !data.wearable.available ? <p className="text-sm text-gray-500">{es ? 'Sin datos: logs no accesibles.' : 'No data: logs unavailable.'}</p> : <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-gray-50 p-4 dark:bg-gray-800"><Database className="h-5 w-5 text-gray-500" /><p className="mt-2 text-sm">{data.webhookErrors == null ? empty : `${data.webhookErrors} webhook errors/pending`}</p></div><div className="rounded-xl bg-gray-50 p-4 dark:bg-gray-800"><Link2 className="h-5 w-5 text-gray-500" /><p className="mt-2 text-sm">{data.wearable.available ? `${data.wearable.stale} stale connections` : empty}</p></div><div className="rounded-xl bg-gray-50 p-4 dark:bg-gray-800"><ShieldAlert className="h-5 w-5 text-gray-500" /><p className="mt-2 text-sm">{data.errors.length ? data.errors.join(', ') : (es ? 'Sin errores de consulta' : 'No query errors')}</p></div></div>}</section>
+    {countries.length > 0 && <section className="rounded-2xl border bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900"><h2 className="mb-4 flex items-center gap-2 font-semibold text-gray-900 dark:text-white"><Globe2 className="h-5 w-5" />{es ? 'Distribución geográfica agregada' : 'Aggregated geography'}</h2><div className="flex flex-wrap gap-2">{countries.map(([country, count]) => <span key={country} className="rounded-full bg-gray-100 px-3 py-1 text-sm dark:bg-gray-800">{country}: {count}</span>)}</div></section>}</div></AdminLayout>;
 }
+export default function AdminPlatformDashboard() { return <RoleGuard allowedRoles={['admin']}><AdminPlatformDashboardContent /></RoleGuard>; }
