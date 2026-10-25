@@ -1,468 +1,78 @@
-import { useEffect, useState } from 'react';
-import { Users, Calendar, TrendingUp, Activity, AlertCircle, Dumbbell, MessageSquare, Brain, Apple, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, HelpCircle, Search, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
-import { supabase } from '../lib/supabase';
 import { useAthlete } from '../contexts/AthleteContext';
+import { supabase } from '../lib/supabase';
+import { PROFESSIONAL_DASHBOARD_THRESHOLDS as T } from './professionalDashboardConfig';
 
-interface AthleteAlert {
-  id: string;
-  full_name: string;
-  avatar_url: string | null;
-  remaining_sessions: number;
+type Role = 'trainer' | 'nutritionist' | 'head_coach';
+type Status = 'good' | 'attention' | 'no_access' | 'not_requested' | 'incomplete' | 'expired' | 'no_plan' | 'no_habits';
+type Cell = { status: Status; detail?: string };
+interface ProfileRow { id: string; full_name: string | null; avatar_url: string | null; is_active: boolean | null; assigned_trainer_id: string | null; assigned_nutritionist_id: string | null; }
+interface Planned { athlete_id: string; scheduled_date: string | null; status: string | null; }
+interface Wellness { athlete_id: string; checkin_date: string; overall_score: number | null; wellness_score_100: number | null; }
+interface Anamnesis { athlete_id: string; is_active: boolean | null; updated_at: string | null; version_number: number | null; }
+interface Diary { athlete_id: string; status: string | null; start_date: string; completed_at: string | null; period_hours: number | null; }
+interface Habit { id: string; user_id: string; is_active: boolean | null; }
+interface HabitLog { user_id: string; habit_id: string; log_date: string; completed: boolean | null; }
+interface Membership { user_id: string; status: string | null; end_date: string | null; }
+interface Row { profile: ProfileRow; training: Cell; wellness: Cell; habits: Cell; nutrition: Cell; data: Cell; membership: Cell; adherencePct: number | null; reasons: string[]; }
+const rows = <T,>(data: unknown): T[] => Array.isArray(data) ? data as T[] : [];
+const date = (d: Date) => d.toISOString().slice(0, 10);
+const offset = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return date(d); };
+const median = (v: number[]) => { const s = [...v].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+const wellnessScore = (x: Wellness) => x.wellness_score_100 ?? (x.overall_score == null ? null : x.overall_score * 20);
+const labelsFor = (es: boolean) => es ? { title: 'Panel profesional', subtitle: 'Qué requiere atención hoy y qué cambió desde ayer', active: 'Atletas activos', attention: 'Requieren atención hoy', adherence: 'Adherencia media 7 días', stale: 'Datos vencidos', renewals: 'Renovaciones ≤14 días', queue: 'Cola de atención', athletes: 'Atletas', search: 'Buscar atleta', all: 'Todos', attentionOnly: 'Con atención', accessOnly: 'Con sin acceso', training: 'Entrenamiento', wellness: 'Wellness', habits: 'Hábitos', nutrition: 'Nutrición', data: 'Datos', membership: 'Membresía', noReasons: 'No hay motivos de atención visibles.', noData: 'Sin datos suficientes', page: 'Página' } : { title: 'Professional dashboard', subtitle: 'What needs attention today and what changed since yesterday', active: 'Active athletes', attention: 'Need attention today', adherence: '7-day mean adherence', stale: 'Expired data', renewals: 'Renewals ≤14 days', queue: 'Attention queue', athletes: 'Athletes', search: 'Search athlete', all: 'All', attentionOnly: 'Needs attention', accessOnly: 'Has no access', training: 'Training', wellness: 'Wellness', habits: 'Habits', nutrition: 'Nutrition', data: 'Data', membership: 'Membership', noReasons: 'No visible attention reasons.', noData: 'Not enough data', page: 'Page' };
+const statusText = (s: Status, es: boolean) => ({ good: es ? 'Bien' : 'Good', attention: es ? 'Revisar' : 'Review', no_access: es ? 'Sin acceso' : 'No access', not_requested: es ? 'No solicitado' : 'Not requested', incomplete: es ? 'No completado' : 'Incomplete', expired: es ? 'Vencido' : 'Expired', no_plan: es ? 'Sin plan' : 'No plan', no_habits: es ? 'Sin hábitos asignados' : 'No habits assigned' })[s];
+function Badge({ cell, es }: { cell: Cell; es: boolean }) {
+  const style: Record<Status, string> = { good: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300', attention: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300', no_access: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300', not_requested: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300', incomplete: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300', expired: 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300', no_plan: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300', no_habits: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300' };
+  const Icon = cell.status === 'good' ? CheckCircle2 : cell.status === 'no_access' ? ShieldAlert : cell.status === 'attention' || cell.status === 'expired' ? AlertTriangle : HelpCircle;
+  return <span title={cell.detail} className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium whitespace-nowrap ${style[cell.status]}`}><Icon className="h-3.5 w-3.5" />{statusText(cell.status, es)}</span>;
 }
-
 export default function TrainerDashboard() {
-  const { profile } = useAuth();
-  const { language } = useLanguage();
-  const { setSelectedAthlete } = useAthlete();
-
-  const navigate = (page: string) => {
-    window.dispatchEvent(new CustomEvent('navigate', { detail: page }));
-  };
-
-  const [stats, setStats] = useState({
-    totalAthletes: 0,
-    activePrograms: 0,
-    todayWorkouts: 0,
-    athletesNeedingAttention: 0,
-  });
-  const [athleteAlerts, setAthleteAlerts] = useState<AthleteAlert[]>([]);
-  const [expandedAthleteId, setExpandedAthleteId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadStats();
-  }, [profile]);
-
-  const formatDateLocal = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  const loadStats = async () => {
-    if (!profile) return;
-
-    try {
-      const [athletesRes, programsRes, workoutsRes] = await Promise.all([
-        (() => {
-          let query = supabase.from('profiles').select('id, full_name, avatar_url').eq('role', 'athlete');
-          if (profile.role === 'head_coach') return query;
-          return query.eq(profile.role === 'nutritionist' ? 'assigned_nutritionist_id' : 'assigned_trainer_id', profile.id);
-        })(),
-        supabase
-          .from('training_programs')
-          .select('id', { count: 'exact', head: true })
-          .eq('created_by', profile.id),
-        supabase
-          .from('athlete_workouts')
-          .select('id', { count: 'exact', head: true })
-          .eq('scheduled_date', formatDateLocal(new Date())),
-      ]);
-
-      const athletes = athletesRes.data || [];
-
-      const athletesWithAlerts = await Promise.all(
-        athletes.map(async (athlete) => {
-          const today = formatDateLocal(new Date());
-          const { count } = await supabase
-            .from('athlete_workouts')
-            .select('*', { count: 'exact', head: true })
-            .eq('athlete_id', athlete.id)
-            .gte('scheduled_date', today)
-            .eq('status', 'pending');
-
-          return {
-            ...athlete,
-            remaining_sessions: count || 0
-          };
-        })
-      );
-
-      const needsAttention = athletesWithAlerts.filter(a => a.remaining_sessions < 3);
-
-      setStats({
-        totalAthletes: athletes.length,
-        activePrograms: programsRes.count || 0,
-        todayWorkouts: workoutsRes.count || 0,
-        athletesNeedingAttention: needsAttention.length,
-      });
-
-      setAthleteAlerts(needsAttention.sort((a, b) => a.remaining_sessions - b.remaining_sessions));
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-10 dark:from-gray-900 dark:via-gray-900 dark:to-gray-8000 dark:from-gray-900 dark:to-gray-800">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-[#fdda36] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 dark:text-gray-400">
-            {language === 'es' ? 'Cargando dashboard...' : 'Loading dashboard...'}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-5 dark:from-gray-900 dark:via-gray-900 dark:to-gray-8000 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-
-        {/* Hero Section */}
-        <div className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-[#514163]/10 via-[#fdda36]/10 to-[#514163]/10 dark:from-[#514163]/20 dark:via-[#fdda36]/20 dark:to-[#514163]/20 animate-pulse" />
-
-          <div className="relative bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-8">
-            <div className="mb-6">
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-[#514163] to-[#fdda36] bg-clip-text text-transparent">
-                {language === 'es' ? '¡Hola,' : 'Hello,'} {profile?.full_name?.split(' ')[0]}! 👋
-              </h1>
-              <p className="mt-2 text-gray-600 dark:text-gray-400 text-lg">
-                {language === 'es' ? (profile.role === 'nutritionist' ? 'Panel de Nutrición' : 'Panel de Entrenador') : (profile.role === 'nutritionist' ? 'Nutritionist Dashboard' : 'Professional Dashboard')}
-              </p>
-            </div>
-
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="p-6 bg-gradient-to-br from-blue-50 to-white dark:from-blue-900/20 dark:to-gray-800/50 rounded-xl border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-blue-600 rounded-lg">
-                    <Users className="h-7 w-7 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      {language === 'es' ? 'Atletas Totales' : 'Total Athletes'}
-                    </p>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                      {stats.totalAthletes}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 bg-gradient-to-br from-green-50 to-white dark:from-green-900/20 dark:to-gray-800/50 rounded-xl border border-green-200 dark:border-green-800">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-green-600 rounded-lg">
-                    <Activity className="h-7 w-7 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      {language === 'es' ? 'Programas Activos' : 'Active Programs'}
-                    </p>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                      {stats.activePrograms}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 bg-gradient-to-br from-purple-50 to-white dark:from-purple-900/20 dark:to-gray-800/50 rounded-xl border border-purple-200 dark:border-purple-800">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-purple-600 rounded-lg">
-                    <Calendar className="h-7 w-7 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      {language === 'es' ? 'Entrenamientos Hoy' : 'Workouts Today'}
-                    </p>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                      {stats.todayWorkouts}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 bg-gradient-to-br from-red-50 to-white dark:from-red-900/20 dark:to-gray-800/50 rounded-xl border border-red-200 dark:border-red-800">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-red-600 rounded-lg">
-                    <AlertCircle className="h-7 w-7 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      {language === 'es' ? 'Requieren Atención' : 'Need Attention'}
-                    </p>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                      {stats.athletesNeedingAttention}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* Athlete Alerts - MAIN FEATURE */}
-          <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-            <div className="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-6 h-6 text-white" />
-                <h2 className="text-xl font-bold text-white">
-                  {language === 'es' ? '⚠️ Atletas que Requieren Planificación' : '⚠️ Athletes Needing Planning'}
-                </h2>
-              </div>
-              <p className="text-red-100 text-sm mt-1">
-                {language === 'es'
-                  ? 'Atletas con menos de 3 sesiones programadas'
-                  : 'Athletes with less than 3 scheduled sessions'}
-              </p>
-            </div>
-
-            <div className="p-6">
-              {athleteAlerts.length === 0 ? (
-                <div className="text-center py-12">
-                  <Brain className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-                  <p className="text-gray-600 dark:text-gray-400 font-medium">
-                    {language === 'es'
-                      ? '¡Excelente! Todos tus atletas tienen planificación suficiente.'
-                      : 'Great! All your athletes have sufficient planning.'}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {athleteAlerts.map((athlete) => (
-                    <div
-                      key={athlete.id}
-                      className="p-5 bg-gradient-to-r from-red-50 to-white dark:from-red-900/10 dark:to-gray-800/50 rounded-xl border-2 border-red-200 dark:border-red-800 hover:border-red-400 dark:hover:border-red-600 transition-all"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 flex-1">
-                          {athlete.avatar_url ? (
-                            <img
-                              src={athlete.avatar_url}
-                              alt={athlete.full_name}
-                              className="w-12 h-12 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-12 h-12 rounded-full bg-red-600 flex items-center justify-center text-white font-bold text-lg">
-                              {athlete.full_name?.charAt(0) || '?'}
-                            </div>
-                          )}
-                          <div className="flex-1">
-                            <h3 className="font-bold text-gray-900 dark:text-white">
-                              {athlete.full_name}
-                            </h3>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                athlete.remaining_sessions === 0
-                                  ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                                  : athlete.remaining_sessions === 1
-                                  ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
-                                  : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                              }`}>
-                                {athlete.remaining_sessions} {language === 'es' ? 'sesiones restantes' : 'sessions left'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={() => setExpandedAthleteId(expandedAthleteId === athlete.id ? null : athlete.id)}
-                          className="px-4 py-2 bg-[#fdda36] text-[#514163] font-medium rounded-lg hover:bg-[#ffd51a] transition-colors flex items-center gap-2"
-                        >
-                          {expandedAthleteId === athlete.id ? (
-                            <>
-                              <ChevronUp className="w-4 h-4" />
-                              {language === 'es' ? 'Ocultar' : 'Hide'}
-                            </>
-                          ) : (
-                            <>
-                              <ChevronDown className="w-4 h-4" />
-                              {language === 'es' ? 'Ver Opciones' : 'Options'}
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {expandedAthleteId === athlete.id && (
-                        <div className="mt-3 pt-3 border-t border-red-200 dark:border-red-800 grid grid-cols-3 gap-2">
-                          <button
-                            onClick={() => {
-                              setSelectedAthlete(athlete.id, athlete.full_name);
-                              navigate('training');
-                            }}
-                            className="px-3 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors flex flex-col items-center gap-1 text-xs font-medium"
-                          >
-                            <Calendar className="w-5 h-5" />
-                            {language === 'es' ? 'Calendario' : 'Calendar'}
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setSelectedAthlete(athlete.id, athlete.full_name);
-                              navigate('nutrition-dashboard');
-                            }}
-                            className="px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex flex-col items-center gap-1 text-xs font-medium"
-                          >
-                            <Apple className="w-5 h-5" />
-                            {language === 'es' ? 'Nutrición' : 'Nutrition'}
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setSelectedAthlete(athlete.id, athlete.full_name);
-                              navigate('habits');
-                            }}
-                            className="px-3 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors flex flex-col items-center gap-1 text-xs font-medium"
-                          >
-                            <CheckCircle className="w-5 h-5" />
-                            {language === 'es' ? 'Hábitos' : 'Habits'}
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              setSelectedAthlete(athlete.id, athlete.full_name);
-                              navigate('performance');
-                            }}
-                            className="px-3 py-2 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 rounded-lg hover:bg-orange-200 dark:hover:bg-orange-900/50 transition-colors flex flex-col items-center gap-1 text-xs font-medium"
-                          >
-                            <TrendingUp className="w-5 h-5" />
-                            {language === 'es' ? 'Performance' : 'Performance'}
-                          </button>
-
-                          <button
-                            onClick={() => navigate('chat')}
-                            className="col-span-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center gap-2 text-xs font-medium"
-                          >
-                            <MessageSquare className="w-4 h-4" />
-                            {language === 'es' ? 'Mensaje' : 'Message'}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="space-y-6">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <Dumbbell className="w-5 h-5 text-[#fdda36]" />
-                {language === 'es' ? 'Acciones Rápidas' : 'Quick Actions'}
-              </h3>
-              <div className="space-y-3">
-                <button
-                  onClick={() => navigate('my-athletes')}
-                  className="w-full p-4 bg-gradient-to-r from-[#514163] to-[#3a2f4a] text-white rounded-lg hover:from-[#3a2f4a] hover:to-[#514163] transition-all flex items-center justify-between group"
-                >
-                  <div className="flex items-center gap-3">
-                    <Users className="w-5 h-5" />
-                    <span className="font-medium">
-                      {language === 'es' ? 'Mis Atletas' : 'My Athletes'}
-                    </span>
-                  </div>
-                  <span className="text-xs bg-white/20 px-2 py-1 rounded">
-                    {stats.totalAthletes}
-                  </span>
-                </button>
-
-                <button
-                  onClick={() => navigate('workout-builder')}
-                  className="w-full p-4 bg-gradient-to-r from-[#fdda36] to-[#ffd51a] text-[#514163] rounded-lg hover:from-[#ffd51a] hover:to-[#fdda36] transition-all flex items-center gap-3 font-medium"
-                >
-                  <Dumbbell className="w-5 h-5" />
-                  {language === 'es' ? 'Crear Workout' : 'Create Workout'}
-                </button>
-
-                <button
-                  onClick={() => navigate('program-builder')}
-                  className="w-full p-4 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all flex items-center gap-3 font-medium"
-                >
-                  <TrendingUp className="w-5 h-5" />
-                  {language === 'es' ? 'Crear Programa' : 'Create Program'}
-                </button>
-
-                <button
-                  onClick={() => navigate('chat')}
-                  className="w-full p-4 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all flex items-center gap-3 font-medium"
-                >
-                  <MessageSquare className="w-5 h-5" />
-                  {language === 'es' ? 'Mensajes' : 'Messages'}
-                </button>
-              </div>
-            </div>
-
-            {/* Tips */}
-            <div className="bg-gradient-to-br from-[#514163] to-[#3a2f4a] rounded-xl shadow-lg p-6 text-white">
-              <div className="flex items-start gap-3">
-                <Brain className="w-6 h-6 flex-shrink-0 mt-1" />
-                <div>
-                  <h3 className="font-bold text-lg mb-2">
-                    💡 {language === 'es' ? 'Consejo Pro' : 'Pro Tip'}
-                  </h3>
-                  <p className="text-white/90 text-sm leading-relaxed">
-                    {language === 'es'
-                      ? 'Mantén siempre al menos 5-7 días de planificación para cada atleta. Esto te permite anticipar cambios y mantener la progresión óptima.'
-                      : 'Always maintain at least 5-7 days of planning for each athlete. This allows you to anticipate changes and maintain optimal progression.'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* This Week Overview */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-6">
-            📊 {language === 'es' ? 'Esta Semana' : 'This Week'}
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="p-6 bg-gradient-to-br from-gray-50 to-white dark:from-gray-700/30 dark:to-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-600">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                    {language === 'es' ? 'Sesiones Programadas' : 'Scheduled Sessions'}
-                  </p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {stats.todayWorkouts}
-                  </p>
-                </div>
-                <Calendar className="w-12 h-12 text-[#514163] dark:text-[#fdda36] opacity-50" />
-              </div>
-            </div>
-
-            <div className="p-6 bg-gradient-to-br from-gray-50 to-white dark:from-gray-700/30 dark:to-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-600">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                    {language === 'es' ? 'Atletas Activos' : 'Active Athletes'}
-                  </p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {stats.totalAthletes}
-                  </p>
-                </div>
-                <Users className="w-12 h-12 text-[#514163] dark:text-[#fdda36] opacity-50" />
-              </div>
-            </div>
-
-            <div className="p-6 bg-gradient-to-br from-gray-50 to-white dark:from-gray-700/30 dark:to-gray-800/30 rounded-xl border border-gray-200 dark:border-gray-600">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                    {language === 'es' ? 'Programas' : 'Programs'}
-                  </p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {stats.activePrograms}
-                  </p>
-                </div>
-                <Activity className="w-12 h-12 text-[#514163] dark:text-[#fdda36] opacity-50" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  );
+  const { profile } = useAuth(); const { language } = useLanguage(); const { setSelectedAthlete } = useAthlete(); const es = language === 'es'; const l = labelsFor(es);
+  const [data, setData] = useState<Row[]>([]); const [loading, setLoading] = useState(true); const [search, setSearch] = useState(''); const [filter, setFilter] = useState<'all' | 'attention' | 'no_access'>('all'); const [page, setPage] = useState(1);
+  const openAthlete = (id: string, name: string) => { setSelectedAthlete(id, name); window.dispatchEvent(new CustomEvent('navigate', { detail: 'athlete-profile' })); };
+  const load = useCallback(async () => {
+    if (!profile || !(['trainer', 'nutritionist', 'head_coach'] as Role[]).includes(profile.role as Role)) return;
+    setLoading(true); const role = profile.role as Role;
+    const direct = role === 'nutritionist' ? `assigned_nutritionist_id.eq.${profile.id}` : role === 'trainer' ? `assigned_trainer_id.eq.${profile.id}` : `assigned_trainer_id.eq.${profile.id},assigned_nutritionist_id.eq.${profile.id}`;
+    const directQ = supabase.from('profiles').select('id,full_name,avatar_url,is_active,assigned_trainer_id,assigned_nutritionist_id').eq('role', 'athlete').or(direct);
+    const teamQ = role === 'trainer' || role === 'head_coach' ? supabase.from('team_members').select('athlete_id,teams!inner(coach_id)').eq('teams.coach_id', profile.id) : Promise.resolve({ data: [], error: null });
+    const [directR, teamR] = await Promise.all([directQ, teamQ]);
+    const directProfiles = rows<ProfileRow>(directR.data); const teamIds = rows<{ athlete_id: string }>(teamR.data).map((x) => x.athlete_id); const ids = [...new Set([...directProfiles.map((x) => x.id), ...teamIds])]; let profiles = directProfiles;
+    const missing = ids.filter((id) => !profiles.some((x) => x.id === id)); if (missing.length) { const teamProfiles = await supabase.from('profiles').select('id,full_name,avatar_url,is_active,assigned_trainer_id,assigned_nutritionist_id').in('id', missing); profiles = [...profiles, ...rows<ProfileRow>(teamProfiles.data)]; }
+    if (!ids.length) { setData([]); setLoading(false); return; }
+    const today = date(new Date()); const from7 = offset(-T.adherenceWindowDays); const from28 = offset(-T.wellnessBaselineDays);
+    const [plans, well, anam, diary, habits, logs, memberships] = await Promise.all([
+      supabase.from('athlete_workouts').select('athlete_id,scheduled_date,status').in('athlete_id', ids).gte('scheduled_date', from28).lte('scheduled_date', offset(T.wellnessBaselineDays)),
+      supabase.from('wellness_checkins').select('athlete_id,checkin_date,overall_score,wellness_score_100').in('athlete_id', ids).gte('checkin_date', from28).lte('checkin_date', today),
+      supabase.from('nutrition_anamnesis').select('athlete_id,is_active,updated_at,version_number').in('athlete_id', ids),
+      supabase.from('food_diary_sessions').select('athlete_id,status,start_date,completed_at,period_hours').in('athlete_id', ids).gte('start_date', from28),
+      supabase.from('user_habits').select('id,user_id,is_active').in('user_id', ids).eq('is_active', true),
+      supabase.from('habit_logs').select('user_id,habit_id,log_date,completed').in('user_id', ids).gte('log_date', from7).lte('log_date', today),
+      role === 'trainer' ? supabase.from('membership_access').select('user_id,status,end_date').in('user_id', ids) : Promise.resolve({ data: null, error: { message: 'role has no membership access' } }),
+    ]);
+    const can = { training: role === 'trainer' && !plans.error, wellness: role === 'trainer' && !well.error, data: role === 'trainer' && !anam.error, nutrition: role === 'trainer' && !diary.error, membership: role === 'trainer' && !memberships.error, habits: role !== 'head_coach' && !habits.error && !logs.error };
+    const planned = rows<Planned>(plans.data), wellness = rows<Wellness>(well.data), anamnesis = rows<Anamnesis>(anam.data), diaries = rows<Diary>(diary.data), habitRows = rows<Habit>(habits.data), logRows = rows<HabitLog>(logs.data), membershipRows = rows<Membership>(memberships.data);
+    const next = profiles.map((athlete): Row => {
+      const ap = planned.filter((x) => x.athlete_id === athlete.id); const overdue = ap.filter((x) => x.scheduled_date && x.scheduled_date >= offset(-T.overduePlanDays) && x.scheduled_date < today && x.status === 'pending'); const due7 = ap.filter((x) => x.scheduled_date && x.scheduled_date >= from7 && x.scheduled_date <= today); const done7 = due7.filter((x) => x.status === 'completed'); const adherencePct = due7.length ? done7.length / due7.length * 100 : null;
+      const training: Cell = !can.training ? { status: 'no_access' } : !ap.length ? { status: 'no_plan' } : overdue.length ? { status: 'attention', detail: es ? `${overdue.length} sesiones vencidas` : `${overdue.length} overdue sessions` } : adherencePct != null && adherencePct < T.adherenceLowPct ? { status: 'attention', detail: `${Math.round(adherencePct)}%` } : { status: 'good' };
+      const aw = wellness.filter((x) => x.athlete_id === athlete.id).sort((a, b) => b.checkin_date.localeCompare(a.checkin_date)); const ws = aw.map(wellnessScore).filter((x): x is number => x != null); const latest = ws[0]; const base = ws.length >= T.wellnessMinimumSamples ? median(ws) : null; const last = aw[0]?.checkin_date; const wellnessCell: Cell = !can.wellness ? { status: 'no_access' } : !last ? { status: 'incomplete' } : last < offset(-T.wellnessMissingDays) ? { status: 'expired' } : base != null && latest != null && latest < base ? { status: 'attention', detail: `${Math.round(latest)} vs ${Math.round(base)}` } : { status: 'good' };
+      const directHabitAccess = role === 'trainer' ? athlete.assigned_trainer_id === profile.id : role === 'nutritionist' ? athlete.assigned_nutritionist_id === profile.id : false; const ah = habitRows.filter((x) => x.user_id === athlete.id); const al = logRows.filter((x) => x.user_id === athlete.id && x.completed); const expected = ah.length * T.adherenceWindowDays; const habitPct = expected ? al.length / expected * 100 : null; const habitsCell: Cell = !can.habits || !directHabitAccess ? { status: 'no_access' } : !ah.length ? { status: 'no_habits' } : habitPct != null && habitPct < T.adherenceLowPct ? { status: 'attention', detail: `${Math.round(habitPct)}%` } : { status: 'good', detail: `${Math.round(habitPct ?? 0)}%` };
+      const an = anamnesis.find((x) => x.athlete_id === athlete.id); const dataCell: Cell = !can.data ? { status: 'no_access' } : !an ? { status: 'not_requested' } : an.is_active === false ? { status: 'incomplete' } : { status: 'good' };
+      const ds = diaries.filter((x) => x.athlete_id === athlete.id).sort((a, b) => b.start_date.localeCompare(a.start_date)); const d = ds[0]; const diaryExpired = d && d.status !== 'completed' && new Date(`${d.start_date}T00:00:00`).getTime() + (d.period_hours ?? 24) * 3600000 < Date.now(); const nutritionCell: Cell = !can.nutrition ? { status: 'no_access' } : !d ? { status: 'not_requested' } : d.status === 'completed' ? { status: 'good' } : diaryExpired ? { status: 'expired' } : { status: 'incomplete' };
+      const m = membershipRows.filter((x) => x.user_id === athlete.id).sort((a, b) => (b.end_date ?? '').localeCompare(a.end_date ?? ''))[0]; const end = m?.end_date ? new Date(m.end_date) : null; const membershipCell: Cell = !can.membership ? { status: 'no_access' } : !m ? { status: 'not_requested' } : m.status === 'expired' || m.status === 'canceled' || (end != null && end.getTime() < Date.now()) ? { status: 'expired' } : end != null && end <= new Date(`${offset(T.membershipExpiringDays)}T23:59:59`) ? { status: 'attention', detail: end.toLocaleDateString() } : { status: 'good' };
+      const reasons: string[] = []; if (training.status === 'attention') reasons.push(es ? overdue.length ? 'Sesiones planificadas vencidas' : 'Adherencia de entrenamiento baja' : overdue.length ? 'Overdue planned sessions' : 'Low training adherence'); if (wellnessCell.status === 'attention' || wellnessCell.status === 'expired') reasons.push(es ? wellnessCell.status === 'expired' ? 'Wellness sin completar' : 'Wellness bajo su línea base' : wellnessCell.status === 'expired' ? 'Wellness missing' : 'Wellness below baseline'); if (habitsCell.status === 'attention') reasons.push(es ? 'Cumplimiento de hábitos bajo' : 'Low habit completion'); if (dataCell.status === 'incomplete') reasons.push(es ? 'Anamnesis incompleta' : 'Incomplete anamnesis'); if (nutritionCell.status === 'incomplete' || nutritionCell.status === 'expired') reasons.push(es ? 'Diario 24 h pendiente' : '24 h diary pending'); if (membershipCell.status === 'attention' || membershipCell.status === 'expired') reasons.push(es ? membershipCell.status === 'expired' ? 'Membresía vencida' : 'Membresía por vencer' : membershipCell.status === 'expired' ? 'Membership expired' : 'Membership expiring');
+      return { profile: athlete, training, wellness: wellnessCell, habits: habitsCell, nutrition: nutritionCell, data: dataCell, membership: membershipCell, adherencePct, reasons };
+    });
+    setData(next); setPage(1); setLoading(false);
+  }, [profile, es]);
+  useEffect(() => { void load(); }, [load]);
+  const filtered = useMemo(() => data.filter((row) => (!search || (row.profile.full_name ?? '').toLowerCase().includes(search.toLowerCase())) && (filter === 'all' || (filter === 'attention' ? row.reasons.length > 0 : [row.training, row.wellness, row.habits, row.nutrition, row.data, row.membership].some((x) => x.status === 'no_access')))), [data, search, filter]);
+  const count = Math.max(1, Math.ceil(filtered.length / T.pageSize)); const visible = filtered.slice((page - 1) * T.pageSize, page * T.pageSize); const attention = data.filter((x) => x.reasons.length).length; const adherence = data.map((x) => x.adherencePct).filter((x): x is number => x != null); const avg = adherence.length ? Math.round(adherence.reduce((a, b) => a + b, 0) / adherence.length) : null; const stale = data.filter((x) => x.data.status === 'expired' || x.data.status === 'incomplete').length; const renewals = data.filter((x) => x.membership.status === 'attention' || x.membership.status === 'expired').length;
+  if (loading) return <div className="flex min-h-[420px] items-center justify-center text-sm text-gray-500">{es ? 'Cargando panel...' : 'Loading dashboard...'}</div>;
+  const columns: [string, keyof Pick<Row, 'training' | 'wellness' | 'habits' | 'nutrition' | 'data' | 'membership'>][] = [[l.training, 'training'], [l.wellness, 'wellness'], [l.habits, 'habits'], [l.nutrition, 'nutrition'], [l.data, 'data'], [l.membership, 'membership']];
+  return <div className="min-h-screen bg-gray-50 px-4 py-6 dark:bg-gray-950 sm:px-6 lg:px-8"><div className="mx-auto max-w-7xl space-y-6"><header><h1 className="text-3xl font-bold text-gray-900 dark:text-white">{l.title}</h1><p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{l.subtitle}</p></header><div className="grid grid-cols-2 gap-3 md:grid-cols-5">{[[l.active, data.filter((x) => x.profile.is_active !== false).length], [l.attention, attention], [l.adherence, avg == null ? '—' : `${avg}%`], [l.stale, stale], [l.renewals, renewals]].map(([label, value]) => <div key={String(label)} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900"><div className="text-xs text-gray-500">{label}</div><div className="mt-1 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{value}</div></div>)}</div><section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-800 dark:bg-gray-900"><div className="mb-4 flex items-center justify-between"><div><h2 className="font-semibold text-gray-900 dark:text-white">{l.queue}</h2><p className="text-xs text-gray-500">{es ? 'Los chips explican cada motivo; sin acceso no genera alertas.' : 'Chips explain each reason; no access never creates alerts.'}</p></div><AlertTriangle className="h-5 w-5 text-amber-500" /></div>{data.filter((x) => x.reasons.length).length === 0 ? <p className="py-4 text-sm text-gray-500">{l.noReasons}</p> : <div className="flex flex-wrap gap-3">{data.filter((x) => x.reasons.length).map((row) => <button key={row.profile.id} onClick={() => openAthlete(row.profile.id, row.profile.full_name ?? '')} className="rounded-xl border border-amber-200 px-3 py-2 text-left hover:bg-amber-50 dark:border-amber-900/50"><span className="block text-sm font-semibold text-gray-900 dark:text-white">{row.profile.full_name ?? '—'}</span><span className="mt-1 flex flex-wrap gap-1">{row.reasons.map((reason) => <span key={reason} className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">{reason}</span>)}</span></button>)}</div>}</section><section className="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900"><div className="flex flex-col gap-3 border-b border-gray-200 p-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between"><h2 className="font-semibold text-gray-900 dark:text-white">{l.athletes}</h2><div className="flex gap-2"><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" /><input aria-label={l.search} value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder={l.search} className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm dark:border-gray-700 dark:bg-gray-800 sm:w-56" /></div><select aria-label="Filter" value={filter} onChange={(e) => { setFilter(e.target.value as typeof filter); setPage(1); }} className="rounded-lg border border-gray-200 bg-white px-2 text-sm dark:border-gray-700 dark:bg-gray-800"><option value="all">{l.all}</option><option value="attention">{l.attentionOnly}</option><option value="no_access">{l.accessOnly}</option></select></div></div><div className="hidden overflow-x-auto md:block"><table className="min-w-full text-left text-sm"><thead className="bg-gray-50 text-xs uppercase text-gray-500 dark:bg-gray-800/50"><tr><th className="px-4 py-3">Atleta</th>{columns.map(([label]) => <th key={label} className="px-4 py-3">{label}</th>)}</tr></thead><tbody className="divide-y divide-gray-100 dark:divide-gray-800">{visible.map((row) => <tr key={row.profile.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/40"><td className="px-4 py-3"><button onClick={() => openAthlete(row.profile.id, row.profile.full_name ?? '')} className="flex items-center gap-2 font-medium text-gray-900 hover:underline dark:text-white">{row.profile.avatar_url ? <img src={row.profile.avatar_url} alt="" className="h-8 w-8 rounded-full object-cover" /> : <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-xs dark:bg-gray-700">{row.profile.full_name?.charAt(0) ?? '?'}</span>}{row.profile.full_name ?? '—'}</button></td>{columns.map(([, key]) => <td key={key} className="px-4 py-3"><Badge cell={row[key]} es={es} /></td>)}</tr>)}</tbody></table></div><div className="space-y-3 p-4 md:hidden">{visible.map((row) => <button key={row.profile.id} onClick={() => openAthlete(row.profile.id, row.profile.full_name ?? '')} className="w-full rounded-xl border border-gray-200 p-4 text-left dark:border-gray-800"><div className="mb-3 flex items-center justify-between"><span className="font-semibold text-gray-900 dark:text-white">{row.profile.full_name ?? '—'}</span><span className="text-xs text-gray-500">{row.adherencePct == null ? l.noData : `${Math.round(row.adherencePct)}%`}</span></div><div className="flex flex-wrap gap-2">{columns.map(([, key]) => <Badge key={key} cell={row[key]} es={es} />)}</div></button>)}</div><div className="flex items-center justify-between border-t border-gray-200 px-4 py-3 text-xs text-gray-500 dark:border-gray-800"><span>{l.page} {page} / {count}</span><div className="flex gap-1"><button disabled={page <= 1} onClick={() => setPage((x) => x - 1)} className="rounded p-1 disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button><button disabled={page >= count} onClick={() => setPage((x) => x + 1)} className="rounded p-1 disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button></div></div></section></div></div>;
 }
