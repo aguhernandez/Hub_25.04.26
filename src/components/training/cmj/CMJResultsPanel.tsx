@@ -67,7 +67,7 @@ export default function CMJResultsPanel({ jumps }: CMJResultsPanelProps) {
           <div className="bg-gray-900 border border-orange-500/20 rounded-2xl p-4">
             <div className="flex items-center gap-2 mb-1">
               <Zap className="w-4 h-4 text-orange-400" />
-              <span className="text-xs text-gray-500">{txt.powerBest}</span>
+              <span className="text-xs text-gray-500">{txt.powerBest} (Samozino)</span>
             </div>
             <div className="text-2xl font-bold text-orange-400">{bestJump.estimatedPowerW.toFixed(0)}</div>
             <div className="text-xs text-gray-500 mt-0.5">W</div>
