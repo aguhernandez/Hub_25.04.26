@@ -3,6 +3,7 @@ import { useAuth } from './AuthContext';
 
 interface ThemeContextType {
   theme: 'light' | 'dark';
+  isDark: boolean;
   toggleTheme: () => void;
 }
 
@@ -30,7 +31,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, isDark: theme === 'dark', toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
