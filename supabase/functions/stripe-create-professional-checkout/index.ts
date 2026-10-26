@@ -34,7 +34,10 @@ Deno.serve(async (req: Request) => {
     if (interval !== 'monthly' && interval !== 'yearly') return response({ error: 'Invalid interval' }, 400);
     const modules = [...new Set(body.modules ?? [])];
     if (modules.length === 0) return response({ error: 'Select at least one module' }, 400);
-    const extraAthletes = Math.min(10, Math.max(0, Math.floor(body.extra_athletes ?? 0)));
+    const { data: maxExtraSetting } = await supabase.from('platform_settings').select('value').eq('key', 'max_extra_packs').maybeSingle();
+    const maxExtraPacks = Number(maxExtraSetting?.value ?? 10);
+    const extraAthletes = Math.min(Number.isFinite(maxExtraPacks) ? maxExtraPacks : 10, Math.max(0, Math.floor(body.extra_athletes ?? 0)));
+    if (modules.includes('extra_athletes') && extraAthletes === 0) return response({ error: 'Extra athlete packs must be greater than zero' }, 400);
     if (extraAthletes > 0 && !modules.includes('extra_athletes')) modules.push('extra_athletes');
 
     const { data: setting } = await supabase.from('platform_settings').select('value').eq('key', 'professional_checkout_enabled').maybeSingle();
@@ -73,6 +76,10 @@ Deno.serve(async (req: Request) => {
     params.set('metadata[extra_athletes]', String(extraAthletes));
     if (existingSub?.stripe_customer_id) params.set('customer', existingSub.stripe_customer_id);
     prices.forEach((item, index) => { params.set(`line_items[${index}][price]`, item.price!); params.set(`line_items[${index}][quantity]`, String(item.quantity)); });
+    params.set('subscription_data[metadata][user_id]', user.id);
+    params.set('subscription_data[metadata][modules]', JSON.stringify(modules));
+    params.set('subscription_data[metadata][extra_athletes]', String(extraAthletes));
+    params.set('subscription_data[metadata][billing_cycle]', interval);
     const endurance = rows.find(row => row.module_key === 'endurance_planner');
     if (endurance?.trial_days && !existingSub) params.set('subscription_data[trial_period_days]', String(endurance.trial_days));
 
