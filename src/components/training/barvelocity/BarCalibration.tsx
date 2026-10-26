@@ -1,15 +1,16 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { Target, CheckCircle, AlertCircle, Move } from 'lucide-react';
 import { CalibrationData } from './BarVelocityTypes';
-import { pxPerMmFromPlate } from './plateTracker';
+import { detectPlateCircle, pxPerMmFromPlate } from './plateTracker';
 import { useLanguage } from '../../../contexts/LanguageContext';
 
 interface BarCalibrationProps {
   videoRef: React.RefObject<HTMLVideoElement>;
   onCalibrated: (data: CalibrationData) => void;
+  sourceFile?: File | null;
 }
 
-export default function BarCalibration({ videoRef, onCalibrated }: BarCalibrationProps) {
+export default function BarCalibration({ videoRef, onCalibrated, sourceFile }: BarCalibrationProps) {
   const { language } = useLanguage();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dragging, setDragging] = useState<'top' | 'bottom' | null>(null);
@@ -17,6 +18,8 @@ export default function BarCalibration({ videoRef, onCalibrated }: BarCalibratio
   const [barBottom, setBarBottom] = useState(70);
   const [videoHeight, setVideoHeight] = useState(300);
   const [calibrated, setCalibrated] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [plateDiameterMm, setPlateDiameterMm] = useState(450);
 
   const txt = {
     title: language === 'es' ? 'Calibracion con disco olimpico' : 'Olympic disc calibration',
@@ -38,11 +41,32 @@ export default function BarCalibration({ videoRef, onCalibrated }: BarCalibratio
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+    if (sourceFile) {
+      const url = URL.createObjectURL(sourceFile);
+      video.srcObject = null;
+      video.src = url;
+      video.muted = true;
+      video.playsInline = true;
+      video.load();
+      void video.play().catch(() => undefined);
+      return () => {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+        URL.revokeObjectURL(url);
+      };
+    }
+    return undefined;
+  }, [sourceFile, videoRef]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
     const update = () => setVideoHeight(video.videoHeight || 300);
     update();
     video.addEventListener('resize', update);
     return () => video.removeEventListener('resize', update);
-  }, [videoRef]);
+  }, [videoRef, sourceFile]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -130,7 +154,7 @@ export default function BarCalibration({ videoRef, onCalibrated }: BarCalibratio
     const botY = (barBottom / 100) * canvas.height;
     const diameterPx = botY - topY;
     const radiusPx = diameterPx / 2;
-    const pixelsPerMm = pxPerMmFromPlate(radiusPx);
+    const pixelsPerMm = pxPerMmFromPlate(radiusPx, plateDiameterMm);
 
     onCalibrated({
       barTopY: topY,
@@ -142,8 +166,28 @@ export default function BarCalibration({ videoRef, onCalibrated }: BarCalibratio
       radiusPx,
       processingWidth: canvas.width,
       processingHeight: canvas.height,
+      plateDiameterMm,
     });
     setCalibrated(true);
+  };
+
+  const autoDetect = () => {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video || video.readyState < 2) return;
+    setDetecting(true);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { setDetecting(false); return; }
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const gray = new Uint8ClampedArray(canvas.width * canvas.height);
+    for (let i = 0, p = 0; i < gray.length; i++, p += 4) gray[i] = Math.round(0.299 * image.data[p] + 0.587 * image.data[p + 1] + 0.114 * image.data[p + 2]);
+    const detected = detectPlateCircle({ data: gray, width: canvas.width, height: canvas.height });
+    if (detected) {
+      setBarTop(Math.max(5, ((detected.cy - detected.radiusPx) / canvas.height) * 100));
+      setBarBottom(Math.min(95, ((detected.cy + detected.radiusPx) / canvas.height) * 100));
+    }
+    setDetecting(false);
   };
 
   return (
@@ -179,7 +223,7 @@ export default function BarCalibration({ videoRef, onCalibrated }: BarCalibratio
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-xs">
+      <div className="grid grid-cols-3 gap-2 text-xs">
         <div className="bg-gray-800/60 rounded-xl p-2.5">
           <div className="text-gray-400 mb-0.5">{txt.topLine}</div>
           <div className="font-mono text-primary">{barTop.toFixed(1)}% {txt.framePercent}</div>
@@ -188,7 +232,16 @@ export default function BarCalibration({ videoRef, onCalibrated }: BarCalibratio
           <div className="text-gray-400 mb-0.5">{txt.bottomLine}</div>
           <div className="font-mono text-primary">{barBottom.toFixed(1)}% {txt.framePercent}</div>
         </div>
+        <label className="bg-gray-800/60 rounded-xl p-2.5">
+          <div className="text-gray-400 mb-0.5">{language === 'es' ? 'Diámetro del disco' : 'Disc diameter'}</div>
+          <div className="flex items-center gap-1"><input type="number" min="50" max="1000" step="1" value={plateDiameterMm} onChange={(event) => setPlateDiameterMm(Number(event.target.value) || 450)} className="w-full bg-transparent text-primary font-mono outline-none" /><span className="text-gray-500">mm</span></div>
+        </label>
       </div>
+
+      <button onClick={autoDetect} disabled={detecting} className="w-full flex items-center justify-center gap-2 rounded-xl border border-primary/30 text-primary py-2.5 text-xs disabled:opacity-50">
+        <Target className="w-4 h-4" />
+        {detecting ? (language === 'es' ? 'Buscando disco…' : 'Finding disc…') : (language === 'es' ? 'Detectar disco automáticamente (ajustar si hace falta)' : 'Auto-detect disc (adjust if needed)')}
+      </button>
 
       {calibrated ? (
         <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/20 rounded-2xl">
@@ -196,7 +249,7 @@ export default function BarCalibration({ videoRef, onCalibrated }: BarCalibratio
           <div>
             <p className="text-sm font-semibold text-green-400">{txt.confirmed}</p>
             <p className="text-xs text-green-400/70">
-              {txt.scale}: {((barBottom - barTop) / 100 * videoHeight / 450).toFixed(3)} px/mm
+              {txt.scale}: {((barBottom - barTop) / 100 * videoHeight / plateDiameterMm).toFixed(3)} px/mm
             </p>
           </div>
         </div>
