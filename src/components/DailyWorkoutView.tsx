@@ -78,6 +78,8 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
   const [loading, setLoading] = useState(true);
   const [expandedExercise, setExpandedExercise] = useState<string | null>(null);
   const [setTracking, setSetTracking] = useState<{ [key: string]: SetTracking }>({});
+  const [exerciseNotes, setExerciseNotes] = useState<Record<string, string>>({});
+  const [savingExerciseNote, setSavingExerciseNote] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [newDate, setNewDate] = useState('');
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -405,6 +407,8 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       const formattedExercises = groupConsecutiveSameExercises(exercisesData || []);
 
       setExercises(formattedExercises);
+      await loadExerciseNotes(selectedWorkout.id);
+      await loadExerciseNotes(allActivities[0].id);
 
       // Load training logs to populate setTracking state
       if (allActivities[0]?.id) {
@@ -412,6 +416,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       }
     } else {
       setExercises([]);
+      setExerciseNotes({});
     }
 
     setLoading(false);
@@ -473,6 +478,77 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
     setSetTracking(newTracking);
   };
 
+  const loadExerciseNotes = async (athleteWorkoutId: string) => {
+    const { data, error } = await supabase
+      .from('exercise_notes')
+      .select('workout_exercise_id, note')
+      .eq('athlete_workout_id', athleteWorkoutId);
+    if (error) {
+      console.error('Error loading exercise notes:', error);
+      return;
+    }
+    setExerciseNotes((data || []).reduce<Record<string, string>>((notes, row: any) => {
+      notes[row.workout_exercise_id] = row.note;
+      return notes;
+    }, {}));
+  };
+
+  const saveExerciseNote = async (exercise: Exercise, value: string) => {
+    if (!workout?.id || !profile?.id) return;
+    const note = value.trim();
+    setSavingExerciseNote(exercise.workout_exercise_id);
+    try {
+      if (!note) {
+        const { error: deleteError } = await supabase.from('exercise_notes')
+          .delete()
+          .eq('athlete_workout_id', workout.id)
+          .eq('workout_exercise_id', exercise.workout_exercise_id);
+        if (deleteError) throw deleteError;
+      } else {
+        const { error: saveError } = await supabase.from('exercise_notes').upsert({
+          athlete_id: profile.id,
+          athlete_workout_id: workout.id,
+          workout_exercise_id: exercise.workout_exercise_id,
+          note,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'athlete_workout_id,workout_exercise_id' });
+        if (saveError) throw saveError;
+      }
+      setExerciseNotes(prev => ({ ...prev, [exercise.workout_exercise_id]: note }));
+    } catch (err) {
+      console.error('Error saving exercise note:', err);
+      error(language === 'es' ? 'No se pudo guardar la nota del ejercicio.' : 'Could not save the exercise note.');
+    } finally {
+      setSavingExerciseNote(null);
+    }
+  };
+
+  const saveAllExerciseNotes = async () => {
+    await Promise.all(exercises.map(exercise => saveExerciseNote(exercise, exerciseNotes[exercise.workout_exercise_id] || '')));
+  };
+
+  const notifyTrainerOfExerciseNotes = async (feedback?: FeedbackData) => {
+    if (!workout?.trainer_id) return;
+    const noteLines = exercises
+      .map(exercise => ({ name: exercise.name, note: (exerciseNotes[exercise.workout_exercise_id] || '').trim() }))
+      .filter(item => item.note)
+      .map(item => `${item.name}: ${item.note}`);
+    if (noteLines.length === 0) return;
+    const athleteName = profile?.full_name || profile?.email || (language === 'es' ? 'Tu atleta' : 'Your athlete');
+    const summary = noteLines.slice(0, 3).join(' · ');
+    const suffix = noteLines.length > 3 ? (language === 'es' ? ' · y más' : ' · and more') : '';
+    await supabase.from('notifications').insert({
+      user_id: workout.trainer_id,
+      type: 'training',
+      title: language === 'es' ? 'Nueva nota de entrenamiento' : 'New workout note',
+      message: language === 'es'
+        ? `${athleteName} dejó notas en ${workout.workouts?.name || 'su entrenamiento'}${feedback ? ` (RPE ${feedback.rpe})` : ''}: ${summary}${suffix}`
+        : `${athleteName} left notes in ${workout.workouts?.name || 'their workout'}${feedback ? ` (RPE ${feedback.rpe})` : ''}: ${summary}${suffix}`,
+      link_type: 'performance_session',
+      link_id: workout.id,
+    });
+  };
+
   const handleCompleteWorkout = async () => {
     if (!workout?.id || !profile?.id) return;
     if (!workoutStartTime) setWorkoutStartTime(Date.now());
@@ -517,6 +593,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
 
   const handleFeedbackSubmit = async (feedback: FeedbackData) => {
     if (!workout?.id || !profile?.id) return;
+    await saveAllExerciseNotes();
 
     const trainingLogs = [];
     let totalVolume = 0;
@@ -641,6 +718,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       .eq('id', workout.id);
 
     if (!error) {
+      await notifyTrainerOfExerciseNotes(feedback);
       // Create performance session record
       await supabase.from('performance_sessions').insert({
         athlete_id: profile.id,
@@ -696,6 +774,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
 
   const handleFeedbackSkip = async () => {
     if (!workout?.id || !profile?.id) return;
+    await saveAllExerciseNotes();
 
     const trainingLogs = [];
     let totalVolume = 0;
@@ -770,6 +849,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       .eq('id', workout.id);
 
     if (!error) {
+      await notifyTrainerOfExerciseNotes();
       // Trigger refresh of workout history
       window.dispatchEvent(new Event('workout-history-refresh'));
 
@@ -1044,6 +1124,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       }
     } else {
       setExercises([]);
+      setExerciseNotes({});
       setSetTracking({});
     }
   };
@@ -1565,6 +1646,26 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
                             <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
                               {exercise.notes}
                             </p>
+                          )}
+                          {workout.type === 'workout' && (
+                            <div className="mt-3 rounded-lg border border-dashed border-gray-200 dark:border-gray-700 bg-gray-50/70 dark:bg-gray-900/40 p-2.5">
+                              <label className="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
+                                {language === 'es' ? 'Nota del atleta' : 'Athlete note'}
+                              </label>
+                              <textarea
+                                value={exerciseNotes[exercise.workout_exercise_id] || ''}
+                                onChange={(e) => setExerciseNotes(prev => ({ ...prev, [exercise.workout_exercise_id]: e.target.value }))}
+                                onBlur={(e) => void saveExerciseNote(exercise, e.target.value)}
+                                placeholder={language === 'es' ? '¿Cómo te fue en este ejercicio?' : 'How did this exercise feel?'}
+                                rows={2}
+                                className="w-full resize-none rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2.5 py-2 text-xs text-gray-800 dark:text-gray-200 outline-none focus:border-[#514163] focus:ring-1 focus:ring-[#514163]/30"
+                              />
+                              {savingExerciseNote === exercise.workout_exercise_id && (
+                                <span className="mt-1 block text-[10px] text-gray-400">
+                                  {language === 'es' ? 'Guardando…' : 'Saving…'}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </div>
 

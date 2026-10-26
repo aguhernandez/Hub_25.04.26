@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
-import { Bell, X, Check, MessageSquare, MessageCircle, Settings as SettingsIcon } from 'lucide-react';
+import { Bell, X, Check, MessageSquare, MessageCircle, Settings as SettingsIcon, Dumbbell } from 'lucide-react';
 
 interface Notification {
   id: string;
@@ -108,6 +108,8 @@ export default function NotificationCenter() {
         return <MessageCircle className="w-5 h-5 text-blue-500" />;
       case 'announcement':
         return <Bell className="w-5 h-5 text-purple-500" />;
+      case 'training':
+        return <Dumbbell className="w-5 h-5 text-[#514163] dark:text-[#fdda36]" />;
       default:
         return <SettingsIcon className="w-5 h-5 text-gray-500 dark:text-gray-400" />;
     }

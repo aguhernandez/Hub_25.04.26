@@ -60,6 +60,11 @@ interface RecentSession {
   session_rpe?: number;
   duration_minutes?: number;
   workout_name?: string;
+  athlete_workout_id?: string;
+  feedback_notes?: string | null;
+  energy_level?: string | null;
+  pain_level?: string | null;
+  mood?: string | null;
   // External activity fields
   name?: string;
   sport_type?: string;
@@ -216,7 +221,7 @@ export default function PerformanceDashboard() {
     // Load gym sessions
     const { data: gymSessions, error: gymError } = await supabase
       .from('performance_sessions')
-      .select('id, session_date, total_volume, session_rpe, duration_minutes, athlete_workout_id, athlete_workouts!athlete_workout_id(workout_id, workouts(name))')
+      .select('id, session_date, total_volume, session_rpe, duration_minutes, athlete_workout_id, athlete_workouts!athlete_workout_id(workout_id, feedback_notes, energy_level, pain_level, mood, completed_at, notes, workouts(name))')
       .eq('athlete_id', targetAthleteId)
       .order('session_date', { ascending: false })
       .limit(15);
@@ -254,6 +259,10 @@ export default function PerformanceDashboard() {
           session_rpe: session.session_rpe,
           duration_minutes: session.duration_minutes,
           athlete_workout_id: session.athlete_workout_id,
+          feedback_notes: aw?.feedback_notes,
+          energy_level: aw?.energy_level,
+          pain_level: aw?.pain_level,
+          mood: aw?.mood,
           workout_name: workoutName,
         } as any);
       });
@@ -1504,6 +1513,8 @@ interface SessionDetailsModalProps {
 
 function SessionDetailsModal({ session, onClose, language, formatDuration, formatDistance, getSportIcon }: SessionDetailsModalProps) {
   const [exerciseLogs, setExerciseLogs] = useState<any[]>([]);
+  const [exerciseNotes, setExerciseNotes] = useState<Record<string, string>>({});
+  const [feedback, setFeedback] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -1525,7 +1536,8 @@ function SessionDetailsModal({ session, onClose, language, formatDuration, forma
       return;
     }
 
-    const { data, error } = await supabase
+    const [{ data, error }, { data: notesData }, { data: workoutData }] = await Promise.all([
+      supabase
       .from('training_logs')
       .select(`
         weight_used,
@@ -1540,7 +1552,22 @@ function SessionDetailsModal({ session, onClose, language, formatDuration, forma
         )
       `)
       .eq('athlete_workout_id', athleteWorkoutId)
-      .order('set_number', { ascending: true });
+      .order('set_number', { ascending: true }),
+      supabase.from('exercise_notes')
+        .select('note, workout_exercise_id, workout_exercises(exercise_id, exercises(id, exercise, exercise_en, exercise_es))')
+        .eq('athlete_workout_id', athleteWorkoutId),
+      supabase.from('athlete_workouts')
+        .select('feedback_notes, energy_level, pain_level, mood, completed_at, notes')
+        .eq('id', athleteWorkoutId)
+        .maybeSingle(),
+    ]);
+
+    setFeedback(workoutData || null);
+    setExerciseNotes((notesData || []).reduce<Record<string, string>>((acc: Record<string, string>, row: any) => {
+      const exerciseId = row.workout_exercises?.exercise_id;
+      if (exerciseId && row.note) acc[exerciseId] = row.note;
+      return acc;
+    }, {}));
 
     if (!error && data && data.length > 0) {
       const exerciseMap = new Map<string, any>();
@@ -1558,6 +1585,7 @@ function SessionDetailsModal({ session, onClose, language, formatDuration, forma
             max_weight: 0,
             total_reps: 0,
             rir_values: [] as number[],
+            exercise_id: exId,
           });
         }
         const entry = exerciseMap.get(exId)!;
@@ -1631,6 +1659,21 @@ function SessionDetailsModal({ session, onClose, language, formatDuration, forma
               )}
             </div>
 
+            {(feedback?.feedback_notes || feedback?.energy_level || feedback?.pain_level || feedback?.mood) && (
+              <div className="mb-6 rounded-2xl border border-[#fdda36]/30 bg-gradient-to-br from-[#514163] to-[#352a43] p-4 text-white shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold">{language === 'es' ? 'Feedback del atleta' : 'Athlete feedback'}</h4>
+                  {feedback?.completed_at && <span className="text-xs text-white/60">{new Date(feedback.completed_at).toLocaleTimeString()}</span>}
+                </div>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {feedback?.energy_level && <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs">{language === 'es' ? 'Energía' : 'Energy'}: {feedback.energy_level}</span>}
+                  {feedback?.pain_level && <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs">{language === 'es' ? 'Dolor' : 'Pain'}: {feedback.pain_level}</span>}
+                  {feedback?.mood && <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs">{language === 'es' ? 'Ánimo' : 'Mood'}: {feedback.mood}</span>}
+                </div>
+                {feedback?.feedback_notes && <p className="text-sm leading-relaxed text-white/90">“{feedback.feedback_notes}”</p>}
+              </div>
+            )}
+
             {/* Exercise List */}
             <div className="space-y-3">
               <h4 className="font-semibold text-gray-900 dark:text-white">
@@ -1674,6 +1717,12 @@ function SessionDetailsModal({ session, onClose, language, formatDuration, forma
                         </div>
                       )}
                     </div>
+                    {exerciseNotes[log.exercise_id] && (
+                      <div className="mt-3 rounded-lg border-l-4 border-[#fdda36] bg-amber-50 dark:bg-amber-900/20 px-3 py-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">{language === 'es' ? 'Nota del atleta' : 'Athlete note'}</p>
+                        <p className="mt-1 text-sm text-gray-700 dark:text-gray-300">{exerciseNotes[log.exercise_id]}</p>
+                      </div>
+                    )}
                   </div>
                 ))
               ) : (
