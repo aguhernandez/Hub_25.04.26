@@ -23,6 +23,7 @@ interface SetLine {
   primary_metric?: string;
   secondary_metric?: string;
   rest_seconds?: number;
+  notes?: string;
   working_set?: boolean;
 }
 
@@ -42,6 +43,7 @@ interface Exercise {
   secondary_value?: string;
   primary_metric?: string;
   secondary_metric?: string;
+  notes?: string;
   set_lines?: SetLine[];
   working_set?: boolean;
 }
@@ -125,6 +127,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
             primary_metric: lastGroup.primary_metric,
             secondary_metric: lastGroup.secondary_metric,
             rest_seconds: lastGroup.rest_seconds,
+            notes: lastGroup.notes,
             working_set: (lastGroup as any).working_set ?? false
           }];
         }
@@ -138,6 +141,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
           primary_metric: item.primary_metric,
           secondary_metric: item.secondary_metric,
           rest_seconds: item.rest_seconds || 60,
+          notes: item.notes,
           working_set: item.working_set ?? false
         });
       } else {
@@ -157,6 +161,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
           secondary_value: item.secondary_value,
           primary_metric: item.primary_metric,
           secondary_metric: item.secondary_metric,
+          notes: item.notes,
           working_set: item.working_set ?? false,
         } as any);
       }
@@ -393,7 +398,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       console.log('🔍 Loading exercises for workout:', allActivities[0].workout_id);
       const { data: exercisesData, error: exError } = await supabase
         .from('workout_exercises')
-        .select('id, order_index, sets, reps, rest_seconds, section_title, block_instance_id, primary_value, secondary_value, primary_metric, secondary_metric, working_set, exercises(id, exercise, exercise_en, exercise_es, description, description_en, description_es, link)')
+        .select('id, order_index, sets, reps, rest_seconds, notes, section_title, block_instance_id, primary_value, secondary_value, primary_metric, secondary_metric, working_set, exercises(id, exercise, exercise_en, exercise_es, description, description_en, description_es, link)')
         .eq('workout_id', allActivities[0].workout_id)
         .order('order_index');
 
@@ -1025,7 +1030,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
     if (selectedWorkout?.workout_id) {
       const { data: exercisesData } = await supabase
         .from('workout_exercises')
-        .select('id, order_index, sets, reps, rest_seconds, section_title, block_instance_id, primary_value, secondary_value, primary_metric, secondary_metric, working_set, exercises(id, exercise, exercise_en, exercise_es, description, description_en, description_es, link)')
+        .select('id, order_index, sets, reps, rest_seconds, notes, section_title, block_instance_id, primary_value, secondary_value, primary_metric, secondary_metric, working_set, exercises(id, exercise, exercise_en, exercise_es, description, description_en, description_es, link)')
         .eq('workout_id', selectedWorkout.workout_id)
         .order('order_index');
 
@@ -1523,6 +1528,11 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
                                       {line.rest_seconds}s
                                     </span>
                                   ) : null}
+                                  {line.notes && (
+                                    <p className="basis-full mt-1 text-xs text-gray-500 dark:text-gray-400 italic">
+                                      {line.notes}
+                                    </p>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -1550,6 +1560,11 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
                                 </span>
                               ) : null}
                             </div>
+                          )}
+                          {!exercise.set_lines && exercise.notes && (
+                            <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic">
+                              {exercise.notes}
+                            </p>
                           )}
                         </div>
 
