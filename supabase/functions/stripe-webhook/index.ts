@@ -79,12 +79,16 @@ Deno.serve(async (req: Request) => {
   log('INFO', 'event_parsed', { event_id: event.id, event_type: event.type });
 
   // ── Idempotency: skip already-processed events ─────────────────────────────
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from('stripe_webhook_events')
     .select('id, processed')
     .eq('event_id', event.id)
     .maybeSingle();
 
+  if (existingError) {
+    log('ERROR', 'event_lookup_failed', { event_id: event.id, error: existingError.message });
+    return new Response(JSON.stringify({ error: 'Webhook state unavailable' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
   if (existing?.processed) {
     log('INFO', 'event_already_processed', { event_id: event.id });
     return new Response(
@@ -94,10 +98,14 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Log event to DB (upsert for retries) ──────────────────────────────────
-  await supabase.from('stripe_webhook_events').upsert(
+  const { error: eventLogError } = await supabase.from('stripe_webhook_events').upsert(
     { event_id: event.id, event_type: event.type, raw_payload: event, processed: false },
     { onConflict: 'event_id' },
   );
+  if (eventLogError) {
+    log('ERROR', 'event_log_failed', { event_id: event.id, error: eventLogError.message });
+    return new Response(JSON.stringify({ error: 'Webhook state unavailable' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
 
   // ── Route event ────────────────────────────────────────────────────────────
   let processingError: string | null = null;
@@ -146,7 +154,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── Mark event processed (or store error) ─────────────────────────────────
-  await supabase
+  const { error: eventUpdateError } = await supabase
     .from('stripe_webhook_events')
     .update({
       processed: !processingError || permanentError,
@@ -154,6 +162,10 @@ Deno.serve(async (req: Request) => {
       error_message: processingError,
     })
     .eq('event_id', event.id);
+  if (eventUpdateError) {
+    log('ERROR', 'event_status_update_failed', { event_id: event.id, error: eventUpdateError.message });
+    return new Response(JSON.stringify({ error: 'Webhook state unavailable' }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
 
   // Retry transient processing failures; permanent validation errors are logged as 200.
   log('INFO', 'webhook_complete', { event_id: event.id, success: !processingError });
@@ -659,17 +671,18 @@ async function handleProfessionalCheckoutCompleted(supabase: any, session: any, 
     ? new Date(session.subscription_details.trial_end * 1000).toISOString()
     : null;
 
+  const hasTrial = Boolean(session.subscription_details?.trial_end);
   const { error } = await supabase.from('professional_subscriptions').upsert({
     user_id: resolvedUserId,
     stripe_customer_id: session.customer,
     stripe_subscription_id: session.subscription,
     stripe_price_id: session.metadata?.price_id || null,
     billing_cycle: billing_cycle || 'monthly',
-    status: 'trialing',
+    status: hasTrial ? 'trialing' : 'active',
     trial_end: trialEnd,
-    current_period_end: session.subscription_details?.trial_end
-      ? new Date(session.subscription_details.trial_end * 1000).toISOString()
-      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    current_period_end: session.subscription_details?.current_period_end
+      ? new Date(session.subscription_details.current_period_end * 1000).toISOString()
+      : null,
     max_athletes: 50,
   }, { onConflict: 'stripe_subscription_id' });
 
@@ -678,11 +691,12 @@ async function handleProfessionalCheckoutCompleted(supabase: any, session: any, 
     throw error;
   }
 
-  await supabase.from('professional_roles').upsert({
+  const { error: roleError } = await supabase.from('professional_roles').upsert({
     user_id: resolvedUserId,
     role: professionalRole,
     source: purchasedProductId === 'prod_VDsyApWSBhtc6k' ? 'stripe_legacy' : 'stripe',
   }, { onConflict: 'user_id,role' });
+  if (roleError) throw roleError;
 
   // New professional checkouts carry the selected catalog modules in metadata.
   // Keep the legacy Professional Account path unchanged and only add entitlements
@@ -692,16 +706,29 @@ async function handleProfessionalCheckoutCompleted(supabase: any, session: any, 
     const moduleKeys = requestedModules.includes('all_access')
       ? ['all_access', 'endurance_planner', 'nutrition_planner', 'lab', 'performance', 'biomechanics']
       : requestedModules;
-    const extraQuantity = Math.max(1, Number(session.metadata?.extra_athletes || 1));
-    const entitlementRows = moduleKeys.map(moduleKey => ({
+    const extraQuantity = Number(session.metadata?.extra_athletes || 0);
+    if (moduleKeys.includes('extra_athletes') && (!Number.isInteger(extraQuantity) || extraQuantity < 1)) {
+      throw new PermanentWebhookError('Invalid extra athlete pack quantity');
+    }
+    const { data: catalogRows, error: catalogError } = await supabase
+      .from('module_catalog')
+      .select('module_key')
+      .in('module_key', moduleKeys)
+      .eq('available', true);
+    if (catalogError) throw catalogError;
+    const availableKeys = new Set((catalogRows ?? []).map((row: { module_key: string }) => row.module_key));
+    if (moduleKeys.some(moduleKey => !availableKeys.has(moduleKey))) {
+      throw new PermanentWebhookError('Professional checkout contains an unknown or unavailable module');
+    }
+    const entitlementRows = moduleKeys.filter(moduleKey => moduleKey !== 'extra_athletes' || extraQuantity > 0).map(moduleKey => ({
       user_id: resolvedUserId,
       module_key: moduleKey,
       quantity: moduleKey === 'extra_athletes' ? extraQuantity : 1,
-      status: 'trialing',
+      status: hasTrial ? 'trialing' : 'active',
       source: 'stripe',
       stripe_subscription_id: session.subscription,
-      current_period_end: session.subscription_details?.trial_end
-        ? new Date(session.subscription_details.trial_end * 1000).toISOString()
+      current_period_end: session.subscription_details?.current_period_end
+        ? new Date(session.subscription_details.current_period_end * 1000).toISOString()
         : null,
       updated_at: new Date().toISOString(),
     }));
@@ -770,6 +797,92 @@ async function handleSubscriptionStatusEvent(supabase: any, event: StripeEvent, 
   log('INFO', 'professional_subscription_status_changed', { subscription_id: subscriptionId, status });
 }
 
+// Stripe can deliver subscription events before checkout.session.completed.
+// Subscription metadata is written by stripe-create-professional-checkout, so
+// those events can provision the row instead of being silently discarded.
+async function ensureProfessionalSubscriptionFromEvent(supabase: any, subscription: any): Promise<boolean> {
+  const resolvedUserId = subscription.metadata?.user_id;
+  if (!resolvedUserId) return false;
+
+  const { data: roleRequest, error: requestError } = await supabase
+    .from('professional_role_requests')
+    .select('role')
+    .eq('user_id', resolvedUserId)
+    .maybeSingle();
+  if (requestError) throw requestError;
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', resolvedUserId)
+    .maybeSingle();
+  if (profileError) throw profileError;
+
+  const professionalRole = roleRequest?.role
+    || (['trainer', 'nutritionist', 'head_coach', 'biomechanist'].includes(profile?.role) ? profile.role : null);
+  if (!professionalRole) return false;
+
+  const status = subscription.status || 'active';
+  const trialEnd = subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null;
+  const periodEnd = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null;
+  const { error: subscriptionError } = await supabase.from('professional_subscriptions').upsert({
+    user_id: resolvedUserId,
+    stripe_customer_id: subscription.customer || null,
+    stripe_subscription_id: subscription.id,
+    stripe_price_id: subscription.items?.data?.[0]?.price?.id || null,
+    billing_cycle: subscription.metadata?.billing_cycle || 'monthly',
+    status,
+    trial_end: trialEnd,
+    current_period_end: periodEnd,
+    max_athletes: 50,
+  }, { onConflict: 'stripe_subscription_id' });
+  if (subscriptionError) throw subscriptionError;
+
+  const { error: roleError } = await supabase.from('professional_roles').upsert({
+    user_id: resolvedUserId,
+    role: professionalRole,
+    source: 'stripe',
+  }, { onConflict: 'user_id,role' });
+  if (roleError) throw roleError;
+
+  const requestedModules = parseModuleMetadata(subscription.metadata?.modules);
+  if (requestedModules.length === 0) return true;
+  const moduleKeys = requestedModules.includes('all_access')
+    ? ['all_access', 'endurance_planner', 'nutrition_planner', 'lab', 'performance', 'biomechanics']
+    : requestedModules;
+  const { data: catalogRows, error: catalogError } = await supabase
+    .from('module_catalog')
+    .select('module_key')
+    .in('module_key', moduleKeys)
+    .eq('available', true);
+  if (catalogError) throw catalogError;
+  const availableKeys = new Set((catalogRows ?? []).map((row: { module_key: string }) => row.module_key));
+  if (moduleKeys.some(moduleKey => !availableKeys.has(moduleKey))) {
+    throw new PermanentWebhookError('Subscription contains an unknown or unavailable module');
+  }
+  const extraQuantity = Number(subscription.metadata?.extra_athletes || 0);
+  if (moduleKeys.includes('extra_athletes') && (!Number.isInteger(extraQuantity) || extraQuantity < 1)) {
+    throw new PermanentWebhookError('Invalid extra athlete pack quantity');
+  }
+  const entitlementRows = moduleKeys
+    .filter(moduleKey => moduleKey !== 'extra_athletes' || extraQuantity > 0)
+    .map(moduleKey => ({
+      user_id: resolvedUserId,
+      module_key: moduleKey,
+      quantity: moduleKey === 'extra_athletes' ? extraQuantity : 1,
+      status: normalizeEntitlementStatus(status),
+      source: 'stripe',
+      stripe_subscription_id: subscription.id,
+      current_period_end: periodEnd,
+      updated_at: new Date().toISOString(),
+    }));
+  const { error: entitlementError } = await supabase
+    .from('professional_entitlements')
+    .upsert(entitlementRows, { onConflict: 'user_id,module_key,source' });
+  if (entitlementError) throw entitlementError;
+  return true;
+}
+
 // ── Subscription updated ───────────────────────────────────────────────────────
 async function handleSubscriptionUpdated(supabase: any, event: StripeEvent) {
   const subscription = event.data.object;
@@ -783,6 +896,11 @@ async function handleSubscriptionUpdated(supabase: any, event: StripeEvent) {
     .select('id, user_id')
     .eq('stripe_subscription_id', subscription.id)
     .maybeSingle();
+
+  if (!profSub && await ensureProfessionalSubscriptionFromEvent(supabase, subscription)) {
+    log('INFO', 'professional_subscription_recovered_from_subscription_event', { subscription_id: subscriptionId });
+    return;
+  }
 
   if (profSub) {
     const status = subscription.status || 'active';
@@ -864,6 +982,11 @@ async function handleSubscriptionActive(supabase: any, event: StripeEvent) {
     .select('id, user_id')
     .eq('stripe_subscription_id', subscriptionId)
     .maybeSingle();
+
+  if (!profSub && await ensureProfessionalSubscriptionFromEvent(supabase, subscription)) {
+    log('INFO', 'professional_subscription_recovered_from_subscription_event', { subscription_id: subscriptionId });
+    return;
+  }
 
   if (profSub) {
     const status = subscription.status || 'active';
