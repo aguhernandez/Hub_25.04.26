@@ -35,9 +35,13 @@ Deno.serve(async (req: Request) => {
 
     if (profileError || !profile) throw new Error('User profile not found');
 
-    const { data: effectiveRoles } = await supabaseClient.rpc('effective_roles', { p_user_id: user.id });
-    const isProfessional = ['trainer', 'nutritionist', 'head_coach', 'biomechanist'].includes(profile.role)
-      || (effectiveRoles ?? []).some((item: { role?: string }) => ['trainer', 'nutritionist', 'head_coach', 'biomechanist'].includes(item.role ?? ''));
+    const { data: effectiveRoles } = await supabaseClient.rpc('effective_professional_roles', { p_user_id: user.id });
+    const { data: hasAccess, error: accessError } = await supabaseClient.rpc('has_active_professional_access', { p_user_id: user.id });
+    if (accessError) throw new Error('Failed to load professional access');
+    const isProfessional = Boolean(hasAccess) && (
+      ['trainer', 'nutritionist', 'head_coach', 'biomechanist'].includes(profile.role)
+      || (effectiveRoles ?? []).some((item: { role?: string }) => ['trainer', 'nutritionist', 'head_coach', 'biomechanist'].includes(item.role ?? ''))
+    );
     if (!isProfessional) throw new Error('Only professional accounts can access billing');
 
     const { data: subscription, error: subError } = await supabaseClient
