@@ -1,4 +1,4 @@
-import { flightMsToHeightCm, sayersPeakPowerSJ, summarizeSession } from '../jumpCore';
+import { flightMsToHeightCm, sayersPeakPowerSJ, type AttemptResult, type JumpMarks } from '../jumpCore';
 
 export interface CMJJump {
   jumpNumber: number;
@@ -9,6 +9,11 @@ export interface CMJJump {
   landingFrame?: number;
   fps?: number;
   isValid: boolean;
+  source?: 'manual' | 'video';
+  marks?: Partial<JumpMarks>;
+  result?: AttemptResult;
+  flags?: string[];
+  reasons?: string[];
 }
 export interface CMJSession {
   id?: string;
@@ -51,8 +56,4 @@ export function calculateSayersPower(
   bodyMassKg: number
 ): number {
   return sayersPeakPowerSJ(jumpHeightCm, bodyMassKg);
-}
-
-export function calculateFatigueIndex(jumps: CMJJump[]): number {
-  return summarizeSession(jumps.filter((j) => j.isValid).map((j) => j.jumpHeightCm)).dropFromBestPct;
 }
