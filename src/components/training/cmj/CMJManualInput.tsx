@@ -46,6 +46,7 @@ export default function CMJManualInput({ jumpNumber, onJumpAdded }: CMJManualInp
       flightTimeMs: preview.time,
       jumpHeightCm: preview.height,
       estimatedPowerW: undefined,
+      source: 'manual',
       isValid: true,
     });
     setFlightTimeMs('');
