@@ -107,10 +107,15 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
         jumpNumber: jumps.length + 1,
         flightTimeMs,
         jumpHeightCm: height,
-        estimatedPowerW: undefined,
+        estimatedPowerW: result?.samozino?.powerW,
         takeoffFrame: analysis.takeoffFrameIndex,
         landingFrame: analysis.landingFrameIndex,
         fps: analysis.fps,
+        source: 'video',
+        marks: { takeoffMs: analysis.takeoffMs, landingMs: analysis.landingMs },
+        result: result ?? undefined,
+        flags: result?.flags ?? [],
+        reasons: result?.reasons ?? [],
         isValid: result?.ok ?? false,
       };
 
@@ -143,7 +148,7 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
         client_session_id: clientSessionId, athlete_id: user.id, session_date: new Date().toISOString().split('T')[0], jump_type: jumpType,
         body_mass_kg: mass, load_kg: Number(loadKg) || null, box_cm: Number(boxCm) || null, hpo_m: Number(hpoM) || null, side: side || null,
         effective_fps: validJumps.find((jump) => jump.fps)?.fps ?? 0, source: validJumps.some((jump) => jump.takeoffFrame !== undefined) ? 'video' : 'manual', algorithm_version: 'jump-core-1', notes: notes.trim() || null,
-        attempts: validJumps.map((jump) => ({ index: jump.jumpNumber, marks: { takeoffMs: null, landingMs: null }, source: jump.takeoffFrame !== undefined ? 'video' : 'manual', flight_ms: jump.flightTimeMs, height_cm: jump.jumpHeightCm, flags: [], reasons: [] })),
+        attempts: validJumps.map((jump) => ({ index: jump.jumpNumber, marks: jump.marks ?? {}, source: jump.source ?? 'manual', flight_ms: jump.result?.flightMs ?? jump.flightTimeMs, height_cm: jump.result?.heightCm ?? jump.jumpHeightCm, takeoff_vel_ms: jump.result?.takeoffVelMs ?? null, contact_ms: jump.result?.contactMs ?? null, rsi: jump.result?.rsi ?? null, rsi_mod: jump.result?.rsiMod ?? null, flags: jump.result?.flags ?? jump.flags ?? [], reasons: jump.result?.reasons ?? jump.reasons ?? [] })),
       } });
       if (saveError) throw saveError;
 
