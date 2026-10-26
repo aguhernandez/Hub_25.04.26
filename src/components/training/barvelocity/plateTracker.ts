@@ -40,8 +40,40 @@ export interface TrackerOptions {
 
 export const PLATE_DIAMETER_MM = 450;
 
-export function pxPerMmFromPlate(radiusPx: number): number {
-  return (2 * radiusPx) / PLATE_DIAMETER_MM;
+export function pxPerMmFromPlate(radiusPx: number, diameterMm = PLATE_DIAMETER_MM): number {
+  return (2 * radiusPx) / diameterMm;
+}
+
+/**
+ * Estimación inicial del círculo del disco para evitar que el usuario tenga que empezar de cero.
+ * Es deliberadamente conservadora: siempre se puede corregir el centro y el radio antes de confirmar.
+ */
+export function detectPlateCircle(frame: GrayFrame): PlateInit | null {
+  const minRadius = Math.max(12, Math.round(Math.min(frame.width, frame.height) * 0.04));
+  const maxRadius = Math.round(Math.min(frame.width, frame.height) * 0.28);
+  let best: PlateInit | null = null;
+  let bestScore = 0;
+  const sample = (x: number, y: number) => {
+    const xx = Math.max(0, Math.min(frame.width - 1, Math.round(x)));
+    const yy = Math.max(0, Math.min(frame.height - 1, Math.round(y)));
+    return Number(frame.data[yy * frame.width + xx] ?? 0);
+  };
+  for (let cy = maxRadius; cy < frame.height - maxRadius; cy += Math.max(8, Math.round(maxRadius / 5))) {
+    for (let cx = maxRadius; cx < frame.width - maxRadius; cx += Math.max(8, Math.round(maxRadius / 5))) {
+      for (let radius = minRadius; radius <= maxRadius; radius += Math.max(4, Math.round(radius / 8))) {
+        let inner = 0; let ring = 0; let outer = 0;
+        for (let i = 0; i < 16; i++) {
+          const angle = (i / 16) * Math.PI * 2;
+          inner += sample(cx + Math.cos(angle) * radius * 0.55, cy + Math.sin(angle) * radius * 0.55);
+          ring += sample(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+          outer += sample(cx + Math.cos(angle) * radius * 1.25, cy + Math.sin(angle) * radius * 1.25);
+        }
+        const score = Math.abs(inner - ring) + Math.abs(ring - outer) * 0.75;
+        if (score > bestScore) { bestScore = score; best = { cx, cy, radiusPx: radius }; }
+      }
+    }
+  }
+  return bestScore > 18 ? best : null;
 }
 
 /** Promedio por cajas de la región (x0,y0,w,h) reduciéndola por ds. Bordes: se repite el píxel del borde. */
