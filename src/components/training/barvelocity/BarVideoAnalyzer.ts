@@ -45,5 +45,67 @@ export async function analyzeBarVideo(blob: Blob, calibration: CalibrationData, 
   return result.reps.map(mapRep);
 }
 
-export function analyzeBarStream(..._args: [MediaStream, CalibrationData, number, number?, (rep: BarRep) => void?, (velocity: number) => void?]): () => void { return () => undefined; }
+export function analyzeBarStream(
+  stream: MediaStream,
+  calibration: CalibrationData,
+  fps: number,
+  loadKg?: number,
+  onRep?: (rep: BarRep) => void,
+  onVelocity?: (velocityMs: number) => void,
+): () => void {
+  void fps;
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.srcObject = stream;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  let stopped = false;
+  let tracker: PlateTracker | null = null;
+  let lastTime = -Infinity;
+  let lastY = 0;
+  const samples: TrackSample[] = [];
+
+  const finish = () => {
+    if (stopped) return;
+    stopped = true;
+    const result = analyzeTrack(samples, { pxPerMm: calibration.pixelsPerMm, loadKg });
+    result.reps.forEach((rep) => onRep?.(mapRep(rep)));
+    video.pause();
+    video.srcObject = null;
+  };
+
+  const callback = (_now: number, metadata: VideoFrameCallbackMetadata) => {
+    if (stopped || !ctx) return;
+    const width = video.videoWidth || calibration.processingWidth || 640;
+    const height = video.videoHeight || calibration.processingHeight || 480;
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    ctx.drawImage(video, 0, 0, width, height);
+    const rgba = ctx.getImageData(0, 0, width, height).data;
+    const gray = new Uint8ClampedArray(width * height);
+    for (let i = 0, p = 0; i < gray.length; i++, p += 4) gray[i] = Math.round(0.299 * rgba[p] + 0.587 * rgba[p + 1] + 0.114 * rgba[p + 2]);
+    const frame: GrayFrame = { data: gray, width, height };
+    if (!tracker) {
+      tracker = new PlateTracker(frame, {
+        cx: calibration.centerX ?? width / 2,
+        cy: calibration.centerY ?? calibration.barTopY,
+        radiusPx: calibration.radiusPx ?? calibration.barDiameterPx / 2,
+      });
+    }
+    const tMs = metadata.mediaTime * 1000;
+    const tracked = tracker.update(frame);
+    const dt = Number.isFinite(lastTime) && tMs > lastTime ? tMs - lastTime : 0;
+    if (dt > 0) onVelocity?.(Math.abs((lastY - tracked.cy) / dt) / calibration.pixelsPerMm);
+    samples.push({ tMs, yPx: tracked.cy, ok: tracked.ok });
+    lastY = tracked.cy;
+    lastTime = tMs;
+    if (!stopped) video.requestVideoFrameCallback(callback);
+  };
+
+  void video.play().then(() => video.requestVideoFrameCallback(callback)).catch(() => undefined);
+  return finish;
+}
 export { pxPerMmFromPlate };
