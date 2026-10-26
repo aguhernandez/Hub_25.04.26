@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import HabitTagSelector from './HabitTagSelector';
+import TagPill, { type Tag } from './TagPill';
+import { Lock } from 'lucide-react';
 
 interface Props {
   habitId: string;
@@ -8,6 +10,7 @@ interface Props {
   isTrainerOrAdmin?: boolean;
   language?: string;
   canEdit?: boolean;
+  canCreate?: boolean;
 }
 
 interface TagRow {
@@ -23,6 +26,7 @@ export default function HabitTagsSection({
   canEdit,
 }: Props) {
   const [tagRows, setTagRows] = useState<TagRow[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(false);
 
   const isEditor = canEdit !== undefined ? canEdit : isTrainerOrAdmin;
@@ -34,8 +38,16 @@ export default function HabitTagsSection({
       .from('habit_tags')
       .select('tag_id, created_by')
       .eq('habit_id', habitId)
-      .then(({ data }) => {
-        if (active) setTagRows(data || []);
+      .then(async ({ data, error }) => {
+        if (!active || error) return;
+        const rows = data || [];
+        setTagRows(rows);
+        if (rows.length > 0) {
+          const { data: tagData } = await supabase.from('tags').select('*').in('id', rows.map(row => row.tag_id));
+          if (active) setTags(tagData || []);
+        } else {
+          setTags([]);
+        }
       });
     return () => { active = false; };
   }, [habitId]);
@@ -65,31 +77,46 @@ export default function HabitTagsSection({
     setLoading(true);
     try {
       for (const tag_id of toAdd) {
-        await supabase.from('habit_tags').upsert(
+        const { error } = await supabase.from('habit_tags').upsert(
           { habit_id: habitId, tag_id, created_by: currentUserId || null },
           { onConflict: 'habit_id,tag_id', ignoreDuplicates: true }
         );
+        if (error) throw error;
       }
       for (const tag_id of toRemove) {
-        await supabase.from('habit_tags').delete()
+        const { error } = await supabase.from('habit_tags').delete()
           .eq('habit_id', habitId)
           .eq('tag_id', tag_id);
+        if (error) throw error;
       }
       const { data } = await supabase
         .from('habit_tags')
         .select('tag_id, created_by')
         .eq('habit_id', habitId);
       setTagRows(data || []);
+    } catch (error) {
+      console.error('Error updating habit tags:', error);
+      setTagRows(tagRows);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <HabitTagSelector
-      selectedTagIds={editableTagIds}
-      onChange={handleChange}
-      language={language}
-    />
+    <div className="space-y-1.5">
+      {trainerTagIds.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Lock size={11} className="text-gray-400" />
+          {tags.filter(tag => trainerTagIds.includes(tag.id)).map(tag => (
+            <TagPill key={tag.id} tag={tag} language={language} />
+          ))}
+        </div>
+      )}
+      <HabitTagSelector
+        selectedTagIds={editableTagIds}
+        onChange={handleChange}
+        language={language}
+      />
+    </div>
   );
 }

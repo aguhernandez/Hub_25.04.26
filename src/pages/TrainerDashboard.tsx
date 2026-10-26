@@ -49,7 +49,7 @@ export default function TrainerDashboard() {
       supabase.from('athlete_workouts').select('athlete_id,scheduled_date,status').in('athlete_id', ids).gte('scheduled_date', from28).lte('scheduled_date', offset(T.wellnessBaselineDays)),
       supabase.from('wellness_checkins').select('athlete_id,checkin_date,overall_score,wellness_score_100').in('athlete_id', ids).gte('checkin_date', from28).lte('checkin_date', today),
       supabase.from('nutrition_anamnesis').select('athlete_id,is_active,updated_at,version_number').in('athlete_id', ids),
-      supabase.from('food_diary_sessions').select('athlete_id,status,start_date,completed_at,period_hours').in('athlete_id', ids).gte('start_date', from28),
+      supabase.from('food_diary_session_status').select('athlete_id,status,start_date,completed_at,period_hours').in('athlete_id', ids).gte('start_date', from28),
       supabase.from('user_habits').select('id,user_id,is_active').in('user_id', ids).eq('is_active', true),
       supabase.from('habit_logs').select('user_id,habit_id,log_date,completed').in('user_id', ids).gte('log_date', from7).lte('log_date', today),
       role === 'trainer' ? supabase.from('membership_access').select('user_id,status,end_date').in('user_id', ids) : Promise.resolve({ data: null, error: { message: 'role has no membership access' } }),

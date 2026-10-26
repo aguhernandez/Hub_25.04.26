@@ -16,6 +16,10 @@ interface Habit {
   numeric_unit: string | null;
   numeric_target: number | null;
   is_active: boolean;
+  scheduled_time?: string | null;
+  reminder_enabled?: boolean;
+  reminder_time?: string | null;
+  reminder_timezone?: string | null;
 }
 
 interface HabitLog {
@@ -99,6 +103,9 @@ export default function HabitsPage() {
   const [editHabitTrackingType, setEditHabitTrackingType] = useState<'checklist' | 'numeric'>('checklist');
   const [editHabitUnit, setEditHabitUnit] = useState('');
   const [editHabitTarget, setEditHabitTarget] = useState('');
+  const [editHabitScheduledTime, setEditHabitScheduledTime] = useState('');
+  const [editHabitReminderEnabled, setEditHabitReminderEnabled] = useState(false);
+  const [editHabitReminderTime, setEditHabitReminderTime] = useState('');
   const [editingInputs, setEditingInputs] = useState<Record<string, string>>({});
 
   const [loading, setLoading] = useState(false);
@@ -107,6 +114,7 @@ export default function HabitsPage() {
   const [shortTermGoals, setShortTermGoals] = useState('');
   const [longTermGoals, setLongTermGoals] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [habitReminderPrompt, setHabitReminderPrompt] = useState<{ habitId: string; date: string } | null>(null);
 
   const isProfessional = ['trainer', 'nutritionist', 'head_coach'].includes(profile?.role || '');
 
@@ -130,6 +138,18 @@ export default function HabitsPage() {
       loadGoals(profile.id);
     }
   }, [profile, trainerView]);
+
+  useEffect(() => {
+    const onPushAction = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      const data = detail?.notification?.data;
+      if (data?.type === 'habit_reminder' && data.habit_id) {
+        setHabitReminderPrompt({ habitId: String(data.habit_id), date: String(data.reminder_date || new Date().toISOString().slice(0, 10)) });
+      }
+    };
+    window.addEventListener('push-notification-action', onPushAction);
+    return () => window.removeEventListener('push-notification-action', onPushAction);
+  }, []);
 
   useEffect(() => {
     console.log('selectedAthleteId changed:', selectedAthleteId);
@@ -588,6 +608,9 @@ export default function HabitsPage() {
     setEditHabitTrackingType(displayType);
     setEditHabitUnit(habit.numeric_unit || '');
     setEditHabitTarget(habit.numeric_target?.toString() || '');
+    setEditHabitScheduledTime((habit.scheduled_time || '').slice(0, 5));
+    setEditHabitReminderEnabled(Boolean(habit.reminder_enabled));
+    setEditHabitReminderTime((habit.reminder_time || '').slice(0, 5));
     setShowEditHabitModal(true);
   };
 
@@ -612,6 +635,10 @@ export default function HabitsPage() {
       tracking_type: dbTrackingType,
       numeric_unit: editHabitTrackingType === 'numeric' ? editHabitUnit : null,
       numeric_target: editHabitTrackingType === 'numeric' ? Number(editHabitTarget) : (editHabitTrackingType === 'checklist' ? 1 : null),
+      scheduled_time: editHabitScheduledTime || null,
+      reminder_enabled: editHabitReminderEnabled && Boolean(editHabitReminderTime),
+      reminder_time: editHabitReminderEnabled ? (editHabitReminderTime || null) : null,
+      reminder_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     };
 
     const { error } = await supabase
@@ -1791,6 +1818,25 @@ export default function HabitsPage() {
                   </div>
                 </div>
               )}
+
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-3">
+                <h4 className="font-semibold text-gray-900 dark:text-white">{language === 'es' ? 'Horario y recordatorio' : 'Schedule & reminder'}</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <label className="text-sm text-gray-700 dark:text-gray-300">
+                    {language === 'es' ? 'Hora del hábito' : 'Habit time'}
+                    <input type="time" value={editHabitScheduledTime} onChange={e => setEditHabitScheduledTime(e.target.value)} className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white" />
+                  </label>
+                  <label className="text-sm text-gray-700 dark:text-gray-300">
+                    {language === 'es' ? 'Avisar a las' : 'Remind me at'}
+                    <input type="time" value={editHabitReminderTime} onChange={e => setEditHabitReminderTime(e.target.value)} disabled={!editHabitReminderEnabled} className="mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-50" />
+                  </label>
+                </div>
+                <label className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
+                  <input type="checkbox" checked={editHabitReminderEnabled} onChange={e => setEditHabitReminderEnabled(e.target.checked)} className="w-4 h-4 accent-[#fdda36]" />
+                  {language === 'es' ? 'Enviar notificación push con “¿Lo hiciste?”' : 'Send a push notification with “Did you do it?”'}
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{language === 'es' ? 'La respuesta se registra en el hábito del día.' : 'The answer is recorded in today’s habit log.'}</p>
+              </div>
             </div>
 
             <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex gap-3">
@@ -1809,6 +1855,18 @@ export default function HabitsPage() {
               >
                 {language === 'es' ? 'Guardar Cambios' : 'Save Changes'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {habitReminderPrompt && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center">
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">{language === 'es' ? 'Recordatorio de hábito' : 'Habit reminder'}</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-6">{language === 'es' ? `¿Hiciste ${habits.find(h => h.id === habitReminderPrompt.habitId)?.name || 'este hábito'}?` : `Did you do ${habits.find(h => h.id === habitReminderPrompt.habitId)?.name || 'this habit'}?`}</p>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => { toggleHabitCompletion(habitReminderPrompt.habitId, habitReminderPrompt.date, false); setHabitReminderPrompt(null); }} className="px-4 py-3 rounded-xl bg-emerald-500 text-white font-semibold">{language === 'es' ? 'Sí, lo hice' : 'Yes, done'}</button>
+              <button onClick={() => { toggleHabitCompletion(habitReminderPrompt.habitId, habitReminderPrompt.date, true); setHabitReminderPrompt(null); }} className="px-4 py-3 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 font-semibold">{language === 'es' ? 'No todavía' : 'Not yet'}</button>
             </div>
           </div>
         </div>

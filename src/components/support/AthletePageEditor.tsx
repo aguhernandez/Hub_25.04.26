@@ -22,6 +22,12 @@ interface PageData {
   };
 }
 
+interface Sponsor {
+  name: string;
+  logo_url: string;
+  website_url: string;
+}
+
 export default function AthletePageEditor() {
   const { profile, updateProfile } = useAuth();
   const { showToast } = useToast();
@@ -42,6 +48,8 @@ export default function AthletePageEditor() {
   const [copied, setCopied] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [coverPreview, setCoverPreview] = useState<string>('');
+  const [sponsors, setSponsors] = useState<Sponsor[]>([]);
+  const [uploadingSponsor, setUploadingSponsor] = useState<number | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -55,6 +63,11 @@ export default function AthletePageEditor() {
       });
       setCoverPreview(coverUrl);
       setSlug(profile.public_profile_slug || '');
+      setSponsors(Array.isArray((profile as any).sponsors)
+        ? (profile as any).sponsors.slice(0, 5).map((s: any) => ({
+            name: s?.name || '', logo_url: s?.logo_url || '', website_url: s?.website_url || '',
+          }))
+        : []);
     }
   }, [profile]);
 
@@ -146,6 +159,7 @@ export default function AthletePageEditor() {
         bio: pageData.bio,
         promo_video_url: pageData.promo_video_url || null,
         social_links: pageData.social_links,
+        sponsors: sponsors.filter(s => s.name.trim() && s.logo_url.trim()).slice(0, 5),
       };
       if (slug && (slugAvailable || slug === profile?.public_profile_slug)) {
         updates.public_profile_slug = slug;
@@ -171,6 +185,46 @@ export default function AthletePageEditor() {
   const previewUrl = `https://hub.asciende.pro/athlete/${slug || profile?.id}`;
   const setSocial = (key: string, value: string) => {
     setPageData(d => ({ ...d, social_links: { ...d.social_links, [key]: value } }));
+  };
+
+  const updateSponsor = (index: number, changes: Partial<Sponsor>) => {
+    setSponsors(current => current.map((s, i) => i === index ? { ...s, ...changes } : s));
+  };
+
+  const addSponsor = () => {
+    if (sponsors.length < 5) setSponsors(current => [...current, { name: '', logo_url: '', website_url: '' }]);
+  };
+
+  const removeSponsor = async (index: number) => {
+    const sponsor = sponsors[index];
+    if (profile?.id && sponsor?.logo_url) {
+      const marker = `/athlete-sponsors/${profile.id}/`;
+      const path = sponsor.logo_url.split(marker)[1]?.split('?')[0];
+      if (path) await supabase.storage.from('athlete-sponsors').remove([`${profile.id}/${path}`]);
+    }
+    setSponsors(current => current.filter((_, i) => i !== index));
+  };
+
+  const handleSponsorUpload = async (index: number, file: File) => {
+    if (!profile?.id) return;
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/svg+xml'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      showToast('Logo must be JPG, PNG, WebP or SVG under 2 MB', 'error');
+      return;
+    }
+    setUploadingSponsor(index);
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const path = `${profile.id}/sponsor-${index}-${Date.now()}.${ext}`;
+      const { error } = await supabase.storage.from('athlete-sponsors').upload(path, file, { upsert: true, contentType: file.type });
+      if (error) throw error;
+      const { data } = supabase.storage.from('athlete-sponsors').getPublicUrl(path);
+      updateSponsor(index, { logo_url: data.publicUrl });
+      showToast('Sponsor logo uploaded', 'success');
+    } catch {
+      showToast('Error uploading sponsor logo', 'error');
+    } finally {
+      setUploadingSponsor(null);
+    }
   };
 
   const videoId = extractYouTubeId(pageData.promo_video_url);
@@ -385,6 +439,35 @@ export default function AthletePageEditor() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Sponsors */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#fdda36]" /> Sponsors
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Add up to 5 brands that support your journey. Logos are optional on your public page.</p>
+          </div>
+          <span className="text-xs text-gray-400">{sponsors.length}/5</span>
+        </div>
+        <div className="space-y-3">
+          {sponsors.map((sponsor, index) => (
+            <div key={index} className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 dark:border-gray-700">
+              <label className="w-16 h-16 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center overflow-hidden cursor-pointer flex-shrink-0 hover:border-[#fdda36]">
+                {sponsor.logo_url ? <img src={sponsor.logo_url} alt="" className="w-full h-full object-contain p-1" /> : <Upload className="w-5 h-5 text-gray-400" />}
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/svg+xml" className="hidden" disabled={uploadingSponsor === index} onChange={e => { const f = e.target.files?.[0]; if (f) handleSponsorUpload(index, f); e.target.value = ''; }} />
+              </label>
+              <div className="flex-1 space-y-2 min-w-0">
+                <input value={sponsor.name} onChange={e => updateSponsor(index, { name: e.target.value })} placeholder="Brand name" maxLength={80} className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white" />
+                <input value={sponsor.website_url} onChange={e => updateSponsor(index, { website_url: e.target.value })} placeholder="Website link (optional)" type="url" className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white" />
+              </div>
+              <button type="button" onClick={() => removeSponsor(index)} className="p-2 text-gray-400 hover:text-red-500" aria-label="Remove sponsor"><Trash2 className="w-4 h-4" /></button>
+            </div>
+          ))}
+        </div>
+        {sponsors.length < 5 && <button type="button" onClick={addSponsor} className="mt-4 inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-[#514163] bg-[#fdda36] rounded-lg hover:bg-[#ffd51a]"><span className="text-lg leading-none">+</span> Add sponsor</button>}
       </div>
 
       {/* Info box */}

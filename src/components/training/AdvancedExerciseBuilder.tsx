@@ -97,6 +97,13 @@ export default function AdvancedExerciseBuilder({
   }, [athleteId, exercise.exercise_id, exerciseHistory]);
 
   const resolvedHistory = exerciseHistory || loadedHistory;
+  // Weight can be configured as either metric, depending on the workout's
+  // convention (for example: reps first, kg second). 1RM tools must follow
+  // the metric position instead of assuming kg/lb is always primary.
+  const hasLoadMetric = exercise.primary_metric === 'kg'
+    || exercise.primary_metric === 'lb'
+    || exercise.secondary_metric === 'kg'
+    || exercise.secondary_metric === 'lb';
 
   const metricOptions = [
     { value: 'reps', label: language === 'es' ? 'Repeticiones' : 'Reps' },
@@ -511,7 +518,7 @@ export default function AdvancedExerciseBuilder({
       />
 
       {/* 1RM Auto Load Configuration */}
-      {(exercise.primary_metric === 'kg' || exercise.primary_metric === 'lb') && (
+      {hasLoadMetric && (
         <OneRMLoadSelector
           exerciseId={exercise.exercise_id}
           exerciseName={exercise.exercise_name}

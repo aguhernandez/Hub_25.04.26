@@ -25,6 +25,7 @@ interface AthleteProfile {
   social_links: Record<string, string> | null;
   public_profile_slug: string | null;
   promo_video_url: string | null;
+  sponsors: { name: string; logo_url: string; website_url?: string }[] | null;
 }
 
 interface SupportProject {
@@ -212,7 +213,7 @@ export default function PublicAthleteLandingPage() {
 
       const { data: bySlug, error: slugError } = await supabase
         .from('profiles')
-        .select('id, full_name, country, sport, avatar_url, profile_visibility, support_mode_enabled, tagline, cover_image_url, bio, payment_links, social_links, public_profile_slug, promo_video_url')
+        .select('id, full_name, country, sport, avatar_url, profile_visibility, support_mode_enabled, tagline, cover_image_url, bio, payment_links, social_links, public_profile_slug, promo_video_url, sponsors')
         .eq('public_profile_slug', slug)
         .maybeSingle();
 
@@ -223,7 +224,7 @@ export default function PublicAthleteLandingPage() {
         if (uuidPattern.test(slug)) {
           const { data: byId } = await supabase
             .from('profiles')
-            .select('id, full_name, country, sport, avatar_url, profile_visibility, support_mode_enabled, tagline, cover_image_url, bio, payment_links, social_links, public_profile_slug, promo_video_url')
+            .select('id, full_name, country, sport, avatar_url, profile_visibility, support_mode_enabled, tagline, cover_image_url, bio, payment_links, social_links, public_profile_slug, promo_video_url, sponsors')
             .eq('id', slug)
             .maybeSingle();
           profile = byId;
@@ -828,6 +829,36 @@ export default function PublicAthleteLandingPage() {
                 </div>
               </div>
             </section>
+
+            {/* Sponsors */}
+            {Array.isArray(athlete.sponsors) && athlete.sponsors.filter(s => s?.name && s?.logo_url).length > 0 && (
+              <section>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="h-px flex-1 bg-gray-200" />
+                  <span className="text-[10px] font-black tracking-[0.2em] uppercase text-[#1a1a2e]/30">
+                    {tr('Brands supporting me', 'Marcas que me acompañan')}
+                  </span>
+                  <div className="h-px flex-1 bg-gray-200" />
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-white px-5 py-5 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-7">
+                    {athlete.sponsors.filter(s => s?.name && s?.logo_url).slice(0, 5).map((sponsor, index) => {
+                      const logo = (
+                        <div className="group flex flex-col items-center gap-2 w-20 sm:w-24">
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl border border-gray-100 bg-gray-50 flex items-center justify-center p-2 group-hover:border-[#fdda36]/60 group-hover:shadow-md transition-all">
+                            <img src={sponsor.logo_url} alt={sponsor.name} className="max-w-full max-h-full object-contain" loading="lazy" />
+                          </div>
+                          <span className="text-[10px] text-[#1a1a2e]/55 text-center leading-tight line-clamp-2">{sponsor.name}</span>
+                        </div>
+                      );
+                      if (!sponsor.website_url) return <div key={`${sponsor.name}-${index}`}>{logo}</div>;
+                      const href = sponsor.website_url.match(/^https?:\/\//i) ? sponsor.website_url : `https://${sponsor.website_url}`;
+                      return <a key={`${sponsor.name}-${index}`} href={href} target="_blank" rel="noopener noreferrer" aria-label={`${sponsor.name} website`}>{logo}</a>;
+                    })}
+                  </div>
+                </div>
+              </section>
+            )}
 
             {/* Training & Progress */}
             <section>

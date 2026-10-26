@@ -149,6 +149,7 @@ export type Database = {
           assigned_nutritionist_id: string | null
           assigned_biomechanist_id: string | null
           timezone: string | null
+          sponsors: Json
         }
         Insert: {
           id: string
@@ -181,6 +182,7 @@ export type Database = {
           assigned_nutritionist_id?: string | null
           assigned_biomechanist_id?: string | null
           timezone?: string | null
+          sponsors?: Json
         }
         Update: {
           email?: string
@@ -212,6 +214,7 @@ export type Database = {
           assigned_nutritionist_id?: string | null
           assigned_biomechanist_id?: string | null
           timezone?: string | null
+          sponsors?: Json
         }
         Relationships: []
       }
