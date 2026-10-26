@@ -12,6 +12,10 @@ interface AdminSectionProps {
   currentProfile: any;
 }
 
+type MembershipRpcClient = {
+  rpc: (name: string, args: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
+};
+
 export default function AdminSection({ currentProfile }: AdminSectionProps) {
   const { profile } = useAuth();
   const { language } = useLanguage();
@@ -31,35 +35,34 @@ export default function AdminSection({ currentProfile }: AdminSectionProps) {
   }, [currentProfile]);
 
   const isAdmin = profile?.role === 'admin';
-  const isTrainer = profile?.role === 'trainer';
   const canManageRole = isAdmin;
-  const canManageMembership = isAdmin || isTrainer;
+  const canManageMembership = isAdmin;
+  const membershipRpc = supabase as unknown as MembershipRpcClient;
 
   const handleSaveAdminChanges = async () => {
     if (!currentProfile?.id) return;
 
     setLoading(true);
     try {
-      const updates: any = {};
-
       if (canManageRole) {
-        updates.role = role;
+        const { error } = await membershipRpc.rpc('admin_set_profile_role', {
+          p_user_id: currentProfile.id,
+          p_role: role,
+        });
+        if (error) throw error;
       }
 
       if (canManageMembership) {
-        updates.membership_plan = membershipPlan;
-        updates.membership_status = membershipStatus;
-        if (membershipStatus === 'active' && !currentProfile.membership_start_date) {
-          updates.membership_start_date = new Date().toISOString();
-        }
+        const { error } = await membershipRpc.rpc('admin_set_user_membership', {
+          p_user_id: currentProfile.id,
+          p_membership_plan: membershipPlan,
+          p_membership_status: membershipStatus,
+          p_membership_start_date: membershipStatus === 'active' && !currentProfile.membership_start_date
+            ? new Date().toISOString()
+            : currentProfile.membership_start_date,
+        });
+        if (error) throw error;
       }
-
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', currentProfile.id);
-
-      if (error) throw error;
 
       alert(language === 'es' ? '✅ Cambios guardados' : '✅ Changes saved');
     } catch (error: any) {

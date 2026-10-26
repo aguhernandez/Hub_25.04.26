@@ -38,6 +38,7 @@ interface AdminUser {
   email: string;
   full_name: string | null;
   role: string;
+  requestedRole?: 'trainer' | 'nutritionist' | 'head_coach' | null;
   is_active: boolean | null;
   created_at: string;
   updated_at: string | null;
@@ -175,6 +176,15 @@ function AdminUsersPageContent() {
 
       const userIds = profiles.map((p: any) => p.id);
 
+      const { data: requestedRoles } = await supabase
+        .from('profiles')
+        .select('id, requested_role')
+        .in('id', userIds);
+      const requestedRoleByUser = new Map<string, string | null>();
+      requestedRoles?.forEach((row: { id: string; requested_role: string | null }) => {
+        requestedRoleByUser.set(row.id, row.requested_role);
+      });
+
       const { data: memberships } = await supabase
         .from('membership_access')
         .select(`
@@ -217,6 +227,7 @@ function AdminUsersPageContent() {
         email: p.email,
         full_name: p.full_name,
         role: p.role,
+        requestedRole: requestedRoleByUser.get(p.id) as AdminUser['requestedRole'],
         is_active: p.is_active,
         created_at: p.created_at,
         updated_at: p.updated_at,
@@ -411,7 +422,6 @@ function AdminUsersPageContent() {
       noMembership: { es: 'Sin membresía', en: 'No membership' },
       proSub: { es: 'Suscripción Pro', en: 'Pro Subscription' },
       trialing: { es: 'Prueba', en: 'Trialing' },
-      active: { es: 'Activo', en: 'Active' },
       pastDue: { es: 'Pago pendiente', en: 'Past Due' },
       canceled: { es: 'Cancelado', en: 'Canceled' },
       unpaid: { es: 'Impagado', en: 'Unpaid' },
@@ -667,6 +677,11 @@ function AdminUsersPageContent() {
                                     t('save')
                                   )}
                                 </button>
+                              )}
+                              {user.requestedRole && user.role === 'athlete' && (
+                                <span className="rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                  {language === 'es' ? `Solicita ${user.requestedRole}` : `Requested ${user.requestedRole}`}
+                                </span>
                               )}
                             </div>
                           </td>

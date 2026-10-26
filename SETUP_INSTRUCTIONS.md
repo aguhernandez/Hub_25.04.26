@@ -24,10 +24,10 @@ Admin: Created
 Trainer (Agu): Created
 
 📧 admin@asciende.pro
-🔒 Admin_asciende.pro1
+🔒 [REDACTED — rotate in production]
 
 📧 agu@asciende.pro
-🔒 Agu_asciende.pro1
+🔒 [REDACTED — rotate in production]
 
 You can now login.
 ```
@@ -39,7 +39,7 @@ You can now login.
 ## 🔐 **Step 2: Login with Admin Account**
 
 **Email:** `admin@asciende.pro`
-**Password:** `Admin_asciende.pro1`
+**Password:** `[REDACTED — rotate in production]`
 
 **Admin Capabilities:**
 - ✅ Full access to all features
@@ -54,7 +54,7 @@ You can now login.
 ## 👨‍🏫 **Step 3: Login with Trainer Account (Agu)**
 
 **Email:** `agu@asciende.pro`
-**Password:** `Agu_asciende.pro1`
+**Password:** `[REDACTED — rotate in production]`
 
 **Trainer Capabilities:**
 - ✅ View assigned athletes
@@ -117,8 +117,8 @@ quien te guiará en tu camino al rendimiento óptimo.
 
 **Solution:**
 1. Verify you're using the correct credentials:
-   - Admin: `admin@asciende.pro` / `Admin_asciende.pro1`
-   - Trainer: `agu@asciende.pro` / `Agu_asciende.pro1`
+   - Admin: `admin@asciende.pro` / `[REDACTED — rotate in production]`
+   - Trainer: `agu@asciende.pro` / `[REDACTED — rotate in production]`
 2. Make sure email confirmation is not required
 3. Wait 30 seconds and try again
 

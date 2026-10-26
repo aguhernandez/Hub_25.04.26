@@ -381,11 +381,8 @@
 8. `zoom-create-meeting` - Creación de meetings Zoom
 9. `load-usda-foods` - Carga de base de datos USDA
 10. `public-digest-api` - API pública de digest
-11. `reset-admin-trainer-passwords` - Reset de passwords
-12. `reset-demo-passwords` - Reset de demos
 13. `auto-publish-scheduled-articles` - Publicación automática
 14. `cleanup-expired-videos` - Limpieza de videos
-15. `create-admin-trainer` - Creación de admin/trainer
 
 **Todas las Edge Functions están deployadas y funcionando** ✅
 

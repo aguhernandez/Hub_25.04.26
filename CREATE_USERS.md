@@ -10,7 +10,7 @@ Abre tu navegador en la página de login y ejecuta este código en la consola:
 // Crear Admin
 await supabase.auth.signUp({
   email: 'admin@asciende.com',
-  password: 'admin123',
+  password: '[REDACTED — rotate in production]',
   options: {
     data: {
       full_name: 'Administrator',
@@ -22,7 +22,7 @@ await supabase.auth.signUp({
 // Crear Trainer
 await supabase.auth.signUp({
   email: 'trainer@asciende.com',
-  password: 'trainer123',
+  password: '[REDACTED — rotate in production]',
   options: {
     data: {
       full_name: 'Trainer Coach',
@@ -37,8 +37,8 @@ await supabase.auth.signUp({
 1. Ve a tu proyecto en Supabase Dashboard
 2. Authentication → Users
 3. Click "Add User"
-4. Email: admin@asciende.com, Password: admin123
-5. Repite para trainer@asciende.com / trainer123
+4. Email: admin@asciende.com, Password: [REDACTED — rotate in production]
+5. Repite para trainer@asciende.com / [REDACTED — rotate in production]
 
 ## Método 3: Script automático
 

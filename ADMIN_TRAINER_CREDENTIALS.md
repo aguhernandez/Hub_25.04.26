@@ -7,7 +7,7 @@ This document contains the credentials for the administrative accounts in the As
 ## 🔐 **Admin Account**
 
 **Email:** `admin@asciende.pro`
-**Password:** `Admin_asciende.pro1`
+**Password:** `[REDACTED — rotate in production]`
 
 **Permissions:**
 - Full access to all platform features
@@ -21,7 +21,7 @@ This document contains the credentials for the administrative accounts in the As
 ## 👨‍🏫 **Default Trainer Account (Agu)**
 
 **Email:** `agu@asciende.pro`
-**Password:** `Agu_asciende.pro1`
+**Password:** `[REDACTED — rotate in production]`
 
 **Permissions:**
 - Can view and manage assigned athletes

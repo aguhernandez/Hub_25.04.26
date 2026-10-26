@@ -15,8 +15,9 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const { email, password, full_name, role, username, phone, first_name, last_name, date_of_birth, gender, bio, tagline, country, terms_accepted, sport, billing_cycle } = body;
     const allowedRoles = ['athlete', 'trainer', 'nutritionist', 'head_coach'] as const;
-    const signupRole = role || 'athlete';
-    console.log('🚀 AUTH-SIGNUP - Request for:', email, 'role:', signupRole);
+    const requestedRole = role || 'athlete';
+    const effectiveRole = 'athlete';
+    console.log('🚀 AUTH-SIGNUP - Request for:', email, 'requested role:', requestedRole);
     console.log('📋 Request body keys:', Object.keys(body));
 
     if (!email || !password) {
@@ -27,7 +28,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (!allowedRoles.includes(signupRole)) {
+    if (!allowedRoles.includes(requestedRole)) {
       return new Response(
         JSON.stringify({ error: 'Invalid account role' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -94,7 +95,7 @@ Deno.serve(async (req: Request) => {
       email_confirm: false,
       user_metadata: {
         full_name: full_name || '',
-        role: signupRole,
+        requested_role: requestedRole === 'athlete' ? undefined : requestedRole,
         ...(billing_cycle === 'monthly' || billing_cycle === 'yearly' ? { billing_cycle } : {}),
       },
     });
@@ -136,8 +137,11 @@ Deno.serve(async (req: Request) => {
     console.log('⏳ Waiting for trigger to create profile...');
     await new Promise(resolve => setTimeout(resolve, 500));
 
-    console.log('1b️⃣ Updating profile with role/username/phone...');
-    const profileUpdates: Record<string, unknown> = { role: signupRole };
+    console.log('1b️⃣ Updating profile with server-assigned role/username/phone...');
+    const profileUpdates: Record<string, unknown> = {
+      role: effectiveRole,
+      requested_role: requestedRole === 'athlete' ? null : requestedRole,
+    };
     if (sport) profileUpdates.sport = sport;
     if (username) profileUpdates.username = username;
     if (phone) profileUpdates.phone = phone;
@@ -172,7 +176,7 @@ Deno.serve(async (req: Request) => {
     if (profileUpdateError) {
       console.warn('⚠️ Warning: Could not update profile:', profileUpdateError.message);
     } else {
-      console.log('✅ Profile updated with role:', signupRole);
+      console.log('✅ Profile updated with effective role:', effectiveRole, 'requested role:', requestedRole);
     }
 
     console.log('2️⃣ Assigning free "Start" membership...');
@@ -200,7 +204,8 @@ Deno.serve(async (req: Request) => {
         user: {
           id: userId,
           email: email,
-          role: signupRole,
+          role: effectiveRole,
+          requested_role: requestedRole === 'athlete' ? null : requestedRole,
           active_plan: [],
         },
         message: 'Account created successfully',

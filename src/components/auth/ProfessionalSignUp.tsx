@@ -4,8 +4,8 @@ import { useToast } from '../../hooks/useToast';
 import { supabase } from '../../lib/supabase';
 import AsciendeLogo from '../AsciendeLogo';
 import {
-  User, Lock, Mail, Phone, ArrowRight, ArrowLeft, Globe, Check,
-  Dumbbell, Stethoscope, Crown, Shield, CreditCard, Loader2, Eye, EyeOff,
+  Lock, Mail, Phone, ArrowRight, ArrowLeft, Globe, Check,
+  Dumbbell, Stethoscope, Crown, CreditCard, Loader2, Eye, EyeOff,
   Sparkles, Calendar, Users, Clock
 } from 'lucide-react';
 
@@ -75,7 +75,6 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
   const [loading, setLoading] = useState(false);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [accountCreated, setAccountCreated] = useState(false);
-  const [createdUserId, setCreatedUserId] = useState<string | null>(null);
   const [confirmationPending, setConfirmationPending] = useState(false);
   const [confirmationEmailSent, setConfirmationEmailSent] = useState(false);
 
@@ -89,7 +88,6 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
       setAccountCreated(true);
       setStep(4);
       window.history.replaceState({}, '', window.location.pathname);
-      attemptAutoLogin();
     }
   }, []);
 
@@ -114,19 +112,6 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
     country: '',
     termsAccepted: false,
   });
-
-  const attemptAutoLogin = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        showToast(language === 'es' ? '¡Pago confirmado! Bienvenido a Asciende.' : 'Payment confirmed! Welcome to Asciende.', 'success');
-        onComplete();
-        return;
-      }
-    } catch {
-      // session not available, user will need to log in manually
-    }
-  };
 
   const update = (field: keyof FormData, value: string | boolean) => {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -271,7 +256,6 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
         return;
       }
 
-      setCreatedUserId(userId);
       setAccountCreated(true);
 
       const stripeLink = STRIPE_LINKS[billingCycle];
@@ -633,8 +617,8 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
                   </h2>
                   <p className="text-sm text-white/50 max-w-xs mx-auto">
                     {language === 'es'
-                      ? 'Tu cuenta profesional está activa. Tu prueba gratuita de 7 días ha comenzado.'
-                      : 'Your professional account is active. Your 7-day free trial has started.'}
+                      ? 'Pago recibido. Tu cuenta profesional será activada por el equipo de Asciende.'
+                      : 'Payment received. Your professional account will be activated by the Asciende team.'}
                   </p>
                 </div>
                 <div className="rounded-2xl p-5 text-left" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>

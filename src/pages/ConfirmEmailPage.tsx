@@ -4,6 +4,7 @@ import { ArrowRight, CheckCircle2, Loader2, Mail, XCircle } from 'lucide-react';
 import type { EmailOtpType, User } from '@supabase/supabase-js';
 import AsciendeLogo from '../components/AsciendeLogo';
 import { supabase } from '../lib/supabase';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const initialCallback = (() => {
   const url = new URL(window.location.href);
@@ -24,6 +25,7 @@ const PROFESSIONAL_PAYMENT_LINKS = {
 
 export default function ConfirmEmailPage() {
   const navigate = useNavigate();
+  const { language } = useLanguage();
   const [state, setState] = useState<ViewState>('checking');
   const [user, setUser] = useState<User | null>(null);
   const [message, setMessage] = useState('');
@@ -171,7 +173,7 @@ export default function ConfirmEmailPage() {
   const continueToPayment = () => {
     if (!user) return;
     const metadata = user.user_metadata ?? {};
-    const role = metadata.role;
+    const role = metadata.requested_role;
     const cycle = metadata.billing_cycle;
     if (!['trainer', 'nutritionist', 'head_coach'].includes(role) || (cycle !== 'monthly' && cycle !== 'yearly')) return;
     const checkout = new URL(PROFESSIONAL_PAYMENT_LINKS[cycle as keyof typeof PROFESSIONAL_PAYMENT_LINKS]);
@@ -181,8 +183,9 @@ export default function ConfirmEmailPage() {
 
   const metadata = user?.user_metadata ?? {};
   const requiresProfessionalPayment = Boolean(user &&
-    ['trainer', 'nutritionist', 'head_coach'].includes(metadata.role) &&
+    ['trainer', 'nutritionist', 'head_coach'].includes(metadata.requested_role) &&
     (metadata.billing_cycle === 'monthly' || metadata.billing_cycle === 'yearly'));
+  const paymentReceived = ['success', 'true'].includes(new URLSearchParams(window.location.search).get('professional_payment') || '');
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-[#F7F6FA] px-4 py-10 text-[#2A1F4A]">
@@ -202,6 +205,13 @@ export default function ConfirmEmailPage() {
             <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-600" />
             <h1 className="text-2xl font-bold">Email confirmed</h1>
             <p className="mt-2 text-sm leading-6 text-[#716B7D]">Your email address is verified. You can continue to Asciende.</p>
+            {paymentReceived && (
+              <p className="mt-4 rounded-xl bg-emerald-50 p-4 text-sm font-medium leading-6 text-emerald-800">
+                {language === 'es'
+                  ? 'Pago recibido. Tu cuenta profesional será activada por el equipo de Asciende'
+                  : 'Payment received. Your professional account will be activated by the Asciende team'}
+              </p>
+            )}
             {requiresProfessionalPayment ? (
               <button onClick={continueToPayment} className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-[#F7C843] px-4 py-3.5 text-sm font-bold text-[#2A1F4A] hover:bg-[#f3bc24]">
                 Continue to account activation <ArrowRight className="h-4 w-4" />

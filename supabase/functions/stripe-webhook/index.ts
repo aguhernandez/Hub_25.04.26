@@ -181,11 +181,11 @@ async function handleCheckoutCompleted(supabase: any, event: StripeEvent) {
     const referenceUserId = session.metadata?.user_id || session.client_reference_id;
     const { data: referencedProfile } = await supabase
       .from('profiles')
-      .select('id, role')
+      .select('id, role, requested_role')
       .eq('id', referenceUserId)
       .maybeSingle();
 
-    if (session.metadata?.type === 'professional_subscription' || referencedProfile?.role === 'trainer' || referencedProfile?.role === 'nutritionist') {
+    if (referencedProfile?.requested_role && ['trainer', 'nutritionist', 'head_coach'].includes(referencedProfile.requested_role)) {
       await handleProfessionalCheckoutCompleted(supabase, session, referenceUserId);
       return;
     }
@@ -603,12 +603,22 @@ async function handleMembershipSubscriptionCreated(supabase: any, session: any) 
 
 // ── Professional subscription checkout completed ──────────────────────────────
 async function handleProfessionalCheckoutCompleted(supabase: any, session: any, referenceUserId?: string) {
-  const { user_id, billing_cycle, role } = session.metadata ?? {};
+  const { user_id, billing_cycle } = session.metadata ?? {};
   const resolvedUserId = user_id || referenceUserId;
-  log('INFO', 'professional_checkout_start', { session_id: session.id, user_id: resolvedUserId, billing_cycle, role });
+  log('INFO', 'professional_checkout_start', { session_id: session.id, user_id: resolvedUserId, billing_cycle });
 
   if (!resolvedUserId || !session.subscription) {
     log('ERROR', 'professional_checkout_missing_subscription_data', { session_id: session.id, has_user_id: !!resolvedUserId, has_subscription: !!session.subscription });
+    return;
+  }
+
+  const { data: requestedProfile } = await supabase
+    .from('profiles')
+    .select('requested_role')
+    .eq('id', resolvedUserId)
+    .maybeSingle();
+  if (!requestedProfile?.requested_role || !['trainer', 'nutritionist', 'head_coach'].includes(requestedProfile.requested_role)) {
+    log('WARN', 'professional_checkout_without_valid_request', { session_id: session.id, user_id: resolvedUserId });
     return;
   }
 
@@ -635,7 +645,7 @@ async function handleProfessionalCheckoutCompleted(supabase: any, session: any, 
     throw error;
   }
 
-  log('INFO', 'professional_subscription_created', { user_id, billing_cycle, trial_end: trialEnd });
+  log('INFO', 'professional_subscription_created', { user_id: resolvedUserId, billing_cycle, trial_end: trialEnd });
 }
 
 // ── Subscription updated ───────────────────────────────────────────────────────
