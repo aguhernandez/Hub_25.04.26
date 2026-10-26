@@ -59,6 +59,7 @@ Deno.serve(async (req: Request) => {
     const prices = rows.map(row => ({ price: interval === 'monthly' ? row.stripe_price_id_monthly : row.stripe_price_id_annual, quantity: row.module_key === 'extra_athletes' ? extraAthletes : 1 })).filter(item => item.price);
     const params = new URLSearchParams();
     params.set('mode', 'subscription');
+    params.set('payment_method_collection', 'always');
     params.set('success_url', `${Deno.env.get('SITE_URL') ?? 'https://hub.asciende.pro'}/confirm-email?professional_payment=success`);
     params.set('cancel_url', `${Deno.env.get('SITE_URL') ?? 'https://hub.asciende.pro'}/confirm-email?professional_payment=cancelled`);
     params.set('client_reference_id', user.id);

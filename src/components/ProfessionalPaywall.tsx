@@ -5,11 +5,6 @@ import { supabase } from '../lib/supabase';
 import { getPaidAccessStatus, invalidatePaidAccessStatus } from '../services/paidAccessStatus';
 import { CreditCard, AlertCircle, Loader2, LogOut } from 'lucide-react';
 
-const STRIPE_LINKS: Record<'monthly' | 'yearly', string> = {
-  monthly: 'https://buy.stripe.com/4gM14n1klgUoac55SG9R60d',
-  yearly: 'https://buy.stripe.com/fZu6oHe77cE8fwpgxk9R60e',
-};
-
 interface SubscriptionState {
   status: string | null;
   trialEnd: string | null;
@@ -110,12 +105,27 @@ export default function ProfessionalPaywall() {
 
   const trialEndDate = subState.trialEnd ? new Date(subState.trialEnd) : null;
   const trialExpired = trialEndDate ? trialEndDate < new Date() : true;
+  const monthlyPrice = profile?.role === 'trainer' ? 40 : profile?.role === 'nutritionist' ? 30 : profile?.role === 'biomechanist' ? 25 : 130;
+  const yearlyPrice = monthlyPrice * 10;
 
-  const handlePay = (cycle: 'monthly' | 'yearly') => {
+  const handlePay = async (cycle: 'monthly' | 'yearly') => {
     if (!user) return;
     sessionStorage.setItem('professional-payment-user', user.id);
-    const link = STRIPE_LINKS[cycle];
-    window.location.href = `${link}?client_reference_id=${user.id}`;
+    const modules = profile?.role === 'trainer'
+      ? ['endurance_planner']
+      : profile?.role === 'nutritionist'
+        ? ['nutrition_planner']
+        : profile?.role === 'biomechanist'
+          ? ['biomechanics']
+          : ['all_access'];
+    const { data, error } = await supabase.functions.invoke('stripe-create-professional-checkout', {
+      body: { interval: cycle, modules },
+    });
+    if (error || !data?.url) {
+      console.error('Unable to create professional checkout', error);
+      return;
+    }
+    window.location.href = data.url;
   };
 
   const handleLogout = async () => {
@@ -163,7 +173,7 @@ export default function ProfessionalPaywall() {
               <span className="text-xs font-bold text-[#fdda36] uppercase block mb-1">
                 {language === 'es' ? 'Mensual' : 'Monthly'}
               </span>
-              <span className="text-lg font-bold text-white">49€</span>
+              <span className="text-lg font-bold text-white">{monthlyPrice}€</span>
               <span className="text-xs text-white/40">/{language === 'es' ? 'mes' : 'mo'}</span>
             </button>
             <button
@@ -174,7 +184,7 @@ export default function ProfessionalPaywall() {
               <span className="text-xs font-bold text-[#fdda36] uppercase block mb-1">
                 {language === 'es' ? 'Anual' : 'Yearly'}
               </span>
-              <span className="text-lg font-bold text-white">490€</span>
+              <span className="text-lg font-bold text-white">{yearlyPrice}€</span>
               <span className="text-xs text-white/40">/{language === 'es' ? 'año' : 'yr'}</span>
               <span className="absolute -top-2 right-2 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-[#4ade80]/20 text-[#4ade80] border border-[#4ade80]/30">
                 {language === 'es' ? '-17%' : '-17%'}

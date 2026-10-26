@@ -114,14 +114,17 @@ Deno.serve(async (req: Request) => {
       case 'customer.subscription.updated':
         await handleSubscriptionUpdated(supabase, event);
         break;
+      case 'customer.subscription.paused':
+        await handleSubscriptionStatusEvent(supabase, event, 'past_due');
+        break;
+      case 'customer.subscription.resumed':
+        await handleSubscriptionStatusEvent(supabase, event, 'active');
+        break;
       case 'customer.subscription.deleted':
         await handleSubscriptionCanceled(supabase, event);
         break;
       case 'invoice.payment_failed':
-        log('WARN', 'invoice_payment_failed', {
-          invoice_id: event.data.object.id,
-          subscription_id: event.data.object.subscription,
-        });
+        await handleInvoicePaymentFailed(supabase, event);
         break;
       case 'customer.updated':
         log('INFO', 'customer_updated', { customer_id: event.data.object.id });
@@ -182,6 +185,8 @@ async function handleCheckoutCompleted(supabase: any, event: StripeEvent) {
   }
   if (session.metadata?.type === 'professional_subscription' || session.client_reference_id) {
     const referenceUserId = session.metadata?.user_id || session.client_reference_id;
+    const isLegacyProfessional = session.metadata?.legacy_product_id === 'prod_VDsyApWSBhtc6k'
+      || session.line_items?.data?.some((item: any) => item.price?.product === 'prod_VDsyApWSBhtc6k');
     const { data: roleRequest } = await supabase
       .from('professional_role_requests')
       .select('role')
@@ -196,7 +201,7 @@ async function handleCheckoutCompleted(supabase: any, event: StripeEvent) {
       .limit(1)
       .maybeSingle();
 
-    if (roleRequest?.role || enabledRole?.role) {
+    if (isLegacyProfessional || roleRequest?.role || enabledRole?.role) {
       await handleProfessionalCheckoutCompleted(supabase, session, referenceUserId);
       return;
     }
@@ -623,6 +628,10 @@ async function handleProfessionalCheckoutCompleted(supabase: any, session: any, 
     throw new PermanentWebhookError('Professional checkout is missing user or subscription data');
   }
 
+  const purchasedProductId = session.line_items?.data?.[0]?.price?.product
+    || session.metadata?.product_id
+    || session.metadata?.legacy_product_id;
+  const isLegacyProfessional = purchasedProductId === 'prod_VDsyApWSBhtc6k';
   const { data: roleRequest } = await supabase
     .from('professional_role_requests')
     .select('role')
@@ -636,7 +645,11 @@ async function handleProfessionalCheckoutCompleted(supabase: any, session: any, 
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
-  const professionalRole = roleRequest?.role || enabledRole?.role;
+  let professionalRole = roleRequest?.role || enabledRole?.role;
+  if (isLegacyProfessional) {
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', resolvedUserId).maybeSingle();
+    professionalRole = profile?.role;
+  }
   if (!professionalRole || !['trainer', 'nutritionist', 'head_coach', 'biomechanist'].includes(professionalRole)) {
     log('WARN', 'professional_checkout_without_valid_request', { session_id: session.id, user_id: resolvedUserId });
     throw new PermanentWebhookError(`No valid professional role request for ${resolvedUserId}`);
@@ -665,9 +678,6 @@ async function handleProfessionalCheckoutCompleted(supabase: any, session: any, 
     throw error;
   }
 
-  const purchasedProductId = session.line_items?.data?.[0]?.price?.product
-    || session.metadata?.product_id
-    || session.metadata?.legacy_product_id;
   await supabase.from('professional_roles').upsert({
     user_id: resolvedUserId,
     role: professionalRole,
@@ -712,6 +722,52 @@ function parseModuleMetadata(value: unknown): string[] {
   } catch {
     return [];
   }
+}
+
+async function updateProfessionalStatus(supabase: any, subscriptionId: string, status: string) {
+  const { error } = await supabase
+    .from('professional_subscriptions')
+    .update({ status })
+    .eq('stripe_subscription_id', subscriptionId);
+  if (error) throw error;
+  const { error: entitlementError } = await supabase
+    .from('professional_entitlements')
+    .update({ status: normalizeEntitlementStatus(status), updated_at: new Date().toISOString() })
+    .eq('stripe_subscription_id', subscriptionId);
+  if (entitlementError) throw entitlementError;
+}
+
+async function handleInvoicePaymentFailed(supabase: any, event: StripeEvent) {
+  const invoice = event.data.object;
+  const subscriptionId = invoice.subscription;
+  if (!subscriptionId) {
+    log('WARN', 'invoice_payment_failed_without_subscription', { invoice_id: invoice.id });
+    return;
+  }
+  const { data: profSub } = await supabase
+    .from('professional_subscriptions')
+    .select('id')
+    .eq('stripe_subscription_id', subscriptionId)
+    .maybeSingle();
+  if (!profSub) {
+    log('WARN', 'invoice_payment_failed_non_professional', { invoice_id: invoice.id, subscription_id: subscriptionId });
+    return;
+  }
+  await updateProfessionalStatus(supabase, subscriptionId, 'past_due');
+  log('WARN', 'professional_subscription_past_due', { invoice_id: invoice.id, subscription_id: subscriptionId });
+}
+
+async function handleSubscriptionStatusEvent(supabase: any, event: StripeEvent, status: string) {
+  const subscription = event.data.object;
+  const subscriptionId = subscription.id;
+  const { data: profSub } = await supabase
+    .from('professional_subscriptions')
+    .select('id')
+    .eq('stripe_subscription_id', subscriptionId)
+    .maybeSingle();
+  if (!profSub) return;
+  await updateProfessionalStatus(supabase, subscriptionId, status);
+  log('INFO', 'professional_subscription_status_changed', { subscription_id: subscriptionId, status });
 }
 
 // ── Subscription updated ───────────────────────────────────────────────────────
