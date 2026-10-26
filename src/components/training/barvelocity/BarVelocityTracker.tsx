@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Camera,
   Video,
+  Upload,
   CheckCircle,
   X,
   Save,
@@ -29,14 +30,14 @@ import {
   BarRep,
   CalibrationData,
 } from './BarVelocityTypes';
-import { analyzeBarVideo } from './BarVideoAnalyzer';
+import { analyzeBarVideo, analyzeBarStream } from './BarVideoAnalyzer';
 import { requestCameraPermission } from '../../../utils/cameraPermission';
 import { LV1RMEstimate } from './LVProfile';
 import { buildBarSessionPayload, createManualRep, persistBarSession } from './BarSessionPersistence';
 
 type AppTab = 'session' | 'history';
 type SessionStep = 'setup' | 'calibration' | 'recording' | 'analyzing' | 'manual' | 'results';
-type CaptureMode = 'video' | 'manual';
+type CaptureMode = 'video' | 'live' | 'manual';
 
 interface BarVelocityTrackerProps {
   onClose: () => void;
@@ -50,6 +51,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const stopLiveRef = useRef<(() => void) | null>(null);
 
   const [tab, setTab] = useState<AppTab>('session');
   const [step, setStep] = useState<SessionStep>('setup');
@@ -62,9 +64,18 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
   const [clientSessionId, setClientSessionId] = useState(() => crypto.randomUUID());
   const [notes, setNotes] = useState('');
 
-  const [calibration, setCalibration] = useState<CalibrationData | null>(null);
+  const [calibration, setCalibration] = useState<CalibrationData | null>(() => {
+    try {
+      const stored = localStorage.getItem('asciende-vbt-calibration-v1');
+      return stored ? JSON.parse(stored) as CalibrationData : null;
+    } catch {
+      return null;
+    }
+  });
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [actualFps, setActualFps] = useState(30);
   const [isRecording, setIsRecording] = useState(false);
+  const [liveVelocity, setLiveVelocity] = useState(0);
   const [manualVelocityInput, setManualVelocityInput] = useState('');
 
   const [reps, setReps] = useState<BarRep[]>([]);
@@ -183,7 +194,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
-          frameRate: { ideal: 240, min: 60 },
+          frameRate: { ideal: 120, min: 30 },
           width: { ideal: 1920 },
           height: { ideal: 1080 },
         },
@@ -230,10 +241,31 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
   }, []);
 
   useEffect(() => {
-    if (step === 'calibration') {
+    if (step === 'calibration' && !videoFile) {
       startCamera();
     }
-  }, [step, startCamera]);
+    if (step === 'recording' && !videoFile && !streamRef.current) {
+      startCamera();
+    }
+  }, [step, startCamera, videoFile]);
+
+  useEffect(() => {
+    if (step !== 'recording' || !videoFile || !videoRef.current) return;
+    const url = URL.createObjectURL(videoFile);
+    const video = videoRef.current;
+    video.srcObject = null;
+    video.src = url;
+    video.muted = true;
+    video.playsInline = true;
+    video.load();
+    void video.play().catch(() => undefined);
+    return () => {
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
+      URL.revokeObjectURL(url);
+    };
+  }, [step, videoFile]);
 
   useEffect(() => {
     if (step === 'recording' && videoRef.current && streamRef.current) {
@@ -247,12 +279,27 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
   useEffect(() => {
     return () => {
       stopCamera();
+      stopLiveRef.current?.();
     };
   }, [stopCamera]);
 
   const handleCalibrated = (data: CalibrationData) => {
     setCalibration(data);
+    localStorage.setItem('asciende-vbt-calibration-v1', JSON.stringify(data));
     setTimeout(() => setStep('recording'), 800);
+  };
+
+  const analyzeUploadedVideo = async () => {
+    if (!videoFile || !calibration) return;
+    setStep('analyzing');
+    try {
+      const detected = await analyzeBarVideo(videoFile, calibration, actualFps, loadKg ? parseFloat(loadKg) : undefined);
+      setReps(detected);
+      setStep('results');
+    } catch {
+      setError(txt.cameraError);
+      setStep('recording');
+    }
   };
 
   const startVideoRecording = () => {
@@ -314,6 +361,27 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
     }
   };
 
+  const startLiveTracking = () => {
+    if (!streamRef.current || !calibration) return;
+    setReps([]);
+    setIsRecording(true);
+    stopLiveRef.current = analyzeBarStream(
+      streamRef.current,
+      calibration,
+      actualFps,
+      loadKg ? parseFloat(loadKg) : undefined,
+      (rep) => setReps((prev) => [...prev, { ...rep, repNumber: prev.length + 1 }]),
+      setLiveVelocity,
+    );
+  };
+
+  const stopLiveTracking = () => {
+    stopLiveRef.current?.();
+    stopLiveRef.current = null;
+    setIsRecording(false);
+    setStep('results');
+  };
+
   const saveSession = async () => {
     if (!user || reps.length === 0) return;
     setSaving(true);
@@ -340,16 +408,20 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
   const resetSession = () => {
     setStep('setup');
     setReps([]);
-    setCalibration(null);
+    // La calibración se reutiliza entre series mientras la cámara mantenga resolución y encuadre.
     setSavedFingerprint(null);
     setPerformedLoadKg(null);
     setClientSessionId(crypto.randomUUID());
     sessionDateRef.current = new Date().toISOString().split('T')[0];
     setError('');
     setIsRecording(false);
+    setLiveVelocity(0);
     setLvEstimate(null);
     setManualVelocityInput('');
+    stopLiveRef.current?.();
+    stopLiveRef.current = null;
     stopCamera();
+    setStep(calibration ? 'recording' : 'setup');
   };
 
   return (
@@ -426,7 +498,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
 
                 <div>
                   <label className={`block text-xs mb-2 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>{txt.captureMode}</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <button
                       onClick={() => setCaptureMode('video')}
                       className={`flex flex-col items-center gap-2 p-3 rounded-2xl border transition-colors ${
@@ -441,13 +513,16 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                         <div className="text-xs opacity-70">{txt.videoPost}</div>
                       </div>
                     </button>
-                    <div className={`flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border ${isDark ? 'bg-gray-800/30 border-gray-700/30 text-gray-500' : 'bg-gray-50 border-gray-300 text-gray-500'}`}>
+                    <button
+                      onClick={() => setCaptureMode('live')}
+                      className={`flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border ${captureMode === 'live' ? 'bg-green-500/15 border-green-500/40 text-green-400' : isDark ? 'bg-gray-800/50 border-gray-700/30 text-gray-400 hover:border-gray-600' : 'bg-gray-50 border-gray-300 text-gray-600 hover:border-gray-400'}`}
+                    >
                       <Camera className="w-5 h-5" />
                       <div className="text-center">
                         <div className="text-xs font-medium">{txt.realTime}</div>
-                        <div className="text-xs opacity-70">{language === 'es' ? 'Próximamente' : 'Coming soon'}</div>
+                        <div className="text-xs opacity-70">{language === 'es' ? 'Seguir disco' : 'Track disc'}</div>
                       </div>
-                    </div>
+                    </button>
                     <button
                       onClick={() => setCaptureMode('manual')}
                       className={`flex flex-col items-center gap-2 p-3 rounded-2xl border transition-colors ${
@@ -464,6 +539,19 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                     </button>
                   </div>
                 </div>
+
+                <label className={`flex items-center justify-center gap-2 p-3 rounded-2xl border cursor-pointer ${isDark ? 'border-gray-700/50 text-gray-300 hover:border-primary/50' : 'border-gray-300 text-gray-700 hover:border-primary/50'}`}>
+                  <Upload className="w-4 h-4" />
+                  <span className="text-xs">{videoFile ? videoFile.name : (language === 'es' ? 'Subir video para analizar' : 'Upload video to analyze')}</span>
+                  <input type="file" accept="video/*" className="hidden" onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    if (!file) return;
+                    setVideoFile(file);
+                    setCalibration(null);
+                    setCaptureMode('video');
+                    setStep('calibration');
+                  }} />
+                </label>
 
                 {captureMode !== 'manual' && (
                   <div className={`border rounded-2xl p-3 text-xs space-y-1 ${isDark ? 'bg-gray-800/40 border-gray-700/30 text-gray-400' : 'bg-gray-50 border-gray-300 text-gray-700'}`}>
@@ -487,7 +575,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                   onClick={() => {
                     const configuredLoad = Number(nextLoadKg);
                     setPerformedLoadKg(Number.isFinite(configuredLoad) && configuredLoad > 0 ? configuredLoad : 0);
-                    setStep(captureMode === 'manual' ? 'manual' : 'calibration');
+                    setStep(captureMode === 'manual' ? 'manual' : calibration ? 'recording' : 'calibration');
                   }}
                   className={`w-full flex items-center justify-center gap-2 font-semibold py-3 rounded-xl transition-colors ${
                     captureMode === 'manual'
@@ -496,13 +584,13 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                   }`}
                 >
                   {captureMode === 'manual' ? <Keyboard className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
-                  {captureMode === 'manual' ? txt.manualTitle : txt.toCalibrationCamera}
+                  {captureMode === 'manual' ? txt.manualTitle : calibration ? txt.startRecording : txt.toCalibrationCamera}
                 </button>
               </>
             )}
 
             {step === 'calibration' && (
-              <BarCalibration videoRef={videoRef} onCalibrated={handleCalibrated} />
+              <BarCalibration videoRef={videoRef} sourceFile={videoFile} onCalibrated={handleCalibrated} />
             )}
 
             {step === 'manual' && (
@@ -668,11 +756,25 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                       </div>
                     </div>
                   )}
+                  {captureMode === 'live' && isRecording && (
+                    <div className="absolute top-3 right-3 bg-black/70 rounded-xl px-3 py-2 text-center">
+                      <div className="text-2xl font-bold text-primary">{liveVelocity.toFixed(2)}</div>
+                      <div className="text-xs text-gray-300">m/s</div>
+                    </div>
+                  )}
                 </div>
 
                 {captureMode === 'video' && (
                   <div className="space-y-2">
-                    {!isRecording ? (
+                    {videoFile ? (
+                      <button
+                        onClick={() => void analyzeUploadedVideo()}
+                        className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-gray-900 font-semibold py-3 rounded-xl transition-colors"
+                      >
+                        <Video className="w-4 h-4" />
+                        {language === 'es' ? 'Analizar video' : 'Analyze video'}
+                      </button>
+                    ) : !isRecording ? (
                       <button
                         onClick={startVideoRecording}
                         className="w-full flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-xl transition-colors"
@@ -690,6 +792,27 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                       </button>
                     )}
                   </div>
+                )}
+                {captureMode === 'live' && (
+                  <div className="space-y-2">
+                    {!isRecording ? (
+                      <button onClick={startLiveTracking} className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-xl transition-colors">
+                        <Camera className="w-4 h-4" />
+                        {txt.startLive}
+                      </button>
+                    ) : (
+                      <button onClick={stopLiveTracking} className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-xl transition-colors">
+                        <Square className="w-4 h-4" />
+                        {txt.stopSet}
+                      </button>
+                    )}
+                  </div>
+                )}
+                {captureMode === 'live' && reps.length > 0 && (
+                  <>
+                    <LVProfilePanel currentReps={reps} loadKg={loadKg ? parseFloat(loadKg) : 0} exerciseName={exerciseName} isLive onEstimateChange={setLvEstimate} />
+                    <VBTLoadPrescriptionPanel currentReps={reps} loadKg={loadKg ? parseFloat(loadKg) : 0} estimate={lvEstimate} onLoadChange={(kg) => setNextLoadKg(String(kg))} isLive />
+                  </>
                 )}
               </div>
             )}
