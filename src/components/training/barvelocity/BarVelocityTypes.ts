@@ -47,6 +47,7 @@ export interface CalibrationData {
   radiusPx?: number;
   processingWidth?: number;
   processingHeight?: number;
+  plateDiameterMm?: number;
 }
 
 export type TrackerPhase =
