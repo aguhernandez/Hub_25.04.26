@@ -1,15 +1,14 @@
 # Security hardening — Fase 1
 
-Aplicación manual: esta entrega solo prepara código y SQL. No se aplicó ninguna migración ni se desplegó ninguna Edge Function.
+La fase quedó aplicada en producción sobre `ngkcbygyoobqhlmlnuvl`. Las migraciones de seguimiento son idempotentes y permanecen en el repositorio para reproducibilidad.
 
 ## Orden de aplicación
 
-1. Revisar y rotar secretos expuestos. Confirmar en los logs de Supabase si las funciones eliminadas fueron invocadas.
-2. Aplicar `20261026120000_security_hardening_phase1.sql`.
-3. Desplegar `auth-signup` y `stripe-webhook`.
-4. Configurar el retorno de los Payment Links para incluir `professional_payment=success`.
-5. Verificar con las consultas de solo lectura de este documento.
-6. Ejecutar el plan de pruebas con cuentas separadas de atleta, trainer y admin.
+1. Revisar y rotar secretos expuestos. Confirmar en los logs de Supabase si las funciones de administración heredadas fueron invocadas.
+2. Aplicar `20261026120000_security_hardening_phase1.sql`, `20261026190000_monetization_security_followup.sql` y `20261026194000_scope_professional_content_policies.sql`.
+3. Desplegar `auth-signup` v68, `stripe-create-professional-checkout` v5, `stripe-create-portal-session` v8 y `stripe-webhook` v52.
+4. Verificar con las consultas de solo lectura de este documento.
+5. Ejecutar el plan de pruebas con cuentas separadas de atleta, trainer y admin.
 
 La CLI de Supabase no está instalada en este entorno, por lo que la migración se creó manualmente con nombre determinista.
 
@@ -56,7 +55,7 @@ El mapeo automático `price_id → rol` queda fuera de esta entrega.
 Estos no conceden permisos y no se modificaron:
 
 - `full_name`, `name`, `avatar_url` y datos del proveedor OAuth para crear o completar el perfil.
-- `requested_role` en metadata durante el registro: sirve para continuidad de UI, pero la autorización usa `profiles.requested_role` y nunca ese metadata.
+- Los datos de nombre y proveedor en `raw_user_meta_data` son auxiliares de perfil; `requested_role` ya no se copia allí.
 - Referencias históricas en comentarios o documentación.
 
 También existen políticas antiguas que usan `auth.jwt()->>'role'` en perfiles, equipos y membresías. No se reescribieron porque quedan fuera del alcance de esta fase; deben revisarse en una fase posterior.
@@ -129,6 +128,10 @@ where coalesce(qual, '') ilike '%user_metadata%'
 ## Secretos y migraciones históricas
 
 Se eliminaron las funciones de creación/reset del repositorio y se limpiaron contraseñas de documentación. No se modificaron migraciones ya ejecutadas que contienen literalmente credenciales históricas; deben rotarse y revisarse en producción. Los emails se deben revisar también, pero no se reproducen aquí en texto completo.
+
+## Estado pendiente
+
+Las funciones heredadas `create-admin-trainer`, `reset-admin-trainer-passwords` y `reset-demo-passwords` ya no ejecutan lógica: fueron reemplazadas en producción por stubs de retirada (versiones 24/28/24), requieren JWT y responden `410`. El conector no expone borrado físico de funciones; si se necesita que desaparezcan del listado, hay que eliminarlas desde Supabase Dashboard.
 
 ## Fuera de alcance
 
