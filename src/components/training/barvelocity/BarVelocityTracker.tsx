@@ -14,7 +14,6 @@ import {
   History,
   Settings,
   Loader,
-  Play,
   Square,
   AlertCircle,
   Keyboard,
@@ -30,14 +29,14 @@ import {
   BarRep,
   CalibrationData,
 } from './BarVelocityTypes';
-import { analyzeBarVideo, analyzeBarStream } from './BarVideoAnalyzer';
+import { analyzeBarVideo } from './BarVideoAnalyzer';
 import { requestCameraPermission } from '../../../utils/cameraPermission';
 import { LV1RMEstimate } from './LVProfile';
 import { buildBarSessionPayload, createManualRep, persistBarSession } from './BarSessionPersistence';
 
 type AppTab = 'session' | 'history';
 type SessionStep = 'setup' | 'calibration' | 'recording' | 'analyzing' | 'manual' | 'results';
-type CaptureMode = 'video' | 'live' | 'manual';
+type CaptureMode = 'video' | 'manual';
 
 interface BarVelocityTrackerProps {
   onClose: () => void;
@@ -51,7 +50,6 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
-  const stopLiveRef = useRef<(() => void) | null>(null);
 
   const [tab, setTab] = useState<AppTab>('session');
   const [step, setStep] = useState<SessionStep>('setup');
@@ -67,7 +65,6 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
   const [calibration, setCalibration] = useState<CalibrationData | null>(null);
   const [actualFps, setActualFps] = useState(30);
   const [isRecording, setIsRecording] = useState(false);
-  const [liveVelocity, setLiveVelocity] = useState(0);
   const [manualVelocityInput, setManualVelocityInput] = useState('');
 
   const [reps, setReps] = useState<BarRep[]>([]);
@@ -250,7 +247,6 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
   useEffect(() => {
     return () => {
       stopCamera();
-      stopLiveRef.current?.();
     };
   }, [stopCamera]);
 
@@ -318,30 +314,6 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
     }
   };
 
-  const startLiveTracking = () => {
-    if (!streamRef.current || !calibration) return;
-    setIsRecording(true);
-    setReps([]);
-
-    const stop = analyzeBarStream(
-      streamRef.current,
-      calibration,
-      actualFps,
-      loadKg ? parseFloat(loadKg) : undefined,
-      (rep) => setReps((prev) => [...prev, rep]),
-      (v) => setLiveVelocity(v)
-    );
-    stopLiveRef.current = stop;
-  };
-
-  const stopLiveTracking = () => {
-    stopLiveRef.current?.();
-    stopLiveRef.current = null;
-    setIsRecording(false);
-    setStep('results');
-    stopCamera();
-  };
-
   const saveSession = async () => {
     if (!user || reps.length === 0) return;
     setSaving(true);
@@ -375,7 +347,6 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
     sessionDateRef.current = new Date().toISOString().split('T')[0];
     setError('');
     setIsRecording(false);
-    setLiveVelocity(0);
     setLvEstimate(null);
     setManualVelocityInput('');
     stopCamera();
@@ -455,7 +426,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
 
                 <div>
                   <label className={`block text-xs mb-2 ${isDark ? 'text-gray-400' : 'text-gray-700'}`}>{txt.captureMode}</label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setCaptureMode('video')}
                       className={`flex flex-col items-center gap-2 p-3 rounded-2xl border transition-colors ${
@@ -470,20 +441,13 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                         <div className="text-xs opacity-70">{txt.videoPost}</div>
                       </div>
                     </button>
-                    <button
-                      disabled
-                      className={`flex flex-col items-center gap-2 p-3 rounded-2xl border transition-colors ${
-                        captureMode === 'live'
-                          ? 'bg-green-500/15 border-green-500/40 text-green-400'
-                          : isDark ? 'bg-gray-800/50 border-gray-700/30 text-gray-400 hover:border-gray-600' : 'bg-gray-50 border-gray-300 text-gray-600 hover:border-gray-400'
-                      }`}
-                    >
+                    <div className={`flex flex-col items-center justify-center gap-2 p-3 rounded-2xl border ${isDark ? 'bg-gray-800/30 border-gray-700/30 text-gray-500' : 'bg-gray-50 border-gray-300 text-gray-500'}`}>
                       <Camera className="w-5 h-5" />
                       <div className="text-center">
                         <div className="text-xs font-medium">{txt.realTime}</div>
                         <div className="text-xs opacity-70">{language === 'es' ? 'Próximamente' : 'Coming soon'}</div>
                       </div>
-                    </button>
+                    </div>
                     <button
                       onClick={() => setCaptureMode('manual')}
                       className={`flex flex-col items-center gap-2 p-3 rounded-2xl border transition-colors ${
@@ -692,37 +656,21 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                     )}
                   </div>
 
-                  {isRecording && captureMode === 'live' && (
-                    <div className="absolute top-3 right-3">
-                      <div className="bg-black/60 rounded-xl px-3 py-2 text-center">
-                        <div className={`text-2xl font-bold ${liveVelocity > 0.8 ? 'text-primary' : liveVelocity > 0.4 ? 'text-yellow-400' : 'text-red-400'}`}>
-                          {Math.abs(liveVelocity).toFixed(2)}
-                        </div>
-                        <div className="text-xs text-gray-300">m/s</div>
-                      </div>
-                    </div>
-                  )}
-
                   {isRecording && (
                     <div className="absolute bottom-3 left-3 right-3">
                       <div className="bg-black/60 rounded-lg px-3 py-2 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                           <span className="text-xs text-white">
-                            {captureMode === 'live' ? `${txt.repsDetected} ${reps.length}` : txt.recording}
+                            {txt.recording}
                           </span>
                         </div>
-                        {captureMode === 'live' && reps.length > 0 && (
-                          <span className="text-xs text-primary font-semibold">
-                            {txt.last} {reps[reps.length - 1].meanConcentricVelocityMs.toFixed(2)} m/s
-                          </span>
-                        )}
                       </div>
                     </div>
                   )}
                 </div>
 
-                {captureMode === 'video' ? (
+                {captureMode === 'video' && (
                   <div className="space-y-2">
                     {!isRecording ? (
                       <button
@@ -742,46 +690,6 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                       </button>
                     )}
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    {!isRecording ? (
-                      <button
-                        disabled
-                        onClick={startLiveTracking}
-                        className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white font-semibold py-3 rounded-xl transition-colors"
-                      >
-                        <Play className="w-4 h-4" />
-                        {language === 'es' ? 'Próximamente' : 'Coming soon'}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={stopLiveTracking}
-                        className="w-full flex items-center justify-center gap-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 rounded-xl transition-colors"
-                      >
-                        <Square className="w-4 h-4" />
-                        {txt.stopSet}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {captureMode === 'live' && (
-                  <>
-                    <LVProfilePanel
-                      currentReps={reps}
-                      loadKg={loadKg ? parseFloat(loadKg) : 0}
-                      exerciseName={exerciseName}
-                      isLive
-                      onEstimateChange={setLvEstimate}
-                    />
-                    <VBTLoadPrescriptionPanel
-                      currentReps={reps}
-                      loadKg={loadKg ? parseFloat(loadKg) : 0}
-                      estimate={lvEstimate}
-                      onLoadChange={(kg) => setNextLoadKg(String(kg))}
-                      isLive
-                    />
-                  </>
                 )}
               </div>
             )}
