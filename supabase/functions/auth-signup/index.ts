@@ -95,7 +95,6 @@ Deno.serve(async (req: Request) => {
       email_confirm: false,
       user_metadata: {
         full_name: full_name || '',
-        requested_role: requestedRole === 'athlete' ? undefined : requestedRole,
         ...(billing_cycle === 'monthly' || billing_cycle === 'yearly' ? { billing_cycle } : {}),
       },
     });
