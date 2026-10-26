@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach';
+export type UserRole = 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach' | 'biomechanist';
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Administrator',
@@ -6,6 +6,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   athlete: 'Athlete',
   nutritionist: 'Nutritionist',
   head_coach: 'Head Coach',
+  biomechanist: 'Biomechanist',
 };
 
 export const ROLE_LABELS_ES: Record<UserRole, string> = {
@@ -14,6 +15,7 @@ export const ROLE_LABELS_ES: Record<UserRole, string> = {
   athlete: 'Atleta',
   nutritionist: 'Nutricionista',
   head_coach: 'Head Coach',
+  biomechanist: 'Biomecánico',
 };
 
 export const ROLE_SATELLITE_ACCESS: Record<UserRole, string[]> = {
@@ -22,9 +24,10 @@ export const ROLE_SATELLITE_ACCESS: Record<UserRole, string[]> = {
   trainer: ['endurance'],
   nutritionist: [],
   athlete: [],
+  biomechanist: [],
 };
 
-export const USER_ROLES: UserRole[] = ['admin', 'trainer', 'athlete', 'nutritionist', 'head_coach'];
+export const USER_ROLES: UserRole[] = ['admin', 'trainer', 'athlete', 'nutritionist', 'head_coach', 'biomechanist'];
 
 export function isUserRole(value: string | null | undefined): value is UserRole {
   return !!value && USER_ROLES.includes(value as UserRole);

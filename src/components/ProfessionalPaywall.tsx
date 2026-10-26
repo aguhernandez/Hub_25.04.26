@@ -42,7 +42,7 @@ export default function ProfessionalPaywall() {
 
   useEffect(() => {
     if (!user) return;
-    if (profile?.role !== 'trainer' && profile?.role !== 'nutritionist') {
+    if (!['trainer', 'nutritionist', 'head_coach', 'biomechanist'].includes(profile?.role ?? '')) {
       setSubState({ status: 'active', trialEnd: null, loading: false });
       return;
     }
@@ -104,7 +104,7 @@ export default function ProfessionalPaywall() {
     );
   }
 
-  const isProfessional = profile?.role === 'trainer' || profile?.role === 'nutritionist';
+  const isProfessional = ['trainer', 'nutritionist', 'head_coach', 'biomechanist'].includes(profile?.role ?? '');
   if (!isProfessional) return null;
   if (subState.status === 'active' || subState.status === 'trialing') return null;
 

@@ -29,7 +29,7 @@ interface CoachNote {
   };
 }
 
-type ProfessionalRole = 'head_coach' | 'trainer' | 'nutritionist';
+type ProfessionalRole = 'head_coach' | 'trainer' | 'nutritionist' | 'biomechanist';
 
 interface Professional {
   id: string;
@@ -182,6 +182,7 @@ export default function AthleteProfilePage() {
     head_coach: { es: 'Head Coach', en: 'Head Coach' },
     trainer: { es: 'Trainer', en: 'Trainer' },
     nutritionist: { es: 'Nutricionista', en: 'Nutritionist' },
+    biomechanist: { es: 'Biomecánico', en: 'Biomechanist' },
   };
 
   const handleSaveDetails = async () => {
@@ -391,7 +392,7 @@ export default function AthleteProfilePage() {
           </p>
 
           <div className="space-y-3 mb-5">
-            {(['head_coach', 'trainer', 'nutritionist'] as ProfessionalRole[]).map((role) => {
+            {(['head_coach', 'trainer', 'nutritionist', 'biomechanist'] as ProfessionalRole[]).map((role) => {
               const assignment = professionalAssignments[role];
               const label = professionalRoleLabels[role][language === 'es' ? 'es' : 'en'];
               return (
@@ -416,7 +417,7 @@ export default function AthleteProfilePage() {
                 onChange={(event) => setProfessionalRole(event.target.value as ProfessionalRole)}
                 className="sm:w-44 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
               >
-                {(['head_coach', 'trainer', 'nutritionist'] as ProfessionalRole[]).map((role) => (
+                {(['head_coach', 'trainer', 'nutritionist', 'biomechanist'] as ProfessionalRole[]).map((role) => (
                   <option key={role} value={role}>{professionalRoleLabels[role][language === 'es' ? 'es' : 'en']}</option>
                 ))}
               </select>

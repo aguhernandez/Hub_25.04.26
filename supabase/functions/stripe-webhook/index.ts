@@ -13,6 +13,10 @@ interface StripeEvent {
   data: { object: any };
 }
 
+class PermanentWebhookError extends Error {
+  readonly permanent = true;
+}
+
 // ── Structured logger ──────────────────────────────────────────────────────────
 function log(level: 'INFO' | 'WARN' | 'ERROR', step: string, data?: any) {
   const entry = { level, step, ts: new Date().toISOString(), ...(data ?? {}) };
@@ -41,40 +45,35 @@ Deno.serve(async (req: Request) => {
   const body = await req.text();
   log('INFO', 'body_read', { bytes: body.length });
 
-  // ── Signature verification (real Stripe SDK verification) ────────────────────
+  // ── Signature verification (fail closed) ────────────────────────────────────
   const signature = req.headers.get('stripe-signature');
   let event: StripeEvent;
 
-  if (webhookSecret && stripeKey) {
-    if (!signature) {
-      log('ERROR', 'signature_missing');
-      return new Response(
-        JSON.stringify({ error: 'Missing stripe-signature header' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
-    try {
-      const stripe = new Stripe(stripeKey, { apiVersion: '2023-10-16' });
-      event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret) as unknown as StripeEvent;
-      log('INFO', 'signature_verified', { event_id: event.id, event_type: event.type });
-    } catch (verifyErr: any) {
-      log('ERROR', 'signature_verification_failed', { error: verifyErr.message });
-      return new Response(
-        JSON.stringify({ error: 'Invalid signature' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
-  } else {
-    log('WARN', 'signature_check_skipped', { reason: 'STRIPE_WEBHOOK_SECRET or STRIPE_SECRET_KEY not configured' });
-    try {
-      event = JSON.parse(body);
-    } catch (parseErr: any) {
-      log('ERROR', 'body_parse_failed', { error: parseErr.message });
-      return new Response(
-        JSON.stringify({ error: 'Invalid JSON body' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
+  if (!webhookSecret || !stripeKey) {
+    log('ERROR', 'signature_verification_unavailable');
+    return new Response(
+      JSON.stringify({ error: 'Webhook signature verification is not configured' }),
+      { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+  if (!signature) {
+    log('ERROR', 'signature_missing');
+    return new Response(
+      JSON.stringify({ error: 'Missing stripe-signature header' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+  try {
+    const stripe = new Stripe(stripeKey, { apiVersion: '2024-10-28.acacia' });
+    event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret) as unknown as StripeEvent;
+    log('INFO', 'signature_verified', { event_id: event.id, event_type: event.type });
+  } catch (verifyErr: unknown) {
+    const message = verifyErr instanceof Error ? verifyErr.message : String(verifyErr);
+    log('ERROR', 'signature_verification_failed', { error: message });
+    return new Response(
+      JSON.stringify({ error: 'Invalid signature' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
   }
 
   log('INFO', 'event_parsed', { event_id: event.id, event_type: event.type });
@@ -102,6 +101,7 @@ Deno.serve(async (req: Request) => {
 
   // ── Route event ────────────────────────────────────────────────────────────
   let processingError: string | null = null;
+  let permanentError = false;
   try {
     switch (event.type) {
       case 'checkout.session.completed':
@@ -129,13 +129,16 @@ Deno.serve(async (req: Request) => {
       default:
         log('INFO', 'event_unhandled', { event_type: event.type });
     }
-  } catch (err: any) {
-    processingError = `${err.message}\n${err.stack ?? ''}`;
+  } catch (err: unknown) {
+    const normalizedError = err instanceof Error ? err : new Error(String(err));
+    permanentError = err instanceof PermanentWebhookError;
+    processingError = `${normalizedError.message}\n${normalizedError.stack ?? ''}`;
     log('ERROR', 'event_processing_failed', {
       event_id: event.id,
       event_type: event.type,
-      error: err.message,
-      stack: err.stack,
+      error: normalizedError.message,
+      stack: normalizedError.stack,
+      permanent: permanentError,
     });
   }
 
@@ -143,17 +146,17 @@ Deno.serve(async (req: Request) => {
   await supabase
     .from('stripe_webhook_events')
     .update({
-      processed: !processingError,
-      processed_at: processingError ? null : new Date().toISOString(),
+      processed: !processingError || permanentError,
+      processed_at: processingError && !permanentError ? null : new Date().toISOString(),
       error_message: processingError,
     })
     .eq('event_id', event.id);
 
-  // Always return 200 so Stripe doesn't retry on processing errors
+  // Retry transient processing failures; permanent validation errors are logged as 200.
   log('INFO', 'webhook_complete', { event_id: event.id, success: !processingError });
   return new Response(
     JSON.stringify({ received: true }),
-    { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    { status: processingError && !permanentError ? 500 : 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
   );
 });
 
@@ -179,13 +182,21 @@ async function handleCheckoutCompleted(supabase: any, event: StripeEvent) {
   }
   if (session.metadata?.type === 'professional_subscription' || session.client_reference_id) {
     const referenceUserId = session.metadata?.user_id || session.client_reference_id;
-    const { data: referencedProfile } = await supabase
-      .from('profiles')
-      .select('id, role, requested_role')
-      .eq('id', referenceUserId)
+    const { data: roleRequest } = await supabase
+      .from('professional_role_requests')
+      .select('role')
+      .eq('user_id', referenceUserId)
+      .maybeSingle();
+    const { data: enabledRole } = await supabase
+      .from('professional_roles')
+      .select('role')
+      .eq('user_id', referenceUserId)
+      .in('role', ['trainer', 'nutritionist', 'head_coach', 'biomechanist'])
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
-    if (referencedProfile?.requested_role && ['trainer', 'nutritionist', 'head_coach'].includes(referencedProfile.requested_role)) {
+    if (roleRequest?.role || enabledRole?.role) {
       await handleProfessionalCheckoutCompleted(supabase, session, referenceUserId);
       return;
     }
@@ -197,7 +208,7 @@ async function handleCheckoutCompleted(supabase: any, event: StripeEvent) {
 
   if (!customerEmail) {
     log('ERROR', 'checkout_no_email', { session_id: session.id });
-    return;
+    throw new PermanentWebhookError(`Checkout ${session.id} has no customer email`);
   }
 
   const { data: profile, error: profileError } = await supabase
@@ -241,7 +252,7 @@ async function handleCheckoutCompleted(supabase: any, event: StripeEvent) {
 
   if (productError || !product) {
     log('ERROR', 'checkout_product_not_found', { price_id: priceId, error: productError?.message });
-    return;
+    throw productError || new PermanentWebhookError(`Price ${priceId || 'unknown'} is not mapped to a product`);
   }
 
   log('INFO', 'checkout_product_found', { product_id: product.id, product_name: product.name, type: product.type });
@@ -302,7 +313,7 @@ async function handleProgramPurchaseCompleted(supabase: any, session: any) {
       has_program_id: !!program_id,
       has_athlete_id: !!athlete_id,
     });
-    return;
+    throw new PermanentWebhookError('Program purchase is missing required metadata');
   }
 
   // ── Idempotency: skip if already completed ─────────────────────────────────
@@ -319,7 +330,7 @@ async function handleProgramPurchaseCompleted(supabase: any, session: any) {
 
   if (!existingPurchase) {
     log('ERROR', 'program_purchase_not_found', { purchase_id });
-    return;
+    throw new PermanentWebhookError(`Program purchase ${purchase_id} not found`);
   }
 
   if (existingPurchase.status === 'completed') {
@@ -552,7 +563,7 @@ async function handleMembershipSubscriptionCreated(supabase: any, session: any) 
 
   if (!user_id || !membership_id) {
     log('ERROR', 'membership_subscription_missing_metadata', { user_id, membership_id });
-    return;
+    throw new PermanentWebhookError('Membership subscription is missing required metadata');
   }
 
   const { data: membership } = await supabase
@@ -609,17 +620,26 @@ async function handleProfessionalCheckoutCompleted(supabase: any, session: any, 
 
   if (!resolvedUserId || !session.subscription) {
     log('ERROR', 'professional_checkout_missing_subscription_data', { session_id: session.id, has_user_id: !!resolvedUserId, has_subscription: !!session.subscription });
-    return;
+    throw new PermanentWebhookError('Professional checkout is missing user or subscription data');
   }
 
-  const { data: requestedProfile } = await supabase
-    .from('profiles')
-    .select('requested_role')
-    .eq('id', resolvedUserId)
+  const { data: roleRequest } = await supabase
+    .from('professional_role_requests')
+    .select('role')
+    .eq('user_id', resolvedUserId)
     .maybeSingle();
-  if (!requestedProfile?.requested_role || !['trainer', 'nutritionist', 'head_coach'].includes(requestedProfile.requested_role)) {
+  const { data: enabledRole } = await supabase
+    .from('professional_roles')
+    .select('role')
+    .eq('user_id', resolvedUserId)
+    .in('role', ['trainer', 'nutritionist', 'head_coach', 'biomechanist'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const professionalRole = roleRequest?.role || enabledRole?.role;
+  if (!professionalRole || !['trainer', 'nutritionist', 'head_coach', 'biomechanist'].includes(professionalRole)) {
     log('WARN', 'professional_checkout_without_valid_request', { session_id: session.id, user_id: resolvedUserId });
-    return;
+    throw new PermanentWebhookError(`No valid professional role request for ${resolvedUserId}`);
   }
 
   const trialEnd = session.subscription_details?.trial_end
@@ -645,7 +665,53 @@ async function handleProfessionalCheckoutCompleted(supabase: any, session: any, 
     throw error;
   }
 
+  const purchasedProductId = session.line_items?.data?.[0]?.price?.product
+    || session.metadata?.product_id
+    || session.metadata?.legacy_product_id;
+  await supabase.from('professional_roles').upsert({
+    user_id: resolvedUserId,
+    role: professionalRole,
+    source: purchasedProductId === 'prod_VDsyApWSBhtc6k' ? 'stripe_legacy' : 'stripe',
+  }, { onConflict: 'user_id,role' });
+
+  // New professional checkouts carry the selected catalog modules in metadata.
+  // Keep the legacy Professional Account path unchanged and only add entitlements
+  // when the catalog metadata is present.
+  const requestedModules = parseModuleMetadata(session.metadata?.modules);
+  if (requestedModules.length > 0) {
+    const moduleKeys = requestedModules.includes('all_access')
+      ? ['all_access', 'endurance_planner', 'nutrition_planner', 'lab', 'performance', 'biomechanics']
+      : requestedModules;
+    const extraQuantity = Math.max(1, Number(session.metadata?.extra_athletes || 1));
+    const entitlementRows = moduleKeys.map(moduleKey => ({
+      user_id: resolvedUserId,
+      module_key: moduleKey,
+      quantity: moduleKey === 'extra_athletes' ? extraQuantity : 1,
+      status: 'trialing',
+      source: 'stripe',
+      stripe_subscription_id: session.subscription,
+      current_period_end: session.subscription_details?.trial_end
+        ? new Date(session.subscription_details.trial_end * 1000).toISOString()
+        : null,
+      updated_at: new Date().toISOString(),
+    }));
+    const { error: entitlementError } = await supabase
+      .from('professional_entitlements')
+      .upsert(entitlementRows, { onConflict: 'user_id,module_key,source' });
+    if (entitlementError) throw entitlementError;
+  }
+
   log('INFO', 'professional_subscription_created', { user_id: resolvedUserId, billing_cycle, trial_end: trialEnd });
+}
+
+function parseModuleMetadata(value: unknown): string[] {
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 // ── Subscription updated ───────────────────────────────────────────────────────
@@ -685,7 +751,11 @@ async function handleSubscriptionUpdated(supabase: any, event: StripeEvent) {
       .eq('stripe_subscription_id', subscriptionId);
 
     if (error) log('ERROR', 'professional_subscription_update_failed', { error: error.message });
-    else log('INFO', 'professional_subscription_updated', { subscription_id: subscriptionId, status });
+    else {
+      const entitlementStatus = normalizeEntitlementStatus(status);
+      await supabase.from('professional_entitlements').update({ status: entitlementStatus, current_period_end: periodEnd, updated_at: new Date().toISOString() }).eq('stripe_subscription_id', subscriptionId);
+      log('INFO', 'professional_subscription_updated', { subscription_id: subscriptionId, status });
+    }
     return;
   }
 
@@ -754,7 +824,10 @@ async function handleSubscriptionActive(supabase: any, event: StripeEvent) {
       .eq('stripe_subscription_id', subscriptionId);
 
     if (error) log('ERROR', 'professional_subscription_active_failed', { error: error.message });
-    else log('INFO', 'professional_subscription_activated', { subscription_id: subscriptionId, status });
+    else {
+      await supabase.from('professional_entitlements').update({ status: normalizeEntitlementStatus(status), current_period_end: periodEnd, updated_at: new Date().toISOString() }).eq('stripe_subscription_id', subscriptionId);
+      log('INFO', 'professional_subscription_activated', { subscription_id: subscriptionId, status });
+    }
     return;
   }
 
@@ -805,7 +878,10 @@ async function handleSubscriptionCanceled(supabase: any, event: StripeEvent) {
       .eq('stripe_subscription_id', stripeSubId);
 
     if (error) log('ERROR', 'professional_subscription_cancel_failed', { error: error.message });
-    else log('INFO', 'professional_subscription_canceled', { subscription_id: stripeSubId });
+    else {
+      await supabase.from('professional_entitlements').update({ status: 'canceled', current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null, updated_at: new Date().toISOString() }).eq('stripe_subscription_id', stripeSubId);
+      log('INFO', 'professional_subscription_canceled', { subscription_id: stripeSubId });
+    }
     return;
   }
 
@@ -858,6 +934,11 @@ async function handleSubscriptionCanceled(supabase: any, event: StripeEvent) {
     .eq('stripe_subscription_id', stripeSubId);
 
   if (error) log('ERROR', 'user_purchase_cancel_failed', { error: error.message });
+}
+
+function normalizeEntitlementStatus(status: string): 'trialing' | 'active' | 'past_due' | 'canceled' | 'expired' {
+  if (status === 'trialing' || status === 'active' || status === 'past_due' || status === 'canceled') return status;
+  return 'expired';
 }
 
 // ── Invoice creation ───────────────────────────────────────────────────────────

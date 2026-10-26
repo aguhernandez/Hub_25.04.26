@@ -14,7 +14,7 @@ Deno.serve(async (req: Request) => {
   try {
     const body = await req.json();
     const { email, password, full_name, role, username, phone, first_name, last_name, date_of_birth, gender, bio, tagline, country, terms_accepted, sport, billing_cycle } = body;
-    const allowedRoles = ['athlete', 'trainer', 'nutritionist', 'head_coach'] as const;
+    const allowedRoles = ['athlete', 'trainer', 'nutritionist', 'head_coach', 'biomechanist'] as const;
     const requestedRole = role || 'athlete';
     const effectiveRole = 'athlete';
     console.log('🚀 AUTH-SIGNUP - Request for:', email, 'requested role:', requestedRole);
@@ -177,6 +177,15 @@ Deno.serve(async (req: Request) => {
       console.warn('⚠️ Warning: Could not update profile:', profileUpdateError.message);
     } else {
       console.log('✅ Profile updated with effective role:', effectiveRole, 'requested role:', requestedRole);
+    }
+
+    if (requestedRole !== 'athlete') {
+      const { error: requestError } = await supabase
+        .from('professional_role_requests')
+        .upsert({ user_id: userId, role: requestedRole, source: 'signup', updated_at: new Date().toISOString() });
+      if (requestError) {
+        console.warn('⚠️ Warning: Could not persist professional role request:', requestError.message);
+      }
     }
 
     console.log('2️⃣ Assigning free "Start" membership...');

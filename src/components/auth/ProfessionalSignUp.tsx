@@ -9,7 +9,7 @@ import {
   Sparkles, Calendar, Users, Clock
 } from 'lucide-react';
 
-type ProfessionalRole = 'trainer' | 'nutritionist' | 'head_coach';
+type ProfessionalRole = 'trainer' | 'nutritionist' | 'head_coach' | 'biomechanist';
 
 interface ProfessionalSignUpProps {
   onComplete: () => void;
@@ -31,11 +31,6 @@ interface FormData {
   country: string;
   termsAccepted: boolean;
 }
-
-const STRIPE_LINKS: Record<'monthly' | 'yearly', string> = {
-  monthly: 'https://buy.stripe.com/4gM14n1klgUoac55SG9R60d',
-  yearly: 'https://buy.stripe.com/fZu6oHe77cE8fwpgxk9R60e',
-};
 
 const ROLE_CARDS: { role: ProfessionalRole; icon: typeof Dumbbell; color: string; labelEs: string; labelEn: string; accessEs: string[]; accessEn: string[]; locked?: boolean }[] = [
   {
@@ -65,6 +60,15 @@ const ROLE_CARDS: { role: ProfessionalRole; icon: typeof Dumbbell; color: string
     accessEs: ['Hub', 'Endurance', 'Nutrition', 'LAB', 'Motion', 'Performance', 'Academy'],
     accessEn: ['Hub', 'Endurance', 'Nutrition', 'LAB', 'Motion', 'Performance', 'Academy'],
     locked: true,
+  },
+  {
+    role: 'biomechanist',
+    icon: Stethoscope,
+    color: '#60a5fa',
+    labelEs: 'Biomecánico',
+    labelEn: 'Biomechanist',
+    accessEs: ['Hub', 'Biomecánica'],
+    accessEn: ['Hub', 'Biomechanics'],
   },
 ];
 
@@ -258,11 +262,8 @@ export default function ProfessionalSignUp({ onComplete, onBack, initialStep = 1
 
       setAccountCreated(true);
 
-      const stripeLink = STRIPE_LINKS[billingCycle];
-      const stripeUrl = `${stripeLink}?client_reference_id=${userId}`;
-
-      showToast(language === 'es' ? 'Cuenta creada. Redirigiendo a Stripe...' : 'Account created. Redirecting to Stripe...', 'success');
-      window.location.href = stripeUrl;
+      showToast(language === 'es' ? 'Cuenta creada. Confirma tu correo para continuar con el pago.' : 'Account created. Confirm your email to continue to payment.', 'success');
+      window.location.href = '/confirm-email';
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');
     } finally {

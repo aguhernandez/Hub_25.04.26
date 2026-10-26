@@ -18,10 +18,6 @@ const initialCallback = (() => {
 
 type ViewState = 'checking' | 'success' | 'invalid';
 const CONFIRMATION_URL = 'https://hub.asciende.pro/confirm-email';
-const PROFESSIONAL_PAYMENT_LINKS = {
-  monthly: 'https://buy.stripe.com/4gM14n1klgUoac55SG9R60d',
-  yearly: 'https://buy.stripe.com/fZu6oHe77cE8fwpgxk9R60e',
-};
 
 export default function ConfirmEmailPage() {
   const navigate = useNavigate();
@@ -170,20 +166,27 @@ export default function ConfirmEmailPage() {
     }
   };
 
-  const continueToPayment = () => {
+  const continueToPayment = async () => {
     if (!user) return;
     const metadata = user.user_metadata ?? {};
     const role = metadata.requested_role;
     const cycle = metadata.billing_cycle;
-    if (!['trainer', 'nutritionist', 'head_coach'].includes(role) || (cycle !== 'monthly' && cycle !== 'yearly')) return;
-    const checkout = new URL(PROFESSIONAL_PAYMENT_LINKS[cycle as keyof typeof PROFESSIONAL_PAYMENT_LINKS]);
-    checkout.searchParams.set('client_reference_id', user.id);
-    window.location.assign(checkout.toString());
+    if (!['trainer', 'nutritionist', 'head_coach', 'biomechanist'].includes(role) || (cycle !== 'monthly' && cycle !== 'yearly')) return;
+    setBusy(true);
+    setMessage('');
+    const modules = role === 'trainer' ? ['endurance_planner'] : role === 'nutritionist' ? ['nutrition_planner'] : role === 'biomechanist' ? ['biomechanics'] : ['all_access'];
+    const { data, error } = await supabase.functions.invoke('stripe-create-professional-checkout', { body: { interval: cycle, modules } });
+    if (error || !data?.url) {
+      setMessage(language === 'es' ? 'No pudimos preparar el pago profesional. Inténtalo de nuevo.' : 'We could not prepare professional checkout. Please try again.');
+      setBusy(false);
+      return;
+    }
+    window.location.assign(data.url);
   };
 
   const metadata = user?.user_metadata ?? {};
   const requiresProfessionalPayment = Boolean(user &&
-    ['trainer', 'nutritionist', 'head_coach'].includes(metadata.requested_role) &&
+    ['trainer', 'nutritionist', 'head_coach', 'biomechanist'].includes(metadata.requested_role) &&
     (metadata.billing_cycle === 'monthly' || metadata.billing_cycle === 'yearly'));
   const paymentReceived = ['success', 'true'].includes(new URLSearchParams(window.location.search).get('professional_payment') || '');
 

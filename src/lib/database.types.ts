@@ -130,7 +130,7 @@ export type Database = {
           privacy_accepted: boolean | null
           privacy_accepted_at: string | null
           profile_completed: boolean | null
-          role: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach'
+          role: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach' | 'biomechanist'
           country: string | null
           phone: string | null
           sport: string | null
@@ -147,6 +147,7 @@ export type Database = {
           updated_at: string
           assigned_trainer_id: string | null
           assigned_nutritionist_id: string | null
+          assigned_biomechanist_id: string | null
           timezone: string | null
         }
         Insert: {
@@ -163,7 +164,7 @@ export type Database = {
           privacy_accepted?: boolean | null
           privacy_accepted_at?: string | null
           profile_completed?: boolean | null
-          role?: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach'
+          role?: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach' | 'biomechanist'
           country?: string | null
           phone?: string | null
           sport?: string | null
@@ -178,6 +179,7 @@ export type Database = {
           is_active?: boolean
           assigned_trainer_id?: string | null
           assigned_nutritionist_id?: string | null
+          assigned_biomechanist_id?: string | null
           timezone?: string | null
         }
         Update: {
@@ -193,7 +195,7 @@ export type Database = {
           privacy_accepted?: boolean | null
           privacy_accepted_at?: string | null
           profile_completed?: boolean | null
-          role?: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach'
+          role?: 'admin' | 'trainer' | 'athlete' | 'nutritionist' | 'head_coach' | 'biomechanist'
           country?: string | null
           phone?: string | null
           sport?: string | null
@@ -208,6 +210,7 @@ export type Database = {
           is_active?: boolean
           assigned_trainer_id?: string | null
           assigned_nutritionist_id?: string | null
+          assigned_biomechanist_id?: string | null
           timezone?: string | null
         }
         Relationships: []

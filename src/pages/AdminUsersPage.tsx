@@ -38,7 +38,7 @@ interface AdminUser {
   email: string;
   full_name: string | null;
   role: string;
-  requestedRole?: 'trainer' | 'nutritionist' | 'head_coach' | null;
+  requestedRole?: 'trainer' | 'nutritionist' | 'head_coach' | 'biomechanist' | null;
   is_active: boolean | null;
   created_at: string;
   updated_at: string | null;

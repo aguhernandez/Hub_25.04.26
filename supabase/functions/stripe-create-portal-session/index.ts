@@ -35,7 +35,9 @@ Deno.serve(async (req: Request) => {
 
     if (profileError || !profile) throw new Error('User profile not found');
 
-    const isProfessional = profile.role === 'trainer' || profile.role === 'nutritionist';
+    const { data: effectiveRoles } = await supabaseClient.rpc('effective_roles', { p_user_id: user.id });
+    const isProfessional = ['trainer', 'nutritionist', 'head_coach', 'biomechanist'].includes(profile.role)
+      || (effectiveRoles ?? []).some((item: { role?: string }) => ['trainer', 'nutritionist', 'head_coach', 'biomechanist'].includes(item.role ?? ''));
     if (!isProfessional) throw new Error('Only professional accounts can access billing');
 
     const { data: subscription, error: subError } = await supabaseClient
@@ -64,16 +66,20 @@ Deno.serve(async (req: Request) => {
       return_url: returnUrl,
     });
 
+    const portalConfiguration = Deno.env.get('STRIPE_BILLING_PORTAL_CONFIGURATION_ID') || 'bpc_1UUmeKErPHHgrU6UIfXz2F4n';
+    const portalParams = new URLSearchParams({
+      customer: subscription.stripe_customer_id,
+      return_url: returnUrl,
+    });
+    if (portalConfiguration) portalParams.set('configuration', portalConfiguration);
+
     const sessionResponse = await fetch('https://api.stripe.com/v1/billing_portal/sessions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${stripeKey}`,
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: new URLSearchParams({
-        customer: subscription.stripe_customer_id,
-        return_url: returnUrl,
-      }),
+      body: portalParams,
     });
 
     if (!sessionResponse.ok) {
