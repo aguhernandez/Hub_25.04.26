@@ -70,14 +70,14 @@ export default function CMJVideoCapture({ onJumpDetected, onError, isActive }: C
     setFrames([]); setFrame(0); setTakeoff(null); setLanding(null); setSkipped(0); setFps(0); setEffectiveFps(0); setAutoMessage('');
   };
 
-  const emitAutomaticJump = (a: { index: number; timeMs: number }, b: { index: number; timeMs: number }) => {
+  const emitAutomaticJump = useCallback((a: { index: number; timeMs: number }, b: { index: number; timeMs: number }) => {
     const table = buildFrameTable(timesRef.current, captureFps); const scale = table.timeScale; const rawFlight = b.timeMs - a.timeMs;
     const flightMs = rawFlight * scale;
     if (!(flightMs > 0) || rawFlight < 120 || rawFlight > 1100 || b.timeMs <= lastEventRef.current) return;
     lastEventRef.current = b.timeMs;
     const analysis: VideoFrameAnalysis = { takeoffFrameIndex: a.index, landingFrameIndex: b.index, fps: table.measuredFps, totalFrames: framesRef.current.length, flightTimeMs: flightMs, takeoffMs: a.timeMs * scale, landingMs: b.timeMs * scale, effectiveFps: table.effectiveFps, skippedFrames: table.skipped };
     setFps(table.measuredFps); setEffectiveFps(table.effectiveFps); setAutoMessage(txt.detected); onJumpDetected(flightMs, analysis);
-  };
+  }, [captureFps, onJumpDetected, txt.detected]);
 
   const processFrame = useCallback((_now: number, metadata: VideoFrameCallbackMetadata) => {
     const video = videoRef.current; const canvas = canvasRef.current; const ctx = canvas?.getContext('2d');
@@ -100,7 +100,7 @@ export default function CMJVideoCapture({ onJumpDetected, onError, isActive }: C
     setFrames([...framesRef.current]); setFrame(next.index);
     const table = buildFrameTable(timesRef.current, captureFps); setFps(table.measuredFps); setEffectiveFps(table.effectiveFps);
     if (runningRef.current && (!video.ended || source === 'live')) video.requestVideoFrameCallback(processFrame);
-  }, [captureFps, onJumpDetected, source, txt.detected]);
+  }, [captureFps, emitAutomaticJump, source]);
 
   const startCapture = useCallback(async (mode: SourceMode = source) => {
     const video = videoRef.current;
@@ -175,11 +175,11 @@ export default function CMJVideoCapture({ onJumpDetected, onError, isActive }: C
     {!capturing && source === 'live' && <button onClick={() => void startLive()} className="w-full rounded-xl bg-primary p-3 text-sm font-semibold text-gray-900"><Camera className="inline w-4 h-4 mr-1" />{txt.start}</button>}
     {capturing && <button onClick={stopCapture} className="w-full rounded-xl bg-gray-700 p-3 text-sm font-semibold text-white"><Square className="inline w-4 h-4 mr-1" />{txt.stop}</button>}
     {fps > 0 && <p className={`text-xs ${effectiveFps < 60 ? 'text-red-400' : 'text-gray-400'}`}>{fps.toFixed(1)} fps medidos · {effectiveFps.toFixed(1)} fps efectivos {effectiveFps < 60 ? `— ${txt.low}` : ''}</p>}
-    {skipped > 0 && <p className="text-xs text-yellow-400"><AlertTriangle className="inline w-3 h-3" /> {skipped} {txt.skipped}</p>}
+    {skipped > 0 && <div className="flex items-center gap-2 rounded-xl border border-yellow-300/80 bg-yellow-400 px-3 py-2 text-xs font-semibold text-gray-950"><AlertTriangle className="w-3 h-3 shrink-0" /> {skipped} {txt.skipped}</div>}
     {autoMessage && <p className="text-xs text-green-400">{autoMessage}</p>}
     {frames.length > 1 && <div className="grid grid-cols-2 gap-2"><button onClick={() => setTakeoff(frame)} className="rounded-xl border border-primary/30 p-2 text-xs">{txt.takeoff}</button><button onClick={() => setLanding(frame)} className="rounded-xl border border-primary/30 p-2 text-xs">{txt.landing}</button></div>}
     {takeoff !== null && landing !== null && <button onClick={confirmMarkedJump} className="w-full rounded-xl bg-primary p-3 font-semibold text-gray-900"><Check className="inline w-4 h-4" /> {txt.confirm}</button>}
     <p className="text-xs text-gray-500">{txt.warning}</p>
-    {!autoMessage && frames.length > 20 && <p className="text-xs text-yellow-400">{txt.fallback}</p>}
+    {!autoMessage && frames.length > 20 && <div className="rounded-xl border border-yellow-300/80 bg-yellow-400 px-3 py-2 text-xs font-semibold text-gray-950">{txt.fallback}</div>}
   </div>;
 }
