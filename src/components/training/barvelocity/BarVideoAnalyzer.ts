@@ -3,6 +3,7 @@ import { analyzeTrack, TrackSample, VbtRep } from './vbtCore';
 import { GrayFrame, PlateTracker, pxPerMmFromPlate } from './plateTracker';
 
 export interface VideoAnalysisOptions { minRomMm?: number; captureFps?: number; onProgress?: (progress: number, effectiveFps: number, lostFrames: number) => void; signal?: AbortSignal; }
+export interface LiveTrackPoint { xPx: number; yPx: number; score: number; ok: boolean; width: number; height: number; }
 
 function median(values: number[]): number { const sorted = [...values].sort((a, b) => a - b); return sorted[Math.floor(sorted.length / 2)] ?? 0; }
 function toGray(ctx: CanvasRenderingContext2D, width: number, height: number): GrayFrame {
@@ -52,6 +53,7 @@ export function analyzeBarStream(
   loadKg?: number,
   onRep?: (rep: BarRep) => void,
   onVelocity?: (velocityMs: number) => void,
+  onTrack?: (point: LiveTrackPoint) => void,
 ): () => void {
   void fps;
   const video = document.createElement('video');
@@ -97,6 +99,7 @@ export function analyzeBarStream(
     }
     const tMs = metadata.mediaTime * 1000;
     const tracked = tracker.update(frame);
+    onTrack?.({ xPx: tracked.cx, yPx: tracked.cy, score: tracked.score, ok: tracked.ok, width, height });
     const dt = Number.isFinite(lastTime) && tMs > lastTime ? tMs - lastTime : 0;
     if (dt > 0) onVelocity?.(Math.abs((lastY - tracked.cy) / dt) / calibration.pixelsPerMm);
     samples.push({ tMs, yPx: tracked.cy, ok: tracked.ok });
