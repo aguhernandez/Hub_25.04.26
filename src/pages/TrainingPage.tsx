@@ -1,5 +1,5 @@
-Warning: truncated output (original token count: 51057)
-Total output lines: 3918
+Warning: truncated output (original token count: 51140)
+Total output lines: 3920
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
@@ -112,8 +112,10 @@ export default function TrainingPage() {
   const { selectedAthleteId, selectedAthleteName, clearSelectedAthlete } = useAthlete();
   const effectiveAthleteId = (profile?.role === 'trainer' || profile?.role === 'admin' || profile?.role === 'head_coach' || profile?.role === 'nutritionist') && selectedAthleteId ? selectedAthleteId : profile?.id;
   const isProfessional = profile?.role === 'trainer' || profile?.role === 'admin' || profile?.role === 'head_coach' || profile?.role === 'nutritionist';
-  const { canAccessAIWorkouts, canAccessAssessments } = useMembership();
-  const canOpenAIWorkoutPlanner = canAccessAIWorkouts || (isProfessional && !!selectedAthleteId);
+  const { level: membershipLevel, canAccessAssessments } = useMembership();
+  const canOpenAIWorkoutPlanner = !!profile && (!isProfessional || !!selectedAthleteId);
+  const aiIsUnlimited = profile?.role === 'trainer' || profile?.role === 'head_coach' || profile?.role === 'admin';
+  const aiMonthlyLimit = membershipLevel === 'pro' || membershipLevel === 'teams_sports' ? 5 : 1;
   const trainingAccess = useProfessionalServiceAccess('training');
   const [showTrainingAccessModal, setShowTrainingAccessModal] = useState(false);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
@@ -2162,12 +2164,7 @@ export default function TrainingPage() {
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-transparent dark:from-blue-400/10 rounded-bl-full" />
             <div className="relative">
-              <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform bg-gradient-to-br from-blue-500 to-indigo-600">
-                <ClipboardList className="w-6 h-6 text-white" />
-              </div>
-              <h3 className="fo…1057 tokens truncated…ite/20'
-                  : 'bg-gradient-to-br from-cyan-500 to-cyan-600 dark:from-cyan-900/40 dark:to-cyan-800/30'
-              }`}>
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-4 …1140 tokens truncated…   }`}>
                 <Zap className={`w-6 h-6 ${showAssessmentMenu ? 'text-white' : 'text-white dark:text-cyan-400'}`} />
               </div>
               <h3 className={`font-bold text-lg mb-1 ${showAssessmentMenu ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
@@ -2249,9 +2246,9 @@ export default function TrainingPage() {
           className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-[#514163]/30 dark:border-[#514163]/50 hover:border-[#514163] dark:hover:border-[#514163] hover:shadow-xl hover:scale-[1.02] transition-all p-6 text-left"
         >
           <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-[#514163]/10 to-transparent dark:from-[#514163]/20 rounded-bl-full" />
-          {!canOpenAIWorkoutPlanner && (
+          {canOpenAIWorkoutPlanner && !aiIsUnlimited && (
             <div className="absolute top-3 right-3 bg-[#fdda36] text-[#514163] text-[10px] font-bold px-2 py-0.5 rounded-full leading-tight uppercase tracking-wide">
-              {language === 'es' ? 'Upgrade' : 'Upgrade'}
+              {language === 'es' ? `${aiMonthlyLimit} uso${aiMonthlyLimit === 1 ? '' : 's'} / mes` : `${aiMonthlyLimit} use${aiMonthlyLimit === 1 ? '' : 's'} / month`}
             </div>
           )}
           <div className="relative">

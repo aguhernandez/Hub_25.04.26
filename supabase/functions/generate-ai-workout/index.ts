@@ -421,9 +421,10 @@ Deno.serve(async (req: Request) => {
     if (!isSelf && (!isProfessional || (requesterProfile?.role === "trainer" && targetProfile.assigned_trainer_id !== user.id))) {
       throw new Error("Not authorized for this athlete");
     }
-    // Athletes require Pro. Authorized professionals may generate for their athletes
-    // as part of their coaching service, regardless of the professional's own plan.
-    if (isSelf) {
+    // Athletes can try the feature on Free (1/month) or use it on Pro (5/month).
+    // Trainers and head coaches are intentionally left open for coaching work.
+    let monthlyLimit: number | null = null;
+    if (isSelf && requesterProfile?.role === "athlete") {
       const { data: proAccess } = await supabaseAdmin
         .from("membership_access")
         .select("status, end_date, membership:memberships(name, slug)")
@@ -434,7 +435,9 @@ Deno.serve(async (req: Request) => {
         const name = `${membership?.name || ""} ${membership?.slug || ""}`.toLowerCase();
         return name.includes("pro") && (!row.end_date || new Date(row.end_date).getTime() > Date.now());
       });
-      if (!hasPro) throw new Error("Plan with AI requires an active Pro membership");
+      monthlyLimit = hasPro ? 5 : 1;
+    } else if (!["trainer", "head_coach", "admin"].includes(requesterProfile?.role || "")) {
+      monthlyLimit = 1;
     }
     const lang = body.language || "es";
     // Luna keeps generation affordable while the deterministic blueprint carries
@@ -460,20 +463,26 @@ Deno.serve(async (req: Request) => {
       atpContext = JSON.stringify(atpData);
     }
 
-    // Cost guard: one AI generation/modification consumes one monthly slot for
-    // the target athlete. The check is server-side so it cannot be bypassed by
-    // editing the browser request. A multi-session block still counts as one click.
-    const monthStart = new Date();
-    monthStart.setUTCDate(1);
-    monthStart.setUTCHours(0, 0, 0, 0);
-    const { count: monthlyGenerations, error: monthlyCountError } = await supabaseAdmin
-      .from("ai_training_plans")
-      .select("id", { count: "exact", head: true })
-      .eq("athlete_id", requestedAthleteId)
-      .gte("generated_at", monthStart.toISOString());
-    if (monthlyCountError) console.warn("Could not read monthly AI generation count", monthlyCountError.message);
-    if ((monthlyGenerations || 0) >= 5) {
-      throw new Error("Monthly AI workout modification limit reached (5 per athlete). Try again next month.");
+    // Cost guard is server-side so it cannot be bypassed by editing the browser
+    // request. A multi-session block still counts as one click.
+    let monthlyGenerations = 0;
+    if (monthlyLimit !== null) {
+      const monthStart = new Date();
+      monthStart.setUTCDate(1);
+      monthStart.setUTCHours(0, 0, 0, 0);
+      let countQuery = supabaseAdmin
+        .from("ai_training_plans")
+        .select("id", { count: "exact", head: true })
+        .gte("generated_at", monthStart.toISOString());
+      countQuery = isSelf
+        ? countQuery.eq("athlete_id", requestedAthleteId)
+        : countQuery.eq("context_data->>requester_id", user.id);
+      const { count, error: monthlyCountError } = await countQuery;
+      monthlyGenerations = count || 0;
+      if (monthlyCountError) console.warn("Could not read monthly AI generation count", monthlyCountError.message);
+      if (monthlyGenerations >= monthlyLimit) {
+        throw new Error(`Monthly AI workout modification limit reached (${monthlyLimit} per month). Try again next month.`);
+      }
     }
 
     const openaiKey = await getOpenAIKey(supabaseAdmin);
@@ -759,7 +768,7 @@ Deno.serve(async (req: Request) => {
         context_data: { request: body, requester_id: user.id, atp: atpData, blueprint: sessionBlueprint, monthly_generation_number: (monthlyGenerations || 0) + 1 },
         plan_data: generatedWorkout,
         athlete_readiness_score: todayWellness?.overall_score || null,
-        athlete_readiness_notes: todayWellness?.general_notes || null,
+          athlete_readiness_notes: todayWellness?.general_notes || null,
       });
       if (auditError) console.warn("Could not audit AI training plan", auditError.message);
 

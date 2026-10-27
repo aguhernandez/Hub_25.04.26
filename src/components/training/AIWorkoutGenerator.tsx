@@ -452,8 +452,8 @@ export default function AIWorkoutGenerator({
       setError(
         isMonthlyLimit
           ? (language === 'es'
-            ? 'Llegaste al límite de 5 modificaciones con IA para este atleta este mes.'
-            : 'You reached the limit of 5 AI modifications for this athlete this month.')
+            ? 'Llegaste al límite mensual de modificaciones con IA para este perfil.'
+            : 'You reached the monthly AI modification limit for this profile.')
           : language === 'es'
             ? 'Error generando el entrenamiento. Por favor, intentalo de nuevo.'
             : 'Error generating workout. Please try again.'
