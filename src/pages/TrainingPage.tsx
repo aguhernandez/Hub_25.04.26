@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 51133)
-Total output lines: 3920
-
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -2164,7 +2161,53 @@ export default function TrainingPage() {
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-transparent dark:from-blue-400/10 rounded-bl-full" />
             <div className="relative">
-              <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transit…1133 tokens truncated…   }`}>
+              <div className="w-12 h-12 rounded-lg bg-blue-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <ClipboardList className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
+                {language === 'es' ? 'Solicitar Cuestionario' : 'Request Questionnaire'}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {language === 'es' ? 'Para tus atletas' : 'For your athletes'}
+              </p>
+            </div>
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowWellnessCheckin(true)}
+            className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-blue-200 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-500 transition-all p-6 text-left"
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-transparent dark:from-blue-400/10 rounded-bl-full" />
+            <div className="relative">
+              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <Heart className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
+                {language === 'es' ? 'Bienestar' : 'Wellness'}
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {language === 'es' ? 'Check-in diario de recuperación' : 'Daily recovery check-in'}
+              </p>
+            </div>
+          </button>
+        )}
+
+        <div className="relative">
+          <button
+            onClick={() => setShowAssessmentMenu(!showAssessmentMenu)}
+            className={`w-full group relative overflow-hidden rounded-xl shadow-lg border-2 transition-all p-6 text-left ${
+              showAssessmentMenu
+                ? 'bg-cyan-600 border-cyan-600'
+                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-cyan-500 dark:hover:border-cyan-500'
+            }`}
+          >
+            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-cyan-500/10 to-transparent dark:from-cyan-400/10 rounded-bl-full" />
+            <div className="relative">
+              <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform ${
+                showAssessmentMenu
+                  ? 'bg-white/20'
+                  : 'bg-gradient-to-br from-cyan-500 to-cyan-600 dark:from-cyan-900/40 dark:to-cyan-800/30'
+              }`}>
                 <Zap className={`w-6 h-6 ${showAssessmentMenu ? 'text-white' : 'text-white dark:text-cyan-400'}`} />
               </div>
               <h3 className={`font-bold text-lg mb-1 ${showAssessmentMenu ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
