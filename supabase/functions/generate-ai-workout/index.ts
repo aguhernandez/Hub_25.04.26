@@ -436,7 +436,7 @@ Deno.serve(async (req: Request) => {
         return name.includes("pro") && (!row.end_date || new Date(row.end_date).getTime() > Date.now());
       });
       monthlyLimit = hasPro ? 5 : 1;
-    } else if (!["trainer", "head_coach", "admin"].includes(requesterProfile?.role || "")) {
+    } else if (!["trainer", "head_coach"].includes(requesterProfile?.role || "")) {
       monthlyLimit = 1;
     }
     const lang = body.language || "es";

@@ -1,4 +1,4 @@
-Warning: truncated output (original token count: 51140)
+Warning: truncated output (original token count: 51133)
 Total output lines: 3920
 
 import { useEffect, useState } from 'react';
@@ -114,7 +114,7 @@ export default function TrainingPage() {
   const isProfessional = profile?.role === 'trainer' || profile?.role === 'admin' || profile?.role === 'head_coach' || profile?.role === 'nutritionist';
   const { level: membershipLevel, canAccessAssessments } = useMembership();
   const canOpenAIWorkoutPlanner = !!profile && (!isProfessional || !!selectedAthleteId);
-  const aiIsUnlimited = profile?.role === 'trainer' || profile?.role === 'head_coach' || profile?.role === 'admin';
+  const aiIsUnlimited = profile?.role === 'trainer' || profile?.role === 'head_coach';
   const aiMonthlyLimit = membershipLevel === 'pro' || membershipLevel === 'teams_sports' ? 5 : 1;
   const trainingAccess = useProfessionalServiceAccess('training');
   const [showTrainingAccessModal, setShowTrainingAccessModal] = useState(false);
@@ -2164,7 +2164,7 @@ export default function TrainingPage() {
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-500/10 to-transparent dark:from-blue-400/10 rounded-bl-full" />
             <div className="relative">
-              <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-4 …1140 tokens truncated…   }`}>
+              <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transit…1133 tokens truncated…   }`}>
                 <Zap className={`w-6 h-6 ${showAssessmentMenu ? 'text-white' : 'text-white dark:text-cyan-400'}`} />
               </div>
               <h3 className={`font-bold text-lg mb-1 ${showAssessmentMenu ? 'text-white' : 'text-gray-900 dark:text-white'}`}>
