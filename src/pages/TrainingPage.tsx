@@ -2385,22 +2385,13 @@ export default function TrainingPage() {
             <div className="px-6 py-5">
               <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 mb-5">
                 <p className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide mb-3">
-                  {language === 'es' ? 'Disponible en plan Inicia' : 'Available on Inicia plan'}
+                  {language === 'es' ? 'Requiere membresía Pro' : 'Requires a Pro membership'}
                 </p>
-                <ul className="space-y-2">
-                  {[
-                    language === 'es' ? '1 programa generado por IA al mes' : '1 AI-generated program per month',
-                    language === 'es' ? 'Duración de 7 días' : '7-day duration',
-                    language === 'es' ? 'Editable manualmente después' : 'Manually editable afterwards',
-                  ].map((item) => (
-                    <li key={item} className="flex items-center gap-2 text-sm text-emerald-800 dark:text-emerald-300">
-                      <div className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
-                        <CheckCircle2 className="w-3 h-3 text-white" />
-                      </div>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
+                <p className="text-sm text-emerald-800 dark:text-emerald-300">
+                  {language === 'es'
+                    ? 'La planificación con IA está disponible exclusivamente con una membresía Pro.'
+                    : 'AI planning is available exclusively with a Pro membership.'}
+                </p>
               </div>
 
               <p className="text-xs text-center text-gray-500 dark:text-gray-400 mb-4">
@@ -2409,27 +2400,16 @@ export default function TrainingPage() {
                   : 'With Pro: unlimited plans, longer durations, and real performance adjustments.'}
               </p>
 
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => {
-                    setShowAIUpgradeModal(false);
-                    setShowAIGenerator(true);
-                  }}
-                  className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition-colors text-sm"
-                >
-                  {language === 'es' ? 'Usar versión gratuita (7 días)' : 'Use free version (7 days)'}
-                </button>
-                <button
-                  onClick={() => {
-                    setShowAIUpgradeModal(false);
-                    window.dispatchEvent(new CustomEvent('navigate', { detail: 'memberships-marketplace' }));
-                  }}
-                  className="w-full py-3 rounded-xl bg-[#514163] hover:bg-[#3a2f4a] text-white font-semibold transition-colors text-sm flex items-center justify-center gap-2"
-                >
-                  <Sparkles className="w-4 h-4 text-[#fdda36]" />
-                  {language === 'es' ? 'Ver plan Pro' : 'See Pro plan'}
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  setShowAIUpgradeModal(false);
+                  window.dispatchEvent(new CustomEvent('navigate', { detail: 'memberships-marketplace' }));
+                }}
+                className="w-full py-3 rounded-xl bg-[#514163] hover:bg-[#3a2f4a] text-white font-semibold transition-colors text-sm flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4 text-[#fdda36]" />
+                {language === 'es' ? 'Ver plan Pro' : 'See Pro plan'}
+              </button>
             </div>
           </div>
         </div>
@@ -3382,10 +3362,10 @@ export default function TrainingPage() {
       />
 
       <AIWorkoutGenerator
-        isOpen={showAIGenerator}
+        isOpen={showAIGenerator && canAccessAIWorkouts}
         onClose={() => setShowAIGenerator(false)}
         selectedDate={formatDateLocal(selectedDate)}
-        isFreeTier={!canAccessAIWorkouts}
+        isFreeTier={false}
         onWorkoutSaved={() => {
           loadWorkouts();
           success(language === 'es' ? 'Entrenamiento generado y guardado' : 'Workout generated and saved');
@@ -3435,11 +3415,11 @@ export default function TrainingPage() {
         <CoachWellnessDashboard onClose={() => setShowCoachWellness(false)} />
       )}
 
-      {showCMJAssessment && (
+      {showCMJAssessment && canAccessAssessments && (
         <CMJAssessment onClose={() => setShowCMJAssessment(false)} />
       )}
 
-      {showBarVelocity && (
+      {showBarVelocity && canAccessAssessments && (
         <BarVelocityTracker onClose={() => setShowBarVelocity(false)} />
       )}
 
