@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useMembership } from '../../hooks/useMembership';
 import { supabase } from '../../lib/supabase';
 import PostTrainingFeedbackModal, { FeedbackData } from '../PostTrainingFeedbackModal';
 import StrengthEstimator from './StrengthEstimator';
@@ -567,6 +568,7 @@ export default function WorkoutSessionScreen({
 }: WorkoutSessionScreenProps) {
   const { language } = useLanguage();
   const { profile } = useAuth();
+  const { canAccessAssessments } = useMembership();
   const [sectionIndex, setSectionIndex] = useState(0);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showStrengthEstimator, setShowStrengthEstimator] = useState(false);
@@ -617,6 +619,10 @@ export default function WorkoutSessionScreen({
     exercises: language === 'es' ? 'ejercicios' : 'exercises',
   };
 
+  const openProPlans = () => {
+    window.dispatchEvent(new CustomEvent('navigate', { detail: 'memberships-marketplace' }));
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-gray-50 dark:bg-gray-950 flex flex-col overflow-hidden">
       {/* Top bar */}
@@ -659,7 +665,7 @@ export default function WorkoutSessionScreen({
       {/* Floating tool buttons */}
       <div className="absolute right-3 top-20 flex flex-col gap-2 z-10">
         <button
-          onClick={() => setShowVBT(true)}
+          onClick={() => canAccessAssessments ? setShowVBT(true) : openProPlans()}
           className="w-10 h-10 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 flex items-center justify-center shadow-md hover:border-[#514163] dark:hover:border-[#fdda36]/40 hover:shadow-lg transition-all"
           title={language === 'es' ? 'Velocidad de barra' : 'Bar Velocity'}
         >
@@ -711,7 +717,7 @@ export default function WorkoutSessionScreen({
               </p>
               <div className="flex flex-col gap-3">
                 <button
-                  onClick={() => setShowCMJ(true)}
+                  onClick={() => canAccessAssessments ? setShowCMJ(true) : openProPlans()}
                   className="flex items-center justify-center gap-2 py-3 px-6 bg-[#fdda36] hover:bg-[#f5cf25] text-gray-900 rounded-2xl font-semibold font-body transition-colors"
                 >
                   <Activity className="w-5 h-5" />
@@ -928,7 +934,7 @@ export default function WorkoutSessionScreen({
         </div>
       )}
 
-      {showVBT && (
+      {showVBT && canAccessAssessments && (
         <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm overflow-y-auto">
           <div className="min-h-screen px-4 py-8 flex items-start justify-center">
             <div className="w-full max-w-lg bg-white dark:bg-gray-900 rounded-3xl border border-gray-200 dark:border-gray-700 p-6 shadow-2xl">
@@ -946,7 +952,7 @@ export default function WorkoutSessionScreen({
         </div>
       )}
 
-      {showCMJ && (
+      {showCMJ && canAccessAssessments && (
         <div className="fixed inset-0 z-[60] bg-gray-50 dark:bg-gray-950 overflow-y-auto">
           <div className="min-h-screen px-4 py-8">
             <CMJAssessment onClose={() => { setShowCMJ(false); handleAdvance(); }} />
