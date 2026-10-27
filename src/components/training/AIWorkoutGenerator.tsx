@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, Sparkles, Loader2, Save, ChevronDown, ChevronUp, Check, RefreshCw, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -41,6 +41,15 @@ interface AIWorkoutGeneratorProps {
   selectedDate: string;
   onWorkoutSaved: () => void;
   isFreeTier?: boolean;
+  athleteId?: string;
+}
+
+interface ATPOption {
+  id: string;
+  title: string;
+  year: number;
+  start_date: string;
+  end_date: string | null;
 }
 
 const MUSCLE_FOCUS_OPTIONS = [
@@ -61,7 +70,7 @@ const SESSION_TYPES = [
   { value: 'endurance', labelEs: 'Resistencia muscular (15+ reps)', labelEn: 'Muscular Endurance (15+ reps)' },
 ];
 
-const DURATION_OPTIONS = [45, 60, 75, 90];
+const DURATION_OPTIONS = [70, 75, 80];
 
 const BLOCK_WEEKS_OPTIONS = [
   { value: 0, labelEs: '1 sesion', labelEn: '1 session' },
@@ -341,16 +350,20 @@ export default function AIWorkoutGenerator({
   selectedDate,
   onWorkoutSaved,
   isFreeTier = false,
+  athleteId,
 }: AIWorkoutGeneratorProps) {
   const { language } = useLanguage();
   const { profile } = useAuth();
+  const targetAthleteId = athleteId || profile?.id;
 
   const [muscleFocus, setMuscleFocus] = useState<string[]>([]);
   const [sessionType, setSessionType] = useState('hypertrophy');
-  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [durationMinutes, setDurationMinutes] = useState(75);
   const [blockWeeks, setBlockWeeks] = useState<number>(isFreeTier ? 1 : 1);
   const [sessionsPerWeek, setSessionsPerWeek] = useState(3);
   const [startDate, setStartDate] = useState<string>(selectedDate);
+  const [atps, setAtps] = useState<ATPOption[]>([]);
+  const [selectedAtpId, setSelectedAtpId] = useState('');
 
   const [generating, setGenerating] = useState(false);
   const [generatedWorkout, setGeneratedWorkout] = useState<GeneratedWorkout | null>(null);
@@ -362,6 +375,25 @@ export default function AIWorkoutGenerator({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [generatingProgress, setGeneratingProgress] = useState('');
+
+  useEffect(() => {
+    if (!isOpen || !targetAthleteId) return;
+    let cancelled = false;
+    const loadATPs = async () => {
+      const { data, error } = await supabase
+        .from('annual_training_plans')
+        .select('id, title, year, start_date, end_date')
+        .eq('athlete_id', targetAthleteId)
+        .eq('is_active', true)
+        .order('year', { ascending: false });
+      if (!cancelled && !error) {
+        setAtps((data || []) as ATPOption[]);
+        setSelectedAtpId(current => current || (data as any)?.[0]?.id || '');
+      }
+    };
+    loadATPs();
+    return () => { cancelled = true; };
+  }, [isOpen, targetAthleteId]);
 
   const toggleMuscleFocus = (value: string) => {
     setMuscleFocus(prev =>
@@ -398,6 +430,9 @@ export default function AIWorkoutGenerator({
           sessions_per_week: isSingleSession ? 1 : sessionsPerWeek,
           available_equipment: 'full_gym',
           language,
+          athlete_id: targetAthleteId,
+          atp_id: selectedAtpId || undefined,
+          start_date: startDate,
         },
       });
 
@@ -413,10 +448,15 @@ export default function AIWorkoutGenerator({
       }
     } catch (err: any) {
       console.error('AI workout generation error:', err);
+      const isMonthlyLimit = String(err?.message || '').toLowerCase().includes('monthly ai workout modification limit');
       setError(
-        language === 'es'
-          ? 'Error generando el entrenamiento. Por favor, intentalo de nuevo.'
-          : 'Error generating workout. Please try again.'
+        isMonthlyLimit
+          ? (language === 'es'
+            ? 'Llegaste al límite de 5 modificaciones con IA para este atleta este mes.'
+            : 'You reached the limit of 5 AI modifications for this athlete this month.')
+          : language === 'es'
+            ? 'Error generando el entrenamiento. Por favor, intentalo de nuevo.'
+            : 'Error generating workout. Please try again.'
       );
     } finally {
       setGenerating(false);
@@ -425,7 +465,7 @@ export default function AIWorkoutGenerator({
   };
 
   const saveWorkout = async (workout: GeneratedWorkout, date: string) => {
-    if (!profile?.id) throw new Error('No profile');
+    if (!profile?.id || !targetAthleteId) throw new Error('No athlete');
 
     const { data: w, error: wErr } = await supabase
       .from('workouts')
@@ -468,8 +508,8 @@ export default function AIWorkoutGenerator({
     }
 
     const { error: assignErr } = await supabase.from('athlete_workouts').insert({
-      athlete_id: profile.id,
-      trainer_id: (profile as any).assigned_trainer_id || null,
+      athlete_id: targetAthleteId,
+      trainer_id: profile.role === 'athlete' ? (profile as any).assigned_trainer_id || null : profile.id,
       workout_id: w.id,
       scheduled_date: date,
       assignment_type: 'individual',
@@ -480,12 +520,11 @@ export default function AIWorkoutGenerator({
   };
 
   const getDateForSession = (weekNum: number, dayNum: number): string => {
-    const base = new Date(startDate + 'T00:00:00');
-    const weekOffset = (weekNum - 1) * 7;
-    const dayOffset = dayNum - 1;
-    const d = new Date(base);
-    d.setDate(d.getDate() + weekOffset + dayOffset);
-    return d.toISOString().split('T')[0];
+    // scheduled_date is a calendar date. Keep it in the athlete's calendar;
+    // never convert it through the browser or server timezone.
+    const [year, month, day] = startDate.split('-').map(Number);
+    const d = new Date(Date.UTC(year, month - 1, day + (weekNum - 1) * 7 + dayNum - 1));
+    return [d.getUTCFullYear(), String(d.getUTCMonth() + 1).padStart(2, '0'), String(d.getUTCDate()).padStart(2, '0')].join('-');
   };
 
   const handleSave = async () => {
@@ -527,6 +566,7 @@ export default function AIWorkoutGenerator({
     setBlockWeeks(1);
     setSessionsPerWeek(3);
     setStartDate(selectedDate);
+    setSelectedAtpId('');
     setGenerating(false);
     setActiveWorkoutIndex(0);
     onClose();
@@ -574,6 +614,21 @@ export default function AIWorkoutGenerator({
 
           {!hasResult && !generating && (
             <>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  {language === 'es' ? 'Plan anual (ATP)' : 'Annual Training Plan (ATP)'}
+                </label>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
+                  {language === 'es'
+                    ? 'La IA usará la fase, la carga semanal y las competiciones del atleta.'
+                    : "AI will use the athlete's phase, weekly load and competitions."}
+                </p>
+                <select value={selectedAtpId} onChange={e => setSelectedAtpId(e.target.value)} className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2.5 text-sm text-gray-800 dark:text-gray-200">
+                  <option value="">{language === 'es' ? 'Sin ATP seleccionado' : 'No ATP selected'}</option>
+                  {atps.map(atp => <option key={atp.id} value={atp.id}>{atp.title} · {atp.year} ({atp.start_date}{atp.end_date ? ` → ${atp.end_date}` : ''})</option>)}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
                   {language === 'es' ? 'Enfoque muscular' : 'Muscle focus'}

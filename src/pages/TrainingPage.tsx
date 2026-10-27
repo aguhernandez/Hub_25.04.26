@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 51057)
+Total output lines: 3918
+
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -110,6 +113,7 @@ export default function TrainingPage() {
   const effectiveAthleteId = (profile?.role === 'trainer' || profile?.role === 'admin' || profile?.role === 'head_coach' || profile?.role === 'nutritionist') && selectedAthleteId ? selectedAthleteId : profile?.id;
   const isProfessional = profile?.role === 'trainer' || profile?.role === 'admin' || profile?.role === 'head_coach' || profile?.role === 'nutritionist';
   const { canAccessAIWorkouts, canAccessAssessments } = useMembership();
+  const canOpenAIWorkoutPlanner = canAccessAIWorkouts || (isProfessional && !!selectedAthleteId);
   const trainingAccess = useProfessionalServiceAccess('training');
   const [showTrainingAccessModal, setShowTrainingAccessModal] = useState(false);
   const [workouts, setWorkouts] = useState<Workout[]>([]);
@@ -2161,79 +2165,7 @@ export default function TrainingPage() {
               <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform bg-gradient-to-br from-blue-500 to-indigo-600">
                 <ClipboardList className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
-                {language === 'es' ? 'Solicitar Cuestionario' : 'Request Questionnaire'}
-              </h3>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
-                {language === 'es'
-                  ? `Programar para ${selectedAthleteName || 'tu atleta'}`
-                  : `Schedule for ${selectedAthleteName || 'your athlete'}`}
-              </p>
-            </div>
-          </button>
-        ) : (
-        <button
-          onClick={() => setShowWellnessCheckin(true)}
-          className={`group relative overflow-hidden rounded-xl shadow-lg border-2 transition-all p-6 text-left ${
-            wellnessChecked
-              ? todayWellnessScore !== null && todayWellnessScore >= 70
-                ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-400 dark:border-emerald-600'
-                : todayWellnessScore !== null && todayWellnessScore >= 45
-                ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-400 dark:border-amber-600'
-                : todayWellnessScore !== null
-                ? 'bg-rose-50 dark:bg-rose-900/20 border-rose-400 dark:border-rose-600'
-                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
-              : 'bg-white dark:bg-gray-800 border-dashed border-gray-300 dark:border-gray-600 hover:border-emerald-400 dark:hover:border-emerald-500'
-          }`}
-        >
-          <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-emerald-500/10 to-transparent dark:from-emerald-400/10 rounded-bl-full" />
-          <div className="relative">
-            <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform ${
-              wellnessChecked && todayWellnessScore !== null
-                ? todayWellnessScore >= 70
-                  ? 'bg-gradient-to-br from-emerald-500 to-emerald-600'
-                  : todayWellnessScore >= 45
-                  ? 'bg-gradient-to-br from-amber-400 to-amber-500'
-                  : 'bg-gradient-to-br from-rose-500 to-rose-600'
-                : 'bg-gradient-to-br from-emerald-500 to-teal-600 dark:from-emerald-900/40 dark:to-teal-800/30'
-            }`}>
-              <Heart className="w-6 h-6 text-white" />
-            </div>
-            <h3 className="font-bold text-gray-900 dark:text-white text-lg mb-1">
-              {language === 'es' ? 'Bienestar' : 'Wellness'}
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {wellnessChecked && todayWellnessScore !== null
-                ? `${todayWellnessScore.toFixed(0)}/100 — ${
-                    todayWellnessScore >= 70
-                      ? language === 'es' ? 'Listo para entrenar' : 'Ready to train'
-                      : todayWellnessScore >= 45
-                      ? language === 'es' ? 'Moderado' : 'Moderate'
-                      : language === 'es' ? 'Recuperación recomendada' : 'Recovery recommended'
-                  }`
-                : language === 'es' ? 'Check-in diario de recuperación' : 'Daily recovery check-in'}
-            </p>
-          </div>
-        </button>
-        )}
-
-        {/* 2. Assessment */}
-        <div className="relative flex flex-col">
-          <button
-            onClick={() => setShowAssessmentMenu(!showAssessmentMenu)}
-            className={`flex-1 w-full group relative overflow-hidden rounded-xl shadow-lg border-2 transition-all p-6 text-left ${
-              showAssessmentMenu
-                ? 'bg-cyan-600 border-cyan-600'
-                : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-cyan-500 dark:hover:border-cyan-500'
-            }`}
-          >
-            <div className={`absolute top-0 right-0 w-24 h-24 bg-gradient-to-br rounded-bl-full ${
-              showAssessmentMenu ? 'from-white/10 to-transparent' : 'from-cyan-500/10 to-transparent dark:from-cyan-400/10'
-            }`} />
-            <div className="relative">
-              <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform ${
-                showAssessmentMenu
-                  ? 'bg-white/20'
+              <h3 className="fo…1057 tokens truncated…ite/20'
                   : 'bg-gradient-to-br from-cyan-500 to-cyan-600 dark:from-cyan-900/40 dark:to-cyan-800/30'
               }`}>
                 <Zap className={`w-6 h-6 ${showAssessmentMenu ? 'text-white' : 'text-white dark:text-cyan-400'}`} />
@@ -2313,11 +2245,11 @@ export default function TrainingPage() {
 
         {/* 3. Plan con IA — visible para todos, paywall para Inicia */}
         <button
-          onClick={() => canAccessAIWorkouts ? setShowAIGenerator(true) : setShowAIUpgradeModal(true)}
+          onClick={() => canOpenAIWorkoutPlanner ? setShowAIGenerator(true) : setShowAIUpgradeModal(true)}
           className="group relative overflow-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border-2 border-[#514163]/30 dark:border-[#514163]/50 hover:border-[#514163] dark:hover:border-[#514163] hover:shadow-xl hover:scale-[1.02] transition-all p-6 text-left"
         >
           <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-[#514163]/10 to-transparent dark:from-[#514163]/20 rounded-bl-full" />
-          {!canAccessAIWorkouts && (
+          {!canOpenAIWorkoutPlanner && (
             <div className="absolute top-3 right-3 bg-[#fdda36] text-[#514163] text-[10px] font-bold px-2 py-0.5 rounded-full leading-tight uppercase tracking-wide">
               {language === 'es' ? 'Upgrade' : 'Upgrade'}
             </div>
@@ -3362,9 +3294,10 @@ export default function TrainingPage() {
       />
 
       <AIWorkoutGenerator
-        isOpen={showAIGenerator && canAccessAIWorkouts}
+        isOpen={showAIGenerator && canOpenAIWorkoutPlanner}
         onClose={() => setShowAIGenerator(false)}
         selectedDate={formatDateLocal(selectedDate)}
+        athleteId={effectiveAthleteId}
         isFreeTier={false}
         onWorkoutSaved={() => {
           loadWorkouts();
