@@ -109,7 +109,28 @@ export default function CMJVideoCapture({ onJumpDetected, onError, isActive }: C
     await video.play().catch(() => undefined); video.requestVideoFrameCallback(processFrame);
   }, [onError, processFrame, source]);
 
-  const stopCapture = useCallback(() => { runningRef.current = false; setCapturing(false); videoRef.current?.pause(); streamRef.current?.getTracks().forEach((track) => track.stop()); streamRef.current = null; }, []);
+  const releaseVideoSource = useCallback(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.pause();
+      video.srcObject = null;
+      video.removeAttribute('src');
+      video.load();
+      video.onended = null;
+    }
+    if (urlRef.current) {
+      URL.revokeObjectURL(urlRef.current);
+      urlRef.current = null;
+    }
+  }, []);
+
+  const stopCapture = useCallback(() => {
+    runningRef.current = false;
+    setCapturing(false);
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    releaseVideoSource();
+  }, [releaseVideoSource]);
 
   const startLive = async () => {
     const permission = await requestCameraPermission();
@@ -123,19 +144,27 @@ export default function CMJVideoCapture({ onJumpDetected, onError, isActive }: C
   };
 
   const loadFile = (file: File) => {
-    stopCapture(); if (urlRef.current) URL.revokeObjectURL(urlRef.current); urlRef.current = URL.createObjectURL(file);
-    const video = videoRef.current; if (!video) return; setSource('video'); video.srcObject = null; video.src = urlRef.current; video.load(); video.onloadedmetadata = () => void startCapture('video');
+    stopCapture();
+    urlRef.current = URL.createObjectURL(file);
+    const video = videoRef.current;
+    if (!video) return;
+    setSource('video');
+    video.srcObject = null;
+    video.src = urlRef.current;
+    video.onended = stopCapture;
+    video.load();
+    video.onloadedmetadata = () => void startCapture('video');
   };
 
   const seekFrame = (next: number) => { const target = Math.max(0, Math.min(frames.length - 1, next)); const item = frames[target]; if (!item || !videoRef.current) return; videoRef.current.currentTime = item.mediaTime; setFrame(target); };
-  const confirmManual = () => {
+  const confirmMarkedJump = () => {
     const a = takeoff === null ? null : frames[takeoff]; const b = landing === null ? null : frames[landing]; if (!a || !b || b.mediaTime <= a.mediaTime) return;
     const table = buildFrameTable(frames.map((item) => item.mediaTime * 1000), captureFps); const scale = table.timeScale;
     const analysis: VideoFrameAnalysis = { takeoffFrameIndex: a.index, landingFrameIndex: b.index, fps: table.measuredFps, totalFrames: frames.length, flightTimeMs: (b.mediaTime - a.mediaTime) * 1000 * scale, takeoffMs: a.mediaTime * 1000 * scale, landingMs: b.mediaTime * 1000 * scale, effectiveFps: table.effectiveFps, skippedFrames: table.skipped };
     onJumpDetected(analysis.flightTimeMs, analysis);
   };
 
-  useEffect(() => () => { stopCapture(); if (urlRef.current) URL.revokeObjectURL(urlRef.current); }, [stopCapture]);
+  useEffect(() => () => { stopCapture(); }, [stopCapture]);
   useEffect(() => { if (!isActive) stopCapture(); }, [isActive, stopCapture]);
 
   return <div className="space-y-3">
@@ -149,7 +178,7 @@ export default function CMJVideoCapture({ onJumpDetected, onError, isActive }: C
     {skipped > 0 && <p className="text-xs text-yellow-400"><AlertTriangle className="inline w-3 h-3" /> {skipped} {txt.skipped}</p>}
     {autoMessage && <p className="text-xs text-green-400">{autoMessage}</p>}
     {frames.length > 1 && <div className="grid grid-cols-2 gap-2"><button onClick={() => setTakeoff(frame)} className="rounded-xl border border-primary/30 p-2 text-xs">{txt.takeoff}</button><button onClick={() => setLanding(frame)} className="rounded-xl border border-primary/30 p-2 text-xs">{txt.landing}</button></div>}
-    {takeoff !== null && landing !== null && <button onClick={confirmManual} className="w-full rounded-xl bg-primary p-3 font-semibold text-gray-900"><Check className="inline w-4 h-4" /> {txt.confirm}</button>}
+    {takeoff !== null && landing !== null && <button onClick={confirmMarkedJump} className="w-full rounded-xl bg-primary p-3 font-semibold text-gray-900"><Check className="inline w-4 h-4" /> {txt.confirm}</button>}
     <p className="text-xs text-gray-500">{txt.warning}</p>
     {!autoMessage && frames.length > 20 && <p className="text-xs text-yellow-400">{txt.fallback}</p>}
   </div>;
