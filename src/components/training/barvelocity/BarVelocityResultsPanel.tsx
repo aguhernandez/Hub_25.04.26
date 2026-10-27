@@ -6,6 +6,7 @@ import { BarRep, getVBTZone, VBT_ZONES } from './BarVelocityTypes';
 import { velocityLossPct } from './vbtCore';
 import BarVelocityChart from './BarVelocityChart';
 import VBTVelocityLossGraph, { repFatigueColor, repFatigueLabel, FATIGUE_THRESHOLDS } from './VBTVelocityLossGraph';
+import asciendeFavicon from '../../../assets/Asciendefavicon.png';
 
 interface BarVelocityResultsPanelProps {
   reps: BarRep[];
@@ -38,6 +39,7 @@ export default function BarVelocityResultsPanel({
   const txt = {
     peakVel: language === 'es' ? 'Vel. pico (mejor rep)' : 'Peak vel. (best rep)',
     meanVel: language === 'es' ? 'Vel. media concentrica' : 'Mean concentric vel.',
+    meanPropulsiveVel: language === 'es' ? 'Velocidad media propulsiva' : 'Mean propulsive velocity',
     avgPower: language === 'es' ? 'Potencia promedio' : 'Average power',
     vbtZone: language === 'es' ? 'Zona VBT' : 'VBT Zone',
     velocityLoss: language === 'es' ? 'perdida de velocidad (vs. mejor repetición)' : 'velocity loss (vs. best rep)',
@@ -83,6 +85,10 @@ export default function BarVelocityResultsPanel({
   const avgPower = avgPowerReps.length > 0
     ? avgPowerReps.reduce((s, r) => s + (r.estimatedPowerW || 0), 0) / avgPowerReps.length
     : 0;
+  const propulsiveReps = validReps.filter((r) => typeof r.meanPropulsiveVelocityMs === 'number' && Number.isFinite(r.meanPropulsiveVelocityMs));
+  const meanPropulsiveVelocity = propulsiveReps.length > 0
+    ? propulsiveReps.reduce((s, r) => s + (r.meanPropulsiveVelocityMs ?? 0), 0) / propulsiveReps.length
+    : null;
 
   const rm1 = loadKg && loadKg > 0 ? estimated1RM(meanV, loadKg) : null;
 
@@ -98,8 +104,6 @@ export default function BarVelocityResultsPanel({
   });
   const fatigued = repsWithFatigue.filter((r) => r.isFatigued);
 
-  const bg = isDark ? 'bg-gray-900' : 'bg-white';
-  const border = isDark ? 'border-gray-800/60' : 'border-gray-200';
   const textSec = isDark ? 'text-gray-400' : 'text-gray-600';
 
   return (
@@ -131,6 +135,20 @@ export default function BarVelocityResultsPanel({
           <div className={`text-xs ${textSec}`}>m/s</div>
         </div>
 
+        {meanPropulsiveVelocity != null && (
+          <div className={`relative rounded-xl p-4 border ${isDark ? 'bg-primary/10 border-primary/25' : 'bg-amber-50 border-amber-200'}`}>
+            <div className="absolute right-3 top-3 rounded-md bg-gray-950/80 p-1.5 shadow-sm">
+              <img src={asciendeFavicon} alt="Asciende" className="h-5 w-5 object-contain" />
+            </div>
+            <div className="flex items-center gap-2 mb-1 pr-8">
+              <Activity className="w-4 h-4 text-primary" />
+              <span className={`text-xs ${textSec}`}>{txt.meanPropulsiveVel}</span>
+            </div>
+            <div className="text-2xl font-bold text-primary tabular-nums">{meanPropulsiveVelocity.toFixed(2)}</div>
+            <div className={`text-xs ${textSec}`}>m/s · {propulsiveReps.length} reps</div>
+          </div>
+        )}
+
         {avgPower > 0 && (
           <div className={`rounded-xl p-4 border ${isDark ? 'bg-orange-500/10 border-orange-500/20' : 'bg-orange-50 border-orange-200'}`}>
             <div className="flex items-center gap-2 mb-1">
@@ -151,7 +169,7 @@ export default function BarVelocityResultsPanel({
             <span className={`text-xs ${textSec}`}>{txt.vbtZone}</span>
           </div>
           <div className={`text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{zoneLabel}</div>
-          <div className={`text-xs ${textSec} mt-0.5`}>{bestZone.min}–{bestZone.max === 3.0 ? '+' : bestZone.max} m/s</div>
+          <div className={`text-xs ${textSec} mt-0.5`}>{bestZone ? `${bestZone.min}–${bestZone.max === 3.0 ? '+' : bestZone.max} m/s` : (language === 'es' ? 'Sin zona de referencia' : 'No reference zone')}</div>
         </div>
 
         <div className={`rounded-xl p-4 border ${isDark ? 'bg-gray-800/40 border-gray-700/30' : 'bg-gray-50 border-gray-200'}`}>
@@ -271,6 +289,10 @@ export default function BarVelocityResultsPanel({
               <span className={textSec}>{language === 'es' ? 'Media' : 'Mean'}</span>
               <div className="font-bold text-primary">{hoveredRep.meanConcentricVelocityMs.toFixed(3)} m/s</div>
             </div>
+            {hoveredRep.meanPropulsiveVelocityMs != null && (<div>
+              <span className={textSec}>{language === 'es' ? 'Propulsiva' : 'Propulsive'}</span>
+              <div className="font-bold text-primary">{hoveredRep.meanPropulsiveVelocityMs.toFixed(3)} m/s</div>
+            </div>)}
             {hoveredRep.peakVelocityMs != null && (<div>
               <span className={textSec}>{language === 'es' ? 'Pico' : 'Peak'}</span>
               <div className={`font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{hoveredRep.peakVelocityMs.toFixed(3)} m/s</div>
@@ -368,6 +390,13 @@ export default function BarVelocityResultsPanel({
                       <div className={`font-semibold ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>{rep.displacementMm.toFixed(0)} mm</div>
                     </div>)}
                   </div>
+                  {rep.meanPropulsiveVelocityMs != null && (
+                    <div className="flex items-center gap-2 text-xs text-primary">
+                      <img src={asciendeFavicon} alt="Asciende" className="h-4 w-4 object-contain" />
+                      <span>{txt.meanPropulsiveVel}</span>
+                      <span className="font-bold">{rep.meanPropulsiveVelocityMs.toFixed(3)} m/s</span>
+                    </div>
+                  )}
                   {rep.estimatedPowerW && rep.estimatedPowerW > 0 && (
                     <div className="flex items-center gap-2 text-xs text-orange-400">
                       <Zap className="w-3.5 h-3.5" />

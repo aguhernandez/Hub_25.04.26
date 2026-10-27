@@ -13,7 +13,7 @@ function toGray(ctx: CanvasRenderingContext2D, width: number, height: number): G
   return { data: gray, width, height };
 }
 function mapRep(rep: VbtRep): BarRep {
-  return { repNumber: rep.repNumber, source: 'video', meanConcentricVelocityMs: rep.mcvMs, peakVelocityMs: rep.peakVelMs, meanEccentricVelocityMs: rep.eccMeanVelMs, concentricDurationMs: rep.concDurMs, eccentricDurationMs: rep.eccDurMs, displacementMm: rep.romMm, estimatedPowerW: rep.meanPowerW, velocitySamples: null, timestampsMs: [rep.tStartMs, rep.tEndMs], isValid: !rep.flags.includes('tracking_gap') };
+  return { repNumber: rep.repNumber, source: 'video', meanConcentricVelocityMs: rep.mcvMs, meanPropulsiveVelocityMs: rep.mpvMs, peakVelocityMs: rep.peakVelMs, meanEccentricVelocityMs: rep.eccMeanVelMs, concentricDurationMs: rep.concDurMs, eccentricDurationMs: rep.eccDurMs, displacementMm: rep.romMm, estimatedPowerW: rep.meanPowerW, velocitySamples: null, timestampsMs: [rep.tStartMs, rep.tEndMs], isValid: !rep.flags.includes('tracking_gap') };
 }
 
 export async function analyzeBarVideo(blob: Blob, calibration: CalibrationData, fps: number, loadKg?: number, options: VideoAnalysisOptions = {}): Promise<BarRep[]> {

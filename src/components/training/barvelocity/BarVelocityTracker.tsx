@@ -31,6 +31,7 @@ import { analyzeBarVideo, analyzeBarStream, LiveTrackPoint } from './BarVideoAna
 import { requestCameraPermission } from '../../../utils/cameraPermission';
 import { LV1RMEstimate } from './LVProfile';
 import { buildBarSessionPayload, persistBarSession } from './BarSessionPersistence';
+import asciendeFavicon from '../../../assets/Asciendefavicon.png';
 
 type AppTab = 'session' | 'history';
 type SessionStep = 'setup' | 'calibration' | 'recording' | 'analyzing' | 'results';
@@ -110,12 +111,14 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
       'Fondo contrastante (pared clara vs disco oscuro)',
       'Iluminacion uniforme sin sombras fuertes',
       'Distancia: 2-3 metros del atleta',
+      '60 fps o mas para velocidad fiable (120–240 ideal)',
     ] : [
       'Camera lateral to athlete, parallel to floor',
       'Disc completely visible at all times',
       'Contrasting background (light wall vs dark disc)',
       'Uniform lighting without strong shadows',
       'Distance: 2-3 meters from athlete',
+      '60 fps or more for reliable velocity (120–240 ideal)',
     ],
     toCalibration: language === 'es' ? 'Continuar a calibracion' : 'Continue to calibration',
     calibrated: language === 'es' ? 'Calibrado' : 'Calibrated',
@@ -186,7 +189,7 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
-          frameRate: { ideal: 120, min: 30 },
+          frameRate: { ideal: 60, min: 30 },
           width: { ideal: 1920 },
           height: { ideal: 1080 },
         },
@@ -596,8 +599,12 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                   {captureMode === 'live' && liveTrackPoint && (
                     <>
                       <div
-                        className="absolute left-0 right-0 h-1 bg-[#fdda36] shadow-[0_0_10px_rgba(253,218,54,0.95)] pointer-events-none"
-                        style={{ top: `${Math.max(0, Math.min(100, (liveTrackPoint.yPx / liveTrackPoint.height) * 100))}%` }}
+                        className="absolute top-0 bottom-0 w-1 bg-[#fdda36] shadow-[0_0_10px_rgba(253,218,54,0.95)] pointer-events-none"
+                        style={{ left: `${Math.max(0, Math.min(100, (liveTrackPoint.xPx / liveTrackPoint.width) * 100))}%` }}
+                      />
+                      <div
+                        className="absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[#fdda36] bg-[#fdda36]/30 shadow-[0_0_10px_rgba(253,218,54,0.95)] pointer-events-none"
+                        style={{ left: `${Math.max(0, Math.min(100, (liveTrackPoint.xPx / liveTrackPoint.width) * 100))}%`, top: `${Math.max(0, Math.min(100, (liveTrackPoint.yPx / liveTrackPoint.height) * 100))}%` }}
                       />
                       <div className="absolute top-14 right-3 rounded-lg bg-[#fdda36] px-2 py-1 text-xs font-semibold text-gray-950 shadow-lg">
                         {liveTrackPoint.ok ? txt.tracking : txt.discDetected}
@@ -619,8 +626,12 @@ export default function BarVelocityTracker({ onClose }: BarVelocityTrackerProps)
                   )}
                   {captureMode === 'live' && isRecording && (
                     <div className="absolute top-3 right-3 bg-black/70 rounded-xl px-3 py-2 text-center">
-                      <div className="text-2xl font-bold text-primary">{liveVelocity.toFixed(2)}</div>
-                      <div className="text-xs text-gray-300">m/s</div>
+                      <div className="flex items-center justify-center gap-1.5 mb-1">
+                        <img src={asciendeFavicon} alt="Asciende" className="h-4 w-4 object-contain" />
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-300">VBT</span>
+                      </div>
+                      <div className="text-2xl font-bold text-primary tabular-nums">{liveVelocity.toFixed(2)}</div>
+                      <div className="text-xs text-gray-300">m/s · {language === 'es' ? 'velocidad actual' : 'current velocity'}</div>
                     </div>
                   )}
                 </div>

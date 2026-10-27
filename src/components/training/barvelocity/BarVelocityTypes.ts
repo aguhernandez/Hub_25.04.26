@@ -10,6 +10,8 @@ export interface BarRep {
   source: BarSource;
   repNumber: number;
   meanConcentricVelocityMs: number;
+  /** Mean propulsive velocity; unavailable when the effective frame rate is too low. */
+  meanPropulsiveVelocityMs?: number | null;
   peakVelocityMs: number | null;
   meanEccentricVelocityMs: number | null;
   concentricDurationMs: number | null;
