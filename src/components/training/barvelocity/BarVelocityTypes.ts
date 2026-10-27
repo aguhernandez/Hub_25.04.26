@@ -48,6 +48,7 @@ export interface CalibrationData {
   processingWidth?: number;
   processingHeight?: number;
   plateDiameterMm?: number;
+  autoDetected?: boolean;
 }
 
 export type TrackerPhase =
