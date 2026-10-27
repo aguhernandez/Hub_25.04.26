@@ -5,8 +5,6 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { supabase } from '../../../lib/supabase';
 import {
   ArrowLeft,
-  Camera,
-  ClipboardList,
   History,
   Settings,
   Save,
@@ -16,7 +14,6 @@ import {
   X,
 } from 'lucide-react';
 import CMJVideoCapture from './CMJVideoCapture';
-import CMJManualInput from './CMJManualInput';
 import CMJResultsPanel from './CMJResultsPanel';
 import CMJHistory from './CMJHistory';
 import {
@@ -29,7 +26,6 @@ import { JumpType } from '../jumpCore';
 import { downloadJumpCsv } from '../jump/JumpExport';
 
 type Tab = 'assess' | 'history';
-type InputMode = 'video' | 'manual';
 
 interface CMJAssessmentProps {
   onClose: () => void;
@@ -43,7 +39,6 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
   const { isDark } = useTheme();
 
   const [tab, setTab] = useState<Tab>('assess');
-  const [inputMode, setInputMode] = useState<InputMode>('manual');
   const [jumps, setJumps] = useState<CMJJump[]>([]);
   const [bodyMassKg, setBodyMassKg] = useState<string>('');
   const [jumpType, setJumpType] = useState<JumpType>('cmj');
@@ -56,7 +51,6 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
-  const [cameraActive, setCameraActive] = useState(false);
 
   const txt = {
     title: 'Jump Assessment',
@@ -66,20 +60,21 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
     sessionConfig: language === 'es' ? 'Configuracion de sesion' : 'Session configuration',
     bodyMass: language === 'es' ? 'Masa corporal (kg)' : 'Body mass (kg)',
     bodyMassPlaceholder: language === 'es' ? 'ej: 75' : 'e.g. 75',
-    manual: 'Manual',
-    camera: language === 'es' ? 'Camara' : 'Camera',
     recordingInstructions: language === 'es' ? 'Instrucciones de grabacion:' : 'Recording instructions:',
     instructions: language === 'es' ? [
       'Coloca el telefono en vista lateral al atleta',
       'Asegurate de que los pies sean visibles en el tercio inferior',
       'Usa buena iluminacion y fondo contrastante',
-      'Graba un salto por vez → detener → analizar',
+      'Usa la cámara en vivo o sube un video slow-motion',
     ] : [
       'Position the phone with a lateral view of the athlete',
       'Ensure feet are visible in the lower third of the frame',
       'Use good lighting and a contrasting background',
-      'Record one jump at a time → stop → analyze',
+      'Use the live camera or upload a slow-motion video',
     ],
+    videoPrivacy: language === 'es'
+      ? 'El video se procesa en este dispositivo para obtener los resultados y no se guarda en la base de datos.'
+      : 'The video is processed on this device to produce results and is not stored in the database.',
     maxJumps: language === 'es'
       ? `Maximo de ${MAX_JUMPS} saltos por sesion alcanzado.`
       : `Maximum of ${MAX_JUMPS} jumps per session reached.`,
@@ -97,6 +92,7 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
 
   const handleJumpDetectedFromVideo = useCallback(
     (flightTimeMs: number, analysis: VideoFrameAnalysis) => {
+      if (jumps.length >= MAX_JUMPS) return;
       const mass = parseFloat(bodyMassKg);
       const result = analysis.takeoffMs !== undefined && analysis.landingMs !== undefined
         ? computeAttempt(jumpType, { takeoffMs: analysis.takeoffMs, landingMs: analysis.landingMs }, { massKg: mass, fps: analysis.effectiveFps ?? analysis.fps, loadKg: Number(loadKg) || undefined, boxCm: Number(boxCm) || undefined, hpoM: Number(hpoM) || undefined })
@@ -124,15 +120,10 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
     [jumps.length, bodyMassKg, jumpType, loadKg, boxCm, hpoM]
   );
 
-  const handleJumpAdded = useCallback((jump: CMJJump) => {
-    setJumps((prev) => [...prev, jump]);
-  }, []);
-
   const resetSession = () => {
     setJumps([]);
     setSaved(false);
     setError('');
-    setCameraActive(false);
   };
 
   const saveSession = async () => {
@@ -147,8 +138,8 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
       const { error: saveError } = await supabase.rpc('save_jump_session', { p_session: {
         client_session_id: clientSessionId, athlete_id: user.id, session_date: new Date().toISOString().split('T')[0], jump_type: jumpType,
         body_mass_kg: mass, load_kg: Number(loadKg) || null, box_cm: Number(boxCm) || null, hpo_m: Number(hpoM) || null, side: side || null,
-        effective_fps: validJumps.find((jump) => jump.fps)?.fps ?? 0, source: validJumps.some((jump) => jump.takeoffFrame !== undefined) ? 'video' : 'manual', algorithm_version: 'jump-core-1', notes: notes.trim() || null,
-        attempts: validJumps.map((jump) => ({ index: jump.jumpNumber, marks: jump.marks ?? {}, source: jump.source ?? 'manual', flight_ms: jump.result?.flightMs ?? jump.flightTimeMs, height_cm: jump.result?.heightCm ?? jump.jumpHeightCm, takeoff_vel_ms: jump.result?.takeoffVelMs ?? null, contact_ms: jump.result?.contactMs ?? null, rsi: jump.result?.rsi ?? null, rsi_mod: jump.result?.rsiMod ?? null, flags: jump.result?.flags ?? jump.flags ?? [], reasons: jump.result?.reasons ?? jump.reasons ?? [] })),
+        effective_fps: validJumps.find((jump) => jump.fps)?.fps ?? 0, source: 'video', algorithm_version: 'jump-core-1', notes: notes.trim() || null,
+        attempts: validJumps.map((jump) => ({ index: jump.jumpNumber, marks: jump.marks ?? {}, source: 'video', flight_ms: jump.result?.flightMs ?? jump.flightTimeMs, height_cm: jump.result?.heightCm ?? jump.jumpHeightCm, takeoff_vel_ms: jump.result?.takeoffVelMs ?? null, contact_ms: jump.result?.contactMs ?? null, rsi: jump.result?.rsi ?? null, rsi_mod: jump.result?.rsiMod ?? null, flags: jump.result?.flags ?? jump.flags ?? [], reasons: jump.result?.reasons ?? jump.reasons ?? [] })),
       } });
       if (saveError) throw saveError;
 
@@ -242,63 +233,27 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
               </div>
             </div>
 
-            {/* Input mode toggle */}
-            <div className={`flex gap-2 p-1 rounded-xl border ${isDark ? 'bg-gray-900 border-gray-800/60' : 'bg-gray-50 border-gray-200'}`}>
-              <button
-                onClick={() => { setInputMode('manual'); setCameraActive(false); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  inputMode === 'manual'
-                    ? 'bg-primary text-gray-900 shadow-md shadow-primary/20'
-                    : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <ClipboardList className="w-4 h-4" />
-                {txt.manual}
-              </button>
-              <button
-                onClick={() => { setInputMode('video'); setCameraActive(true); }}
-                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                  inputMode === 'video'
-                    ? 'bg-primary text-gray-900 shadow-md shadow-primary/20'
-                    : isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Camera className="w-4 h-4" />
-                {txt.camera}
-              </button>
-            </div>
-
-            {/* Video mode */}
-            {inputMode === 'video' && (
-              <div className="space-y-3">
-                <CMJVideoCapture
-                  onJumpDetected={handleJumpDetectedFromVideo}
-                  onError={(msg) => setError(msg)}
-                  isActive={cameraActive}
-                />
-                <div className={`border rounded-2xl p-3 space-y-1.5 ${isDark ? 'bg-gray-900 border-gray-800/60' : 'bg-gray-50 border-gray-200'}`}>
-                  <p className={`text-xs font-semibold ${isDark ? 'text-gray-300' : 'text-gray-800'}`}>{txt.recordingInstructions}</p>
-                  <ol className="space-y-1">
-                    {txt.instructions.map((step, i) => (
-                      <li key={i} className={`flex items-start gap-2 text-xs ${isDark ? 'text-gray-500' : 'text-gray-700'}`}>
-                        <span className="w-4 h-4 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
-                          {i + 1}
-                        </span>
-                        {step}
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              </div>
-            )}
-
-            {/* Manual mode */}
-            {inputMode === 'manual' && canAddMore && (
-              <CMJManualInput
-                jumpNumber={jumps.length + 1}
-                onJumpAdded={handleJumpAdded}
+            <div className="space-y-3">
+              <CMJVideoCapture
+                onJumpDetected={handleJumpDetectedFromVideo}
+                onError={(msg) => setError(msg)}
+                isActive={tab === 'assess'}
               />
-            )}
+              <div className={`border rounded-2xl p-3 space-y-1.5 ${isDark ? 'bg-gray-900 border-gray-800/60' : 'bg-gray-50 border-gray-200'}`}>
+                <p className={`text-xs font-semibold ${isDark ? 'text-gray-300' : 'text-gray-800'}`}>{txt.recordingInstructions}</p>
+                <ol className="space-y-1">
+                  {txt.instructions.map((step, i) => (
+                    <li key={i} className={`flex items-start gap-2 text-xs ${isDark ? 'text-gray-500' : 'text-gray-700'}`}>
+                      <span className="w-4 h-4 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                        {i + 1}
+                      </span>
+                      {step}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+              <p className="text-xs text-gray-500">{txt.videoPrivacy}</p>
+            </div>
 
             {!canAddMore && (
               <div className="flex items-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-xs text-yellow-300">
@@ -326,7 +281,7 @@ export default function CMJAssessment({ onClose }: CMJAssessmentProps) {
                   jumps={validJumps}
                   bodyMassKg={bodyMassKg ? parseFloat(bodyMassKg) : undefined}
                 />
-                <button onClick={() => downloadJumpCsv({ clientSessionId, athleteId: user?.id ?? '', sessionDate: new Date().toISOString().split('T')[0], jumpType, bodyMassKg: Number(bodyMassKg), loadKg: Number(loadKg) || null, boxCm: Number(boxCm) || null, hpoM: Number(hpoM) || null, side: side || null, effectiveFps: validJumps.find((jump) => jump.fps)?.fps ?? 0, source: validJumps.some((jump) => jump.takeoffFrame !== undefined) ? 'video' : 'manual', algorithmVersion: 'jump-core-1', attempts: validJumps.map((jump) => ({ index: jump.jumpNumber, marks: { takeoffMs: 0, landingMs: jump.flightTimeMs }, result: null, source: jump.takeoffFrame !== undefined ? 'video' : 'manual', flags: [], reasons: [] })), saved })} className="w-full rounded-xl border border-gray-700 text-gray-300 py-2 text-xs">Exportar CSV</button>
+                <button onClick={() => downloadJumpCsv({ clientSessionId, athleteId: user?.id ?? '', sessionDate: new Date().toISOString().split('T')[0], jumpType, bodyMassKg: Number(bodyMassKg), loadKg: Number(loadKg) || null, boxCm: Number(boxCm) || null, hpoM: Number(hpoM) || null, side: side || null, effectiveFps: validJumps.find((jump) => jump.fps)?.fps ?? 0, source: 'video', algorithmVersion: 'jump-core-1', attempts: validJumps.map((jump) => ({ index: jump.jumpNumber, marks: { takeoffMs: 0, landingMs: jump.flightTimeMs }, result: null, source: 'video', flags: [], reasons: [] })), saved })} className="w-full rounded-xl border border-gray-700 text-gray-300 py-2 text-xs">Exportar CSV</button>
 
                 <div>
                   <label className={`block text-xs mb-1.5 ${isDark ? 'text-gray-500' : 'text-gray-700'}`}>{txt.sessionNotes}</label>
