@@ -176,6 +176,7 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
     if (!effectiveAthleteId) return;
 
     setLoading(true);
+    try {
     const formatDateLocal = (date: Date): string => {
       const year = date.getFullYear();
       const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -231,6 +232,8 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
         )
       `)
       .eq('athlete_id', effectiveAthleteId)
+      .gte('logged_at', `${dateStr}T00:00:00`)
+      .lte('logged_at', `${dateStr}T23:59:59`)
       .order('logged_at', { ascending: false });
 
     // Filter logs for this date
@@ -407,7 +410,6 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       const formattedExercises = groupConsecutiveSameExercises(exercisesData || []);
 
       setExercises(formattedExercises);
-      await loadExerciseNotes(selectedWorkout.id);
       await loadExerciseNotes(allActivities[0].id);
 
       // Load training logs to populate setTracking state
@@ -419,7 +421,11 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
       setExerciseNotes({});
     }
 
-    setLoading(false);
+    } catch (loadError) {
+      console.error('Error loading daily workout:', loadError);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const loadTrainingLogs = async (athleteWorkoutId: string, exercisesList: Exercise[]) => {
@@ -1808,3 +1814,4 @@ export default function DailyWorkoutView({ selectedDate, onWorkoutUpdate, onOpen
     </>
   );
 }
+
