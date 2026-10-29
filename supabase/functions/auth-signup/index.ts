@@ -42,10 +42,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    if (password.length < 6) {
+    if (password.length < 10) {
       console.error('❌ Password too short');
       return new Response(
-        JSON.stringify({ error: 'Password must be at least 6 characters' }),
+        JSON.stringify({ error: 'Password must be at least 10 characters' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
