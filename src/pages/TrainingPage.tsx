@@ -527,20 +527,20 @@ export default function TrainingPage() {
 
     setLoading(true);
     try {
-      // For monthly view, load ALL historical data (past 2 years + future 6 months)
-      // For day/week view, use the specific range
+      // Keep the calendar query near the visible period. Loading years of logs and
+      // activity payloads on every navigation stalls mobile connections.
       let startDateStr: string;
       let endDateStr: string;
 
       if (calendarView === 'month' || calendarView === 'pending') {
-        // Load the full 2-year window to 6 months ahead
-        const twoYearsAgo = new Date();
-        twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-        const sixMonthsAhead = new Date();
-        sixMonthsAhead.setMonth(sixMonthsAhead.getMonth() + 6);
-
-        startDateStr = formatDateLocal(twoYearsAgo);
-        endDateStr = formatDateLocal(sixMonthsAhead);
+        const start = calendarView === 'pending'
+          ? new Date(selectedDate.getFullYear() - 2, selectedDate.getMonth(), 1)
+          : new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+        const end = calendarView === 'pending'
+          ? new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 7, 0)
+          : new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0);
+        startDateStr = formatDateLocal(start);
+        endDateStr = formatDateLocal(end);
       } else {
         const startDate = getDateRangeStart();
         const endDate = getDateRangeEnd();
@@ -631,6 +631,8 @@ export default function TrainingPage() {
           )
         `)
         .eq('athlete_id', effectiveAthleteId)
+        .gte('logged_at', `${startDateStr}T00:00:00`)
+        .lte('logged_at', `${endDateStr}T23:59:59`)
         .order('logged_at', { ascending: false });
 
       if (logsError) throw logsError;
@@ -943,7 +945,13 @@ export default function TrainingPage() {
       try {
         const wearableStart = parseDateStr(startDateStr); wearableStart.setDate(wearableStart.getDate() - 1);
         const wearableEnd = parseDateStr(endDateStr); wearableEnd.setDate(wearableEnd.getDate() + 1);
-        const { data: wearable } = await supabase.functions.invoke('open-wearables', { body: { action: 'analysis-calendar', athlete_id: effectiveAthleteId, range_start: wearableStart.toISOString(), range_end: wearableEnd.toISOString() } });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000);
+        let wearable: any;
+        try {
+          const result = await supabase.functions.invoke('open-wearables', { body: { action: 'analysis-calendar', athlete_id: effectiveAthleteId, range_start: wearableStart.toISOString(), range_end: wearableEnd.toISOString() }, signal: controller.signal });
+          wearable = result.data;
+        } finally { clearTimeout(timeout); }
         setWearableCalendarActive(!!wearable?.active);
         if (wearable?.active) {
           const completionRows = wearable.completions || [];
@@ -1788,6 +1796,7 @@ export default function TrainingPage() {
   };
 
   const handleCopyWorkout = async (workout: Workout) => {
+    if (!workout.workout_id) return;
     const exercises = await loadWorkoutDetails(workout.workout_id);
     setCopiedWorkout({
       ...workout,
@@ -1813,6 +1822,14 @@ export default function TrainingPage() {
       .eq('id', sourceWorkoutId)
       .maybeSingle();
     if (wErr) throw wErr;
+    if (!originalWorkout) throw new Error('Source workout was not found');
+
+    const { data: originalExercises, error: exErr } = await supabase
+      .from('workout_exercises')
+      .select('exercise_id, custom_exercise_name, custom_exercise_video_url, sets, reps, rest_seconds, notes, superset_group, order_index, primary_metric, secondary_metric, set_lines, section_title, block_instance_id, working_set, use_1rm_auto_load, target_1rm_percentage, reference_1rm_method, calculated_load, rir, rpe, primary_value, secondary_value')
+      .eq('workout_id', sourceWorkoutId)
+      .order('order_index');
+    if (exErr) throw exErr;
 
     const { data: newWorkout, error: nwErr } = await supabase
       .from('workouts')
@@ -1827,13 +1844,7 @@ export default function TrainingPage() {
       .single();
     if (nwErr) throw nwErr;
 
-    const { data: originalExercises, error: exErr } = await supabase
-      .from('workout_exercises')
-      .select('exercise_id, custom_exercise_name, custom_exercise_video_url, sets, reps, rest_seconds, notes, superset_group, order_index, primary_metric, secondary_metric, set_lines, section_title, block_instance_id, working_set, use_1rm_auto_load, target_1rm_percentage, reference_1rm_method, calculated_load, rir, rpe, primary_value, secondary_value')
-      .eq('workout_id', sourceWorkoutId)
-      .order('order_index');
-    if (exErr) throw exErr;
-
+    try {
     if (originalExercises && originalExercises.length > 0) {
       const copiedBlockIds = new Map<string, string>();
       let previousBlockId: string | null = null;
@@ -1875,10 +1886,14 @@ export default function TrainingPage() {
         ...(trainerId && { trainer_id: trainerId }),
       });
     if (awErr) throw awErr;
+    } catch (copyError) {
+      await supabase.from('workouts').delete().eq('id', newWorkout.id);
+      throw copyError;
+    }
   };
 
   const handlePasteWorkout = async (targetDate: string) => {
-    if (!copiedWorkout || !effectiveAthleteId) return;
+    if (!copiedWorkout?.workout_id || !effectiveAthleteId) return;
 
     try {
       const isTrainer = profile?.role === 'trainer' && selectedAthleteId;
@@ -1898,13 +1913,17 @@ export default function TrainingPage() {
   };
 
   const handleDuplicateWorkout = (workout: Workout) => {
+    if (!workout.workout_id || workout.type !== 'workout') {
+      error(language === 'es' ? 'Esta sesión no admite duplicación' : 'This session cannot be duplicated');
+      return;
+    }
     setWorkoutToDuplicate(workout);
     setShowDuplicateModal(true);
     setContextMenuWorkout(null);
   };
 
   const executeDuplicate = async (targetDates: string[]) => {
-    if (!workoutToDuplicate || !effectiveAthleteId || targetDates.length === 0) return;
+    if (!workoutToDuplicate?.workout_id || !effectiveAthleteId || targetDates.length === 0) throw new Error('Missing workout or athlete');
 
     try {
       const isTrainer = profile?.role === 'trainer' && selectedAthleteId;
@@ -1927,11 +1946,10 @@ export default function TrainingPage() {
             : `${succeeded} workout(s) duplicated successfully${failed > 0 ? `, ${failed} failed` : ''}`
         );
       } else {
-        error(language === 'es' ? 'Error al duplicar el entrenamiento' : 'Error duplicating workout');
+        throw new Error('No sessions could be duplicated');
       }
       await loadWorkouts();
-      setShowDuplicateModal(false);
-      setWorkoutToDuplicate(null);
+      // Partial success is already reported; do not retry successful dates.
     } catch (err) {
       console.error('Error duplicating workout:', err);
       throw err;
@@ -3887,3 +3905,4 @@ export default function TrainingPage() {
     </>
   );
 }
+
