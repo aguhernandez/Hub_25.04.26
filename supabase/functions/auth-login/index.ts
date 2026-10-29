@@ -181,9 +181,9 @@ Deno.serve(async (req: Request) => {
     // Generate JWT token
     const secret = new TextEncoder().encode(jwtSecret);
     const issuedAt = Math.floor(Date.now() / 1000);
-    // URL-delivered satellite tokens are intentionally short lived. Planners
-    // consume them immediately and can continue using their own session.
-    const expiresAt = issuedAt + 10 * 60;
+    // Keep the established lifetime until every planner exchanges this token
+    // for its own local session. Exact redirect validation prevents exfiltration.
+    const expiresAt = issuedAt + 7 * 24 * 60 * 60;
 
     const jwtPayload: Record<string, unknown> = {
       user_id: userId,
@@ -217,7 +217,7 @@ Deno.serve(async (req: Request) => {
       'Path=/',
       'HttpOnly',
       'SameSite=Lax',
-      `Max-Age=${10 * 60}`,
+      `Max-Age=${7 * 24 * 60 * 60}`,
       isSecure ? 'Secure' : '',
     ]
       .filter(Boolean)

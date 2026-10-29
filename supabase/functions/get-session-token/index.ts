@@ -96,9 +96,9 @@ Deno.serve(async (req: Request) => {
 
     const secret = new TextEncoder().encode(jwtSecret);
     const issuedAt = Math.floor(Date.now() / 1000);
-    // This token travels through the planner launch URL, so keep its exposure
-    // window short. The planner exchanges/consumes it immediately.
-    const expiresAt = issuedAt + 10 * 60;
+    // Keep the established lifetime until every planner exchanges this token
+    // for its own local session.
+    const expiresAt = issuedAt + 7 * 24 * 60 * 60;
 
     const jwtPayload: Record<string, unknown> = {
       user_id: user.id,
