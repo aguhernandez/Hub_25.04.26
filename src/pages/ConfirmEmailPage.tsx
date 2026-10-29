@@ -4,6 +4,7 @@ import { ArrowRight, CheckCircle2, Loader2, Mail, XCircle } from 'lucide-react';
 import type { EmailOtpType, User } from '@supabase/supabase-js';
 import AsciendeLogo from '../components/AsciendeLogo';
 import { supabase } from '../lib/supabase';
+import { buildSatelliteLaunchUrl } from '../lib/satelliteAuth';
 import { useLanguage } from '../contexts/LanguageContext';
 
 const initialCallback = (() => {
@@ -41,24 +42,7 @@ export default function ConfirmEmailPage() {
     setBusy(true);
     setMessage('');
     try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !session?.access_token) throw new Error('No confirmed Hub session is available.');
-
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-session-token`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-        },
-      });
-      const tokenData = await response.json();
-      if (!response.ok || !tokenData.success || !tokenData.token) {
-        throw new Error('Could not prepare the existing planner session token.');
-      }
-
-      target.searchParams.set('session_token', tokenData.token);
-      window.location.assign(target.toString());
+      window.location.assign(await buildSatelliteLaunchUrl(target.toString()));
     } catch {
       setMessage('We confirmed your email, but could not connect to the selected planner. You can continue to Asciende Hub and open it again.');
     } finally {

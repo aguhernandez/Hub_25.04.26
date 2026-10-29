@@ -7,6 +7,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Client-Info, Apikey',
 };
 
+const SATELLITE_HOSTS = new Set([
+  'lab.asciende.pro', 'endurance.asciende.pro', 'nutrition.asciende.pro',
+  'academy.asciende.pro', 'motion.asciende.pro', 'performance.asciende.pro',
+]);
+
+async function sha256(value: string) {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(bytes)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -21,6 +31,13 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({ error: 'Method not allowed' }),
         { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    const targetHost = new URL(req.url).searchParams.get('target_host');
+    if (!targetHost || !SATELLITE_HOSTS.has(targetHost)) {
+      return new Response(JSON.stringify({ error: 'Invalid target satellite' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const authHeader = req.headers.get('authorization');
@@ -122,10 +139,21 @@ Deno.serve(async (req: Request) => {
       .setExpirationTime(expiresAt)
       .sign(secret);
 
+    const handoffCode = `${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`;
+    const { error: codeError } = await supabase.from('satellite_sso_codes').insert({
+      code_hash: await sha256(handoffCode),
+      user_id: user.id,
+      target_host: targetHost,
+      session_token: hubToken,
+      expires_at: new Date(Date.now() + 90_000).toISOString(),
+    });
+    if (codeError) throw codeError;
+
     return new Response(
       JSON.stringify({
         success: true,
         token: hubToken,
+        code: handoffCode,
       }),
       {
         status: 200,

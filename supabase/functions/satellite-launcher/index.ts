@@ -1,11 +1,11 @@
 Deno.serve(async (req: Request) => {
   try {
     const url = new URL(req.url);
-    const token = url.searchParams.get('token');
+    const code = url.searchParams.get('code');
     const satellite = url.searchParams.get('satellite');
 
-    if (!token || !satellite) {
-      return new Response('Missing token or satellite parameter', {
+    if (!code || !satellite) {
+      return new Response('Missing code or satellite parameter', {
         status: 400,
       });
     }
@@ -26,7 +26,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const redirectUrl = `${targetUrl}?session_token=${token}`;
+    const redirectUrl = `${targetUrl}#sso_code=${encodeURIComponent(code)}`;
 
     return new Response(null, {
       status: 302,

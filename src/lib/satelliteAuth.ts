@@ -22,12 +22,13 @@ export function isAllowedSatelliteUrl(value: string): boolean {
   }
 }
 
-export async function getSatelliteSessionToken(): Promise<string> {
+export async function getSatelliteHandoffCode(target: string): Promise<string> {
+  if (!isAllowedSatelliteUrl(target)) throw new Error('Invalid satellite URL');
   const { data: { session }, error } = await supabase.auth.getSession();
   if (error || !session?.access_token) throw new Error('No active Hub session');
 
   const response = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-session-token`,
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-session-token?target_host=${encodeURIComponent(new URL(target).hostname)}`,
     {
       method: 'GET',
       headers: {
@@ -38,15 +39,17 @@ export async function getSatelliteSessionToken(): Promise<string> {
     },
   );
   const result = await response.json();
-  if (!response.ok || !result.success || !result.token) {
+  if (!response.ok || !result.success || !result.code) {
     throw new Error(result.error || 'Could not create planner session');
   }
-  return result.token as string;
+  return result.code as string;
 }
 
 export async function buildSatelliteLaunchUrl(target: string): Promise<string> {
   if (!isAllowedSatelliteUrl(target)) throw new Error('Invalid satellite URL');
   const url = new URL(target);
-  url.searchParams.set('session_token', await getSatelliteSessionToken());
+  const fragment = new URLSearchParams(url.hash.slice(1));
+  fragment.set('sso_code', await getSatelliteHandoffCode(target));
+  url.hash = fragment.toString();
   return url.toString();
 }

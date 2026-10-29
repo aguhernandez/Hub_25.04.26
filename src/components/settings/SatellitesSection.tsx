@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { supabase } from '../../lib/supabase';
+import { buildSatelliteLaunchUrl } from '../../lib/satelliteAuth';
 import {
   Satellite,
   Activity,
@@ -241,30 +242,9 @@ export default function SatellitesSection() {
   const handleOpenSatellite = async (satelliteName: string) => {
     setLaunchingId(satelliteName);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-session-token`,
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-        }
-      );
-
-      if (!response.ok) return;
-
-      const data = await response.json();
-      if (!data.success || !data.token) return;
-
       const satelliteUrl = SATELLITE_URLS[satelliteName];
       if (!satelliteUrl) return;
-
-      window.open(`${satelliteUrl}?session_token=${data.token}`, '_blank');
+      window.open(await buildSatelliteLaunchUrl(satelliteUrl), '_blank', 'noopener,noreferrer');
     } catch (err) {
       console.error('Error opening satellite:', err);
     } finally {

@@ -59,6 +59,9 @@ verify_jwt = false
 [functions.api-config-admin]
 verify_jwt = true
 
+[functions.exchange-satellite-code]
+verify_jwt = false
+
 [functions.satellite-login-widget]
 verify_jwt = false
 

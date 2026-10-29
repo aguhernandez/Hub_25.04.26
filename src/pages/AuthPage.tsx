@@ -252,7 +252,8 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
           if (data.success) {
             await new Promise(resolve => setTimeout(resolve, 500));
             const finalUrl = new URL(data.redirect_url || redirectUrl!);
-            if (data.token) finalUrl.searchParams.set('session_token', data.token);
+            if (!data.code) throw new Error('Missing secure planner handoff code');
+            finalUrl.hash = new URLSearchParams({ sso_code: data.code }).toString();
             window.location.href = finalUrl.toString();
             return;
           }
@@ -288,34 +289,14 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
         return;
       }
 
-      // If satellite was selected from the splash screen, get a hub token and redirect directly
+      // If satellite was selected from the splash screen, redirect with a one-time code.
       if (isSatelliteFromSplash && selectedSatellite?.url) {
         try {
-          const { data: sessionData } = await supabase.auth.getSession();
-          if (sessionData?.session?.access_token) {
-            const tokenResponse = await fetch(
-              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-session-token`,
-              {
-                method: 'GET',
-                headers: {
-                  'Authorization': `Bearer ${sessionData.session.access_token}`,
-                  'Content-Type': 'application/json',
-                  'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-                },
-              }
-            );
-            if (tokenResponse.ok) {
-              const tokenData = await tokenResponse.json();
-              if (tokenData.success && tokenData.token) {
-                window.location.href = `${selectedSatellite.url}?session_token=${tokenData.token}`;
-                return;
-              }
-            }
-          }
-          window.location.href = selectedSatellite.url;
+          window.location.href = await buildSatelliteLaunchUrl(selectedSatellite.url);
         } catch {
-          window.location.href = selectedSatellite.url;
+          setError(language === 'es' ? 'No se pudo abrir el planner de forma segura.' : 'Could not securely open the planner.');
         }
+        return;
       }
     } catch {
       setError('An unexpected error occurred');
@@ -493,7 +474,8 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
         showToast(language === 'es' ? 'Cuenta creada! Redirigiendo...' : 'Account created! Redirecting...', 'success');
         await new Promise(resolve => setTimeout(resolve, 1000));
         const finalUrl = new URL(data.redirect_url || redirectUrl!);
-        if (data.token) finalUrl.searchParams.set('session_token', data.token);
+        if (!data.code) throw new Error('Missing secure planner handoff code');
+        finalUrl.hash = new URLSearchParams({ sso_code: data.code }).toString();
         window.location.href = finalUrl.toString();
         return;
       }

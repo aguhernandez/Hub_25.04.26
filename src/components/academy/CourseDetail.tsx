@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { buildSatelliteLaunchUrl } from '../../lib/satelliteAuth';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { ArrowLeft, Loader2, AlertCircle, ExternalLink, GraduationCap } from 'lucide-react';
 
@@ -21,34 +21,8 @@ export default function CourseDetail({ courseId, onBack }: CourseDetailProps) {
       setLoading(true);
       setError(null);
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error('No session');
-
-        // Get satellite token so Academy recognizes the Hub session
-        const tokenRes = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-session-token`,
-          {
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-        let satelliteToken: string | null = null;
-        if (tokenRes.ok) {
-          const tokenData = await tokenRes.json();
-          if (tokenData.success && tokenData.token) {
-            satelliteToken = tokenData.token;
-          }
-        }
-
-        const params = new URLSearchParams();
-        if (satelliteToken) {
-          params.set('token', satelliteToken);
-        }
-
-        const url = `https://academy.asciende.pro/course/${encodeURIComponent(courseId)}${params.toString() ? `?${params.toString()}` : ''}`;
+        const target = `https://academy.asciende.pro/course/${encodeURIComponent(courseId)}`;
+        const url = await buildSatelliteLaunchUrl(target);
         if (cancelled) return;
         setAcademyUrl(url);
 

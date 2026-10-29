@@ -38,6 +38,11 @@ function isAllowedRedirect(value: string): boolean {
   }
 }
 
+async function sha256(value: string) {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(bytes)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 function getCorsHeaders(origin: string | null) {
   const allowedOrigins = [
     'http://localhost:5173',
@@ -207,6 +212,20 @@ Deno.serve(async (req: Request) => {
       .setExpirationTime(expiresAt)
       .sign(secret);
 
+    let handoffCode: string | null = null;
+    if (redirect_url) {
+      handoffCode = `${crypto.randomUUID().replaceAll('-', '')}${crypto.randomUUID().replaceAll('-', '')}`;
+      const targetHost = new URL(redirect_url).hostname;
+      const { error: codeError } = await supabase.from('satellite_sso_codes').insert({
+        code_hash: await sha256(handoffCode),
+        user_id: userId,
+        target_host: targetHost,
+        session_token: token,
+        expires_at: new Date(Date.now() + 90_000).toISOString(),
+      });
+      if (codeError) throw codeError;
+    }
+
     // Set cookie with appropriate domain
     const cookieDomain = nodeEnv === 'production' ? '.asciende.pro' : 'localhost';
     const isSecure = nodeEnv === 'production';
@@ -227,6 +246,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         success: true,
         token: token,
+        code: handoffCode,
         user: {
           id: userId,
           email: authData.user.email,

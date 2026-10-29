@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { buildSatelliteLaunchUrl } from '../lib/satelliteAuth';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../hooks/useToast';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -679,19 +680,8 @@ export default function AcademyPage({ onNavigate }: AcademyPageProps) {
 
     if (isNative) {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const params = new URLSearchParams();
-        if (session) {
-          const tokenRes = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-session-token`,
-            { headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' } }
-          );
-          if (tokenRes.ok) {
-            const tokenData = await tokenRes.json();
-            if (tokenData.success && tokenData.token) params.set('token', tokenData.token);
-          }
-        }
-        const url = `https://academy.asciende.pro/course/${encodeURIComponent(courseId)}${params.toString() ? `?${params.toString()}` : ''}`;
+        const target = `https://academy.asciende.pro/course/${encodeURIComponent(courseId)}`;
+        const url = await buildSatelliteLaunchUrl(target);
         const { Browser } = await import('@capacitor/browser');
         await Browser.open({ url, windowName: '_self' });
         return;

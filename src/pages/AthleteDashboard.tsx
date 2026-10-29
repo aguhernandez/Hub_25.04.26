@@ -37,6 +37,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { supabase } from '../lib/supabase';
+import { buildSatelliteLaunchUrl } from '../lib/satelliteAuth';
 import ExternalPlannerWidget from '../components/planner/ExternalPlannerWidget';
 import WellnessCheckinModal from '../components/training/wellness/WellnessCheckinModal';
 
@@ -158,29 +159,7 @@ export default function AthleteDashboard({ onNavigate }: AthleteDashboardProps) 
 
   const openSatelliteWithToken = async (url: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        window.open(url, '_blank', 'noopener,noreferrer');
-        return;
-      }
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-session-token`,
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-        }
-      );
-      if (!response.ok) {
-        window.open(url, '_blank', 'noopener,noreferrer');
-        return;
-      }
-      const data = await response.json();
-      const finalUrl = data.success && data.token ? `${url}?session_token=${data.token}` : url;
-      window.open(finalUrl, '_blank', 'noopener,noreferrer');
+      window.open(await buildSatelliteLaunchUrl(url), '_blank', 'noopener,noreferrer');
     } catch {
       window.open(url, '_blank', 'noopener,noreferrer');
     }
