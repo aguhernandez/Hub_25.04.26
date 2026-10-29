@@ -67,25 +67,12 @@ import AdaptiveNavigation from './components/AdaptiveNavigation';
 
 import AppUpdateBanner from './components/AppUpdateBanner';
 import { removePushListeners, deletePushToken } from './services/pushNotificationService';
+import { buildSatelliteLaunchUrl, isAllowedSatelliteUrl } from './lib/satelliteAuth';
 
 type Page = 'dashboard' | 'training' | 'activity-history' | 'nutrition' | 'nutrition-dashboard' | 'habits' | 'bioimpedance' | 'chat' | 'membership' | 'book' | 'events' | 'brand' | 'discover' | 'brand-dashboard' | 'invoices' | 'incoming-requests' | 'settings' | 'exercises' | 'workout-builder' | 'programs' | 'about-asciende' | 'teams' | 'my-teams' | 'my-athletes' | 'athlete-profile' | 'feedback-analytics' | 'performance' | 'program-builder' | 'program-builder-detail' | 'programs-marketplace' | 'atp' | 'impact' | 'admin' | 'brand-requests' | 'marketplace' | 'services' | 'goals' | 'admin-platform-dashboard' | 'admin-communications' | 'admin-brands' | 'admin-partners' | 'admin-users' | 'admin-library' | 'admin-stripe' | 'admin-memberships' | 'admin-projects' | 'admin-foods' | 'memberships-marketplace' | 'exercise-management' | 'feedback' | 'biological-passport' | 'trainer-athlete-nutrition' | 'live-race' | 'professional-services';
 
-const SATELLITE_ORIGINS = [
-  'lab.asciende.pro',
-  'endurance.asciende.pro',
-  'nutrition.asciende.pro',
-  'academy.asciende.pro',
-  'motion.asciende.pro',
-  'performance.asciende.pro',
-];
-
 function isSatelliteOrigin(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return SATELLITE_ORIGINS.some(origin => parsed.hostname === origin);
-  } catch {
-    return false;
-  }
+  return isAllowedSatelliteUrl(url);
 }
 
 function App() {
@@ -359,16 +346,9 @@ function App() {
 
     (async () => {
       try {
-        const { data: sessionData } = await (await import('./lib/supabase')).supabase.auth.getSession();
-        const accessToken = sessionData?.session?.access_token;
-
-        const targetUrl = new URL(redirectParam);
-        if (accessToken) {
-          targetUrl.searchParams.set('session_token', accessToken);
-        }
-        window.location.replace(targetUrl.toString());
+        window.location.replace(await buildSatelliteLaunchUrl(redirectParam));
       } catch {
-        window.location.replace(redirectParam);
+        window.history.replaceState({}, '', window.location.pathname);
       }
     })();
   }, [user]);

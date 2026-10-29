@@ -10,11 +10,19 @@ function getCorsHeaders(origin: string | null) {
   ];
 
   const requestOrigin = origin || '';
-
-  const isAllowed = allowedOrigins.some(allowed => requestOrigin.includes(allowed))
-    || requestOrigin.includes('webcontainer')
-    || requestOrigin.includes('.asciende.pro')
-    || requestOrigin.endsWith('asciende.pro');
+  let isAllowed = allowedOrigins.includes(requestOrigin);
+  if (!isAllowed && requestOrigin) {
+    try {
+      const parsed = new URL(requestOrigin);
+      const satelliteHosts = new Set([
+        'lab.asciende.pro', 'endurance.asciende.pro', 'nutrition.asciende.pro',
+        'academy.asciende.pro', 'motion.asciende.pro', 'performance.asciende.pro',
+      ]);
+      isAllowed = parsed.protocol === 'https:' && satelliteHosts.has(parsed.hostname);
+    } catch {
+      isAllowed = false;
+    }
+  }
 
   const allowOrigin = isAllowed ? requestOrigin : allowedOrigins[0];
 

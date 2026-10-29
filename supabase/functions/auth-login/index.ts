@@ -7,6 +7,37 @@ interface LoginRequest {
   redirect_url?: string;
 }
 
+const SATELLITE_HOSTS = new Set([
+  'lab.asciende.pro',
+  'endurance.asciende.pro',
+  'nutrition.asciende.pro',
+  'academy.asciende.pro',
+  'motion.asciende.pro',
+  'performance.asciende.pro',
+]);
+
+function isAllowedOrigin(value: string | null): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    if (url.protocol === 'https:' && (url.hostname === 'asciende.pro' || url.hostname === 'www.asciende.pro' || SATELLITE_HOSTS.has(url.hostname))) return true;
+    return (url.hostname === 'localhost' || url.hostname === '127.0.0.1') && url.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedRedirect(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.username || url.password) return false;
+    if (url.protocol === 'https:' && SATELLITE_HOSTS.has(url.hostname)) return true;
+    return (url.hostname === 'localhost' || url.hostname === '127.0.0.1') && url.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 function getCorsHeaders(origin: string | null) {
   const allowedOrigins = [
     'http://localhost:5173',
@@ -14,14 +45,11 @@ function getCorsHeaders(origin: string | null) {
     'https://ngkcbygyoobqhlmlnuvl.supabase.co',
     'https://asciende.pro',
     'https://www.asciende.pro',
+    'https://hub.asciende.pro',
   ];
 
   const requestOrigin = origin || '';
-
-  const isAllowed = allowedOrigins.some(allowed => requestOrigin.includes(allowed))
-    || requestOrigin.includes('webcontainer')
-    || requestOrigin.includes('.asciende.pro')
-    || requestOrigin.endsWith('asciende.pro');
+  const isAllowed = allowedOrigins.includes(requestOrigin) || isAllowedOrigin(requestOrigin);
 
   const allowOrigin = isAllowed ? requestOrigin : allowedOrigins[0];
 
@@ -63,18 +91,7 @@ Deno.serve(async (req: Request) => {
 
     // Validate redirect URL
     if (redirect_url) {
-      const allowedDomains = [
-        'localhost',
-        '127.0.0.1',
-        'asciende.pro',
-        'webcontainer',
-      ];
-
-      const isValidRedirect = allowedDomains.some(domain =>
-        redirect_url.includes(domain)
-      );
-
-      if (!isValidRedirect) {
+      if (!isAllowedRedirect(redirect_url)) {
         return new Response(
           JSON.stringify({ error: 'Invalid redirect URL' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -164,7 +181,9 @@ Deno.serve(async (req: Request) => {
     // Generate JWT token
     const secret = new TextEncoder().encode(jwtSecret);
     const issuedAt = Math.floor(Date.now() / 1000);
-    const expiresAt = issuedAt + 7 * 24 * 60 * 60; // 7 days
+    // URL-delivered satellite tokens are intentionally short lived. Planners
+    // consume them immediately and can continue using their own session.
+    const expiresAt = issuedAt + 10 * 60;
 
     const jwtPayload: Record<string, unknown> = {
       user_id: userId,
@@ -181,6 +200,9 @@ Deno.serve(async (req: Request) => {
 
     const token = await new jose.SignJWT(jwtPayload)
       .setProtectedHeader({ alg: 'HS256' })
+      .setIssuer('asciende-hub')
+      .setAudience('asciende-satellites')
+      .setJti(crypto.randomUUID())
       .setIssuedAt(issuedAt)
       .setExpirationTime(expiresAt)
       .sign(secret);
@@ -195,7 +217,7 @@ Deno.serve(async (req: Request) => {
       'Path=/',
       'HttpOnly',
       'SameSite=Lax',
-      `Max-Age=${7 * 24 * 60 * 60}`,
+      `Max-Age=${10 * 60}`,
       isSecure ? 'Secure' : '',
     ]
       .filter(Boolean)

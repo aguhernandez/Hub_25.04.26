@@ -56,6 +56,9 @@ verify_jwt = false
 [functions.academy-auth]
 verify_jwt = false
 
+[functions.api-config-admin]
+verify_jwt = true
+
 [functions.satellite-login-widget]
 verify_jwt = false
 

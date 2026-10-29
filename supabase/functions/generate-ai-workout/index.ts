@@ -206,11 +206,35 @@ async function getOpenAIKey(supabaseAdmin: any): Promise<string> {
   if (data.config_value) return data.config_value;
 
   if (data.encrypted_value) {
-    const encryptionKey = Deno.env.get("VITE_API_ENCRYPTION_KEY") || "asciende-default-key-2024";
-    const { data: decrypted, error: decryptError } = await supabaseAdmin.rpc(
+    const encryptionKey = Deno.env.get("API_ENCRYPTION_KEY") || Deno.env.get("JWT_SECRET");
+    if (!encryptionKey) throw new Error("Server encryption key is not configured");
+    let { data: decrypted, error: decryptError } = await supabaseAdmin.rpc(
       "decrypt_api_config",
       { p_encrypted_value: data.encrypted_value, p_key: encryptionKey }
     );
+    // One-time compatibility for values encrypted by the former browser code.
+    // Re-encrypt immediately with the server-only key after a successful read.
+    if (decryptError || !decrypted) {
+      const legacy = await supabaseAdmin.rpc("decrypt_api_config", {
+        p_encrypted_value: data.encrypted_value,
+        p_key: Deno.env.get("VITE_API_ENCRYPTION_KEY") || "asciende-default-key-2024",
+      });
+      decrypted = legacy.data;
+      decryptError = legacy.error;
+      if (!decryptError && decrypted) {
+        const migrated = await supabaseAdmin.rpc("encrypt_api_config", {
+          p_value: decrypted,
+          p_key: encryptionKey,
+        });
+        if (migrated.data) {
+          await supabaseAdmin.from("api_configurations").update({
+            encrypted_value: migrated.data,
+            config_value: null,
+            updated_at: new Date().toISOString(),
+          }).eq("service_name", "openai").eq("config_key", "api_key");
+        }
+      }
+    }
     if (!decryptError && decrypted) return decrypted;
   }
 

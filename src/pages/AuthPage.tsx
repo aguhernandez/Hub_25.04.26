@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 import { getYouTubeEmbedUrl } from '../utils/youtubeNative';
+import { buildSatelliteLaunchUrl, isAllowedSatelliteUrl } from '../lib/satelliteAuth';
 
 const SATELLITES = [
   {
@@ -196,7 +197,9 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
     const redirect = params.get('redirect');
     if (redirect) {
       setRedirectUrl(redirect);
-      const matched = SATELLITES.find(s => s.url && redirect.startsWith(s.url));
+      const matched = isAllowedSatelliteUrl(redirect)
+        ? SATELLITES.find(s => s.url && new URL(redirect).hostname === new URL(s.url).hostname)
+        : undefined;
       if (matched) {
         setSelectedSatellite(matched);
       } else {
@@ -278,13 +281,9 @@ export default function AuthPage({ fromSplash = false, initialSatelliteId, initi
       // If satellite was selected from redirect and edge function path failed, redirect manually
       if (isSatelliteFromRedirect && redirectUrl) {
         try {
-          const { data: sessionData } = await supabase.auth.getSession();
-          const token = sessionData?.session?.access_token;
-          const finalUrl = new URL(redirectUrl);
-          if (token) finalUrl.searchParams.set('session_token', token);
-          window.location.href = finalUrl.toString();
+          window.location.href = await buildSatelliteLaunchUrl(redirectUrl);
         } catch {
-          window.location.href = redirectUrl;
+          setError(language === 'es' ? 'No se pudo abrir el planner de forma segura.' : 'Could not securely open the planner.');
         }
         return;
       }

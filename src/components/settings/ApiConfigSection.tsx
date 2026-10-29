@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { supabase } from '../../lib/supabase';
-import { saveEncryptedConfig, loadDecryptedConfig, isSensitiveField } from '../../lib/apiConfigEncryption';
+import { saveEncryptedConfig, loadDecryptedConfig, listApiConfigurations, isSensitiveField } from '../../lib/apiConfigEncryption';
 import { Key, Mail, CreditCard, Video, Save, Eye, EyeOff, CheckCircle, XCircle, AlertTriangle, RefreshCw, Brain, ChevronDown } from 'lucide-react';
 
 interface ApiConfig {
@@ -52,13 +51,7 @@ export default function ApiConfigSection() {
 
   const loadConfigurations = async () => {
     try {
-      const { data, error } = await supabase
-        .from('api_configurations')
-        .select('*')
-        .order('service_name', { ascending: true });
-
-      if (error) throw error;
-
+      const data = await listApiConfigurations();
       setConfigs(data || []);
 
       // Load and decrypt Brevo configs
@@ -160,13 +153,6 @@ export default function ApiConfigSection() {
       console.log('Modelo guardado');
 
       // Verify it was saved
-      const { data: verifyData } = await supabase
-        .from('api_configurations')
-        .select('*')
-        .eq('service_name', 'openai');
-
-      console.log('Verificación en BD:', verifyData);
-
       alert(language === 'es' ? '✅ OpenAI configurado correctamente' : '✅ OpenAI configured successfully');
       await loadConfigurations();
     } catch (error: any) {
