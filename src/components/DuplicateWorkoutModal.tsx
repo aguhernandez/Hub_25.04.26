@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Copy, X, Calendar as CalendarIcon, Check, ChevronLeft, ChevronRight, Loader2, AlertCircle, CalendarRange } from 'lucide-react';
 
@@ -23,6 +23,15 @@ export default function DuplicateWorkoutModal({
   const [duplicating, setDuplicating] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen && /^\d{4}-\d{2}-\d{2}$/.test(currentDate)) {
+      const [year, month] = currentDate.split('-').map(Number);
+      setCurrentMonth(new Date(year, month - 1, 1));
+      setSelectedDates(new Set());
+      setErrorMsg(null);
+    }
+  }, [isOpen, currentDate]);
 
   const sortedSelectedList = useMemo(() => {
     return Array.from(selectedDates).sort();
@@ -416,3 +425,4 @@ export default function DuplicateWorkoutModal({
     </div>
   );
 }
+
