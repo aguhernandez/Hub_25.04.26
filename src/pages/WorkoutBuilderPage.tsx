@@ -959,6 +959,7 @@ export default function WorkoutBuilderPage() {
             reps: exercise.reps || '10',
             rest_seconds: 0,
             notes: exercise.notes || '',
+            superset_group: 10000 + circuitIndex,
             order_index: 100000 + circuitIndex * 100 + exerciseIndex,
             section_title: exerciseIndex === 0 ? circuit.section_title : null,
             block_instance_id: exerciseIndex === 0 ? (circuit.block_instance_id || null) : null,
