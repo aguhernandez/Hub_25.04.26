@@ -370,6 +370,12 @@ export default function WorkoutBuilderPage() {
             section_title,
             block_instance_id,
             working_set,
+            circuit_instance_id,
+            circuit_id,
+            circuit_name,
+            circuit_type,
+            circuit_rounds,
+            circuit_amrap_minutes,
             exercises (
               id,
               exercise,
@@ -402,7 +408,37 @@ export default function WorkoutBuilderPage() {
       let prevTitle: string | null = null;
       let legacyRun = 0;
 
+      const circuitRows = workout.workout_exercises.filter((we: any) => we.circuit_instance_id);
+      const circuitsByInstance = new Map<string, WorkoutCircuit>();
+      circuitRows.sort((a: any, b: any) => a.order_index - b.order_index).forEach((we: any) => {
+        let circuit = circuitsByInstance.get(we.circuit_instance_id);
+        if (!circuit) {
+          circuit = {
+            id: we.circuit_instance_id,
+            circuit_id: we.circuit_id,
+            circuit_name: we.circuit_name || (language === 'es' ? 'Circuito' : 'Circuit'),
+            circuit_type: we.circuit_type || 'rounds',
+            rounds: we.circuit_rounds || 1,
+            amrap_minutes: we.circuit_amrap_minutes || 0,
+            exercises: [],
+            section_title: we.section_title || (language === 'es' ? 'Parte Principal' : 'Main Work'),
+            block_instance_id: we.block_instance_id || undefined,
+          };
+          circuitsByInstance.set(we.circuit_instance_id, circuit);
+        }
+        circuit.exercises.push({
+          exercise_id: we.exercise_id,
+          exercise_name: getExerciseName(we.exercises, language),
+          exercise_link: we.exercises?.link,
+          reps: we.reps,
+          notes: we.notes || '',
+          order_index: circuit.exercises.length,
+        });
+      });
+      const loadedCircuits = Array.from(circuitsByInstance.values());
+
       workout.workout_exercises
+        .filter((we: any) => !we.circuit_instance_id)
         .sort((a: any, b: any) => a.order_index - b.order_index)
         .forEach((we: any) => {
           const title: string | null = we.section_title || null;
@@ -462,6 +498,12 @@ export default function WorkoutBuilderPage() {
           blockMap.set(key, { title: ex.section_title || 'Main Work', firstIndex: i });
         }
       });
+      loadedCircuits.forEach((circuit, i) => {
+        const key = circuit.block_instance_id || `circuit_block_${i}`;
+        if (!blockMap.has(key)) {
+          blockMap.set(key, { title: circuit.section_title || 'Main Work', firstIndex: exercisesArray.length + i });
+        }
+      });
       const keyToInstanceId = new Map<string, string>();
       const reconstructedBlocks: BlockInstance[] = Array.from(blockMap.entries())
         .sort((a, b) => a[1].firstIndex - b[1].firstIndex)
@@ -481,8 +523,13 @@ export default function WorkoutBuilderPage() {
         const key = ex.block_instance_id || '_default';
         ex.block_instance_id = keyToInstanceId.get(key) || reconstructedBlocks[0]?.instanceId || 'default';
       });
+      loadedCircuits.forEach((circuit, i) => {
+        const key = circuit.block_instance_id || `circuit_block_${i}`;
+        circuit.block_instance_id = keyToInstanceId.get(key) || reconstructedBlocks[0]?.instanceId || 'default';
+      });
 
       setWorkoutExercises(exercisesArray);
+      setWorkoutCircuits(loadedCircuits);
 
       const { data: tagRows } = await supabase
         .from('workout_tags')
@@ -894,11 +941,42 @@ export default function WorkoutBuilderPage() {
         });
       });
 
-      const { error: exercisesError } = await supabase
-        .from('workout_exercises')
-        .insert(exercisesToInsert);
+      if (exercisesToInsert.length > 0) {
+        const { error: exercisesError } = await supabase
+          .from('workout_exercises')
+          .insert(exercisesToInsert);
+        if (exercisesError) throw exercisesError;
+      }
 
-      if (exercisesError) throw exercisesError;
+      const circuitExerciseRows = workoutCircuits.flatMap((circuit, circuitIndex) =>
+        circuit.exercises
+          .slice()
+          .sort((a, b) => a.order_index - b.order_index)
+          .map((exercise, exerciseIndex) => ({
+            workout_id: workout.id,
+            exercise_id: exercise.exercise_id,
+            sets: circuit.circuit_type === 'rounds' ? Math.max(circuit.rounds, 1) : 1,
+            reps: exercise.reps || '10',
+            rest_seconds: 0,
+            notes: exercise.notes || '',
+            order_index: 100000 + circuitIndex * 100 + exerciseIndex,
+            section_title: exerciseIndex === 0 ? circuit.section_title : null,
+            block_instance_id: exerciseIndex === 0 ? (circuit.block_instance_id || null) : null,
+            circuit_instance_id: circuit.id,
+            circuit_id: circuit.circuit_id || null,
+            circuit_name: circuit.circuit_name,
+            circuit_type: circuit.circuit_type,
+            circuit_rounds: circuit.rounds,
+            circuit_amrap_minutes: circuit.amrap_minutes,
+          }))
+      );
+
+      if (circuitExerciseRows.length > 0) {
+        const { error: circuitsError } = await supabase
+          .from('workout_exercises')
+          .insert(circuitExerciseRows);
+        if (circuitsError) throw circuitsError;
+      }
 
       if (editAthleteWorkoutId) {
         const { error: updateDateError } = await supabase
@@ -992,6 +1070,7 @@ export default function WorkoutBuilderPage() {
       setWorkoutName('');
       setWorkoutDescription('');
       setWorkoutExercises([]);
+      setWorkoutCircuits([]);
       setSelectedAthlete('');
       setSelectedTeam('');
       setSelectedMembership('');

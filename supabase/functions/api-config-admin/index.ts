@@ -5,7 +5,6 @@ const SENSITIVE_FIELDS: Record<string, string[]> = {
   brevo: ['api_key'], stripe: ['secret_key', 'webhook_secret'],
   zoom: ['client_secret'], openai: ['api_key'],
 };
-
 function cors(origin: string | null) {
   return {
     'Access-Control-Allow-Origin': origin && HUB_ORIGINS.has(origin) ? origin : 'https://asciende.pro',
