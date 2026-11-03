@@ -273,7 +273,7 @@ Deno.serve(async (req: Request) => {
           .from("profiles")
           .select("id, email, full_name, role")
           .eq("id", coachId)
-          .in("role", ["trainer", "admin"])
+          .in("role", ["trainer", "nutritionist", "head_coach", "admin"])
           .maybeSingle();
         coachProfile = data;
       }
@@ -282,7 +282,7 @@ Deno.serve(async (req: Request) => {
           .from("profiles")
           .select("id, email, full_name, role")
           .ilike("email", coachEmail.trim())
-          .in("role", ["trainer", "admin"])
+          .in("role", ["trainer", "nutritionist", "head_coach", "admin"])
           .maybeSingle();
         coachProfile = data;
       }
