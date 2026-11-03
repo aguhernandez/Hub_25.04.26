@@ -273,7 +273,7 @@ Deno.serve(async (req: Request) => {
           .from("profiles")
           .select("id, email, full_name, role")
           .eq("id", coachId)
-          .in("role", ["trainer", "nutritionist", "head_coach", "admin"])
+          .in("role", ["coach", "trainer", "nutritionist", "head_coach", "admin"])
           .maybeSingle();
         coachProfile = data;
       }
@@ -282,7 +282,7 @@ Deno.serve(async (req: Request) => {
           .from("profiles")
           .select("id, email, full_name, role")
           .ilike("email", coachEmail.trim())
-          .in("role", ["trainer", "nutritionist", "head_coach", "admin"])
+          .in("role", ["coach", "trainer", "nutritionist", "head_coach", "admin"])
           .maybeSingle();
         coachProfile = data;
       }
@@ -294,13 +294,21 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const { data: athletes } = await supabaseAdmin
+      let athletesQuery = supabaseAdmin
         .from("profiles")
         .select("id, email, full_name, sport")
-        .eq("assigned_trainer_id", coachProfile.id)
         .eq("role", "athlete")
-        .eq("is_active", true)
-        .order("full_name", { ascending: true });
+        .eq("is_active", true);
+
+      // Admins can inspect the full active roster. Every other professional
+      // is restricted to the relationship represented on the athlete profile.
+      if (coachProfile.role !== "admin") {
+        athletesQuery = athletesQuery.or(
+          `assigned_trainer_id.eq.${coachProfile.id},assigned_nutritionist_id.eq.${coachProfile.id}`,
+        );
+      }
+
+      const { data: athletes } = await athletesQuery.order("full_name", { ascending: true });
 
       const athleteIds = (athletes || []).map((a: any) => a.id);
       let membershipMap: Record<string, string> = {};
