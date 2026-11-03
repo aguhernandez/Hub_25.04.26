@@ -450,6 +450,76 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // POST /nutrition-satellite-bridge/save-anamnesis
+    if (endpoint === "save-anamnesis" && req.method === "POST") {
+      const body = await req.json();
+      const allowed = [
+        "age", "sex", "height_cm", "weight_kg", "occupation", "activity_level", "work_hours",
+        "medical_conditions", "medications_supplements", "allergies_intolerances", "sleep_hours",
+        "sleep_quality", "energy_levels", "stress_level", "alcohol_frequency", "smoking_frequency",
+        "sport", "training_frequency", "training_hours_weekly", "training_time", "pre_workout_nutrition",
+        "during_workout_nutrition", "post_workout_nutrition", "eating_pattern", "dietary_preferences",
+        "dietary_restrictions", "breakfast_description", "lunch_description", "dinner_description",
+        "snacks_description", "beverages_description", "food_likes", "food_dislikes", "food_allergies",
+        "cooking_frequency", "eating_out_frequency", "appetite_changes", "relationship_with_food",
+        "main_goal", "nutrition_goals", "performance_expectations", "upcoming_events", "additional_notes"
+      ];
+      const updates: Record<string, unknown> = {};
+      for (const key of allowed) if (Object.prototype.hasOwnProperty.call(body, key)) updates[key] = body[key];
+      const { data, error } = await serviceSupabase
+        .from("nutrition_anamnesis")
+        .upsert({ athlete_id: athleteId, ...updates, updated_at: new Date().toISOString() }, { onConflict: "athlete_id" })
+        .select("*")
+        .single();
+      if (error) throw error;
+      return new Response(JSON.stringify({ anamnesis: data }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // POST /nutrition-satellite-bridge/save-food-diary
+    if (endpoint === "save-food-diary" && req.method === "POST") {
+      const body = await req.json();
+      const entries = Array.isArray(body.entries) ? body.entries : [];
+      const totals = entries.reduce((acc: any, entry: any) => ({
+        calories: acc.calories + Number(entry.estimated_calories || 0),
+        carbs: acc.carbs + Number(entry.estimated_carbs_g || 0),
+        protein: acc.protein + Number(entry.estimated_protein_g || 0),
+        fat: acc.fat + Number(entry.estimated_fat_g || 0),
+      }), { calories: 0, carbs: 0, protein: 0, fat: 0 });
+      const sessionPayload = {
+        athlete_id: athleteId,
+        period_hours: Number(body.period_hours || 24),
+        start_date: body.start_date || new Date().toISOString().split("T")[0],
+        day_of_week: body.day_of_week || null,
+        status: body.status || "in_progress",
+        total_calories: totals.calories,
+        total_carbs_g: totals.carbs,
+        total_protein_g: totals.protein,
+        total_fat_g: totals.fat,
+        completed_at: body.status === "completed" ? (body.completed_at || new Date().toISOString()) : null,
+      };
+      let session: any = null;
+      if (body.id) {
+        const { data, error } = await serviceSupabase.from("food_diary_sessions").update(sessionPayload).eq("id", body.id).eq("athlete_id", athleteId).select("*").single();
+        if (error) throw error;
+        session = data;
+        await serviceSupabase.from("food_diary_entries").delete().eq("session_id", body.id);
+      } else {
+        const { data, error } = await serviceSupabase.from("food_diary_sessions").insert(sessionPayload).select("*").single();
+        if (error) throw error;
+        session = data;
+      }
+      if (entries.length > 0) {
+        const { error } = await serviceSupabase.from("food_diary_entries").insert(entries.map((entry: any) => ({
+          session_id: session.id, entry_time: entry.entry_time || null, meal_type: entry.meal_type || "other",
+          food_description: entry.food_description || "", estimated_calories: Number(entry.estimated_calories || 0),
+          estimated_carbs_g: Number(entry.estimated_carbs_g || 0), estimated_protein_g: Number(entry.estimated_protein_g || 0),
+          estimated_fat_g: Number(entry.estimated_fat_g || 0), additional_notes: entry.additional_notes || null,
+        })));
+        if (error) throw error;
+      }
+      return new Response(JSON.stringify({ session: { ...session, entries } }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // GET /nutrition-satellite-bridge/anamnesis
     if (endpoint === "anamnesis") {
       const { data: anamnesis, error: anamnesisError } = await serviceSupabase
