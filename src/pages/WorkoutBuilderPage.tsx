@@ -868,43 +868,6 @@ export default function WorkoutBuilderPage() {
 
     setLoading(true);
     try {
-      let workout;
-
-      if (editWorkoutId) {
-        const { data: updatedWorkout, error: updateError } = await supabase
-          .from('workouts')
-          .update({
-            name: finalWorkoutName,
-            description: workoutDescription
-          })
-          .eq('id', editWorkoutId)
-          .select()
-          .single();
-
-        if (updateError) throw updateError;
-        workout = updatedWorkout;
-
-        const { error: deleteExercisesError } = await supabase
-          .from('workout_exercises')
-          .delete()
-          .eq('workout_id', editWorkoutId);
-
-        if (deleteExercisesError) throw deleteExercisesError;
-      } else {
-        const { data: newWorkout, error: workoutError } = await supabase
-          .from('workouts')
-          .insert([{
-            name: finalWorkoutName,
-            description: workoutDescription,
-            trainer_id: profile?.id
-          }])
-          .select()
-          .single();
-
-        if (workoutError) throw workoutError;
-        workout = newWorkout;
-      }
-
       // Flatten set_lines into individual exercise entries
       // Sort exercises by block order (supports duplicate block types)
       const blockOrder = orderedBlocks.map(b => b.instanceId);
@@ -922,7 +885,6 @@ export default function WorkoutBuilderPage() {
       sortedExercises.forEach((ex, exerciseIndex) => {
         ex.set_lines.forEach((line, lineIndex) => {
           exercisesToInsert.push({
-            workout_id: workout.id,
             exercise_id: ex.exercise_id,
             sets: line.sets,
             reps: line.reps,
@@ -941,22 +903,14 @@ export default function WorkoutBuilderPage() {
         });
       });
 
-      if (exercisesToInsert.length > 0) {
-        const { error: exercisesError } = await supabase
-          .from('workout_exercises')
-          .insert(exercisesToInsert);
-        if (exercisesError) throw exercisesError;
-      }
-
       const circuitExerciseRows = workoutCircuits.flatMap((circuit, circuitIndex) =>
         circuit.exercises
           .slice()
           .sort((a, b) => a.order_index - b.order_index)
           .map((exercise, exerciseIndex) => ({
-            workout_id: workout.id,
             exercise_id: exercise.exercise_id,
-            sets: circuit.circuit_type === 'rounds' ? Math.max(circuit.rounds, 1) : 1,
-            reps: exercise.reps || '10',
+            sets: circuit.rounds ? Math.max(circuit.rounds, 1) : 1,
+            reps: exercise.reps,
             rest_seconds: 0,
             notes: exercise.notes || '',
             superset_group: 10000 + circuitIndex,
@@ -965,98 +919,31 @@ export default function WorkoutBuilderPage() {
             block_instance_id: exerciseIndex === 0 ? (circuit.block_instance_id || null) : null,
             circuit_instance_id: circuit.id,
             circuit_id: circuit.circuit_id || null,
-            circuit_name: circuit.circuit_name,
-            circuit_type: circuit.circuit_type,
+            circuit_name: circuit.name,
+            circuit_type: circuit.type,
             circuit_rounds: circuit.rounds,
             circuit_amrap_minutes: circuit.amrap_minutes,
           }))
       );
 
-      if (circuitExerciseRows.length > 0) {
-        const { error: circuitsError } = await supabase
-          .from('workout_exercises')
-          .insert(circuitExerciseRows);
-        if (circuitsError) throw circuitsError;
-      }
-
-      if (editAthleteWorkoutId) {
-        const { error: updateDateError } = await supabase
-          .from('athlete_workouts')
-          .update({ scheduled_date: scheduledDate })
-          .eq('id', editAthleteWorkoutId);
-
-        if (updateDateError) throw updateDateError;
-      } else {
-        // If athlete creating for themselves, auto-assign
-        if (profile?.role === 'athlete' && scheduledDate) {
-          const { error: assignError } = await supabase
-            .from('athlete_workouts')
-            .insert([{
-              athlete_id: profile.id,
-              trainer_id: profile.assigned_trainer_id || null,
-              workout_id: workout.id,
-              scheduled_date: scheduledDate,
-              assignment_type: 'individual',
-              status: 'pending'
-            }]);
-
-          if (assignError) throw assignError;
-        }
-        // If trainer/admin, handle different assignment types
-        else if ((profile?.role === 'trainer' || profile?.role === 'admin') && scheduledDate) {
-          if (assignmentType === 'individual' && selectedAthlete) {
-            const { error: assignError } = await supabase
-              .from('athlete_workouts')
-              .insert([{
-                athlete_id: selectedAthlete,
-                trainer_id: profile?.id,
-                workout_id: workout.id,
-                scheduled_date: scheduledDate,
-                assignment_type: 'individual',
-                status: 'pending'
-              }]);
-
-            if (assignError) throw assignError;
-          } else if (assignmentType === 'team' && selectedTeam) {
-            const { data: result, error: assignError } = await supabase
-              .rpc('assign_workout_to_team', {
-                p_workout_id: workout.id,
-                p_team_id: selectedTeam,
-                p_trainer_id: profile.id,
-                p_scheduled_date: scheduledDate
-              });
-
-            if (assignError) throw assignError;
-            console.log(`Assigned to ${result} team members`);
-          } else if (assignmentType === 'membership' && selectedMembership) {
-            const { data: result, error: assignError } = await supabase
-              .rpc('assign_workout_to_membership', {
-                p_workout_id: workout.id,
-                p_membership_id: selectedMembership,
-                p_trainer_id: profile.id,
-                p_scheduled_date: scheduledDate
-              });
-
-            if (assignError) throw assignError;
-            console.log(`Assigned to ${result} membership subscribers`);
-          }
-        }
-      }
-
-      setSavedWorkoutId(workout.id);
-
-      if (pendingTagIds.length > 0) {
-        await supabase.from('workout_tags').delete().eq('workout_id', workout.id);
-        await supabase.from('workout_tags').insert(
-          pendingTagIds.map(tag_id => ({
-            workout_id: workout.id,
-            tag_id,
-            created_by: profile?.id || null
-          }))
-        );
-      } else if (editWorkoutId) {
-        await supabase.from('workout_tags').delete().eq('workout_id', workout.id);
-      }
+      const targetId = assignmentType === 'individual'
+        ? (selectedAthlete || null)
+        : assignmentType === 'team'
+          ? (selectedTeam || null)
+          : (selectedMembership || null);
+      const { data: savedId, error: saveError } = await supabase.rpc('save_workout_builder_atomic', {
+        p_workout_id: editWorkoutId,
+        p_name: finalWorkoutName,
+        p_description: workoutDescription,
+        p_exercises: [...exercisesToInsert, ...circuitExerciseRows],
+        p_scheduled_date: scheduledDate,
+        p_edit_athlete_workout_id: editAthleteWorkoutId,
+        p_assignment_type: assignmentType,
+        p_target_id: targetId,
+        p_tag_ids: pendingTagIds,
+      });
+      if (saveError) throw saveError;
+      setSavedWorkoutId(savedId as string);
 
       if (draftId) {
         await deleteDraft(draftId);
