@@ -303,7 +303,56 @@ Deno.serve(async (req: Request) => {
 
       if (error) throw error;
 
-      return new Response(JSON.stringify({ scheduled_workouts: data }), {
+      // Nutrition planning needs the same training-load signal used by
+      // Endurance. Keep the legacy athlete_workouts response shape, but enrich
+      // it from the canonical external_endurance_workouts table.
+      const { data: plannedWorkouts, error: plannedError } = await serviceSupabase
+        .from("external_endurance_workouts")
+        .select("id, scheduled_date, sport, estimated_duration_minutes, intensity_basis, estimated_impulse")
+        .eq("athlete_id", athleteId)
+        .gte("scheduled_date", today)
+        .order("scheduled_date", { ascending: true })
+        .limit(14);
+
+      if (plannedError) throw plannedError;
+
+      const impulseByDate = new Map<string, any>();
+      for (const planned of plannedWorkouts || []) {
+        if (!impulseByDate.has(planned.scheduled_date)) impulseByDate.set(planned.scheduled_date, planned);
+      }
+
+      const enriched = (data || []).map((row: any) => {
+        const planned = impulseByDate.get(row.scheduled_date);
+        return planned ? {
+          ...row,
+          workouts: row.workouts ? { ...row.workouts, estimated_impulse: planned.estimated_impulse ?? null } : row.workouts,
+          estimated_impulse: planned.estimated_impulse ?? null,
+        } : { ...row, estimated_impulse: null };
+      });
+
+      const existingDates = new Set(enriched.map((row: any) => row.scheduled_date));
+      for (const planned of plannedWorkouts || []) {
+        if (existingDates.has(planned.scheduled_date)) continue;
+        enriched.push({
+          id: planned.id,
+          scheduled_date: planned.scheduled_date,
+          workout_id: planned.id,
+          status: "scheduled",
+          estimated_impulse: planned.estimated_impulse ?? null,
+          workouts: {
+            id: planned.id,
+            title: planned.sport || "Endurance workout",
+            workout_type: planned.sport || null,
+            duration_minutes: planned.estimated_duration_minutes ?? null,
+            estimated_tss: null,
+            difficulty: planned.intensity_basis || null,
+            estimated_impulse: planned.estimated_impulse ?? null,
+          },
+        });
+      }
+
+      enriched.sort((a: any, b: any) => String(a.scheduled_date).localeCompare(String(b.scheduled_date)));
+      return new Response(JSON.stringify({ scheduled_workouts: enriched.slice(0, 14) }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
