@@ -510,7 +510,7 @@ Deno.serve(async (req: Request) => {
       }
       if (entries.length > 0) {
         const { error } = await serviceSupabase.from("food_diary_entries").insert(entries.map((entry: any) => ({
-          session_id: session.id, entry_time: entry.entry_time || null, meal_type: entry.meal_type || "other",
+          session_id: session.id, entry_time: entry.entry_time || "00:00", meal_type: entry.meal_type || "other",
           food_description: entry.food_description || "", estimated_calories: Number(entry.estimated_calories || 0),
           estimated_carbs_g: Number(entry.estimated_carbs_g || 0), estimated_protein_g: Number(entry.estimated_protein_g || 0),
           estimated_fat_g: Number(entry.estimated_fat_g || 0), additional_notes: entry.additional_notes || null,
