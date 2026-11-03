@@ -5,8 +5,6 @@ import { supabase } from '../lib/supabase';
 import { getExerciseName } from '../utils/exerciseI18n';
 import WorkoutFrequencyHeatmap from '../components/performance/WorkoutFrequencyHeatmap';
 import StrengthProgressionChart from '../components/performance/StrengthProgressionChart';
-import ExerciseSelector from '../components/performance/ExerciseSelector';
-// v2.0 - Fixed exercises column name issue
 import {
   TrendingUp,
   Activity,
@@ -15,7 +13,6 @@ import {
   CheckCircle,
   BarChart3,
   Download,
-  Filter,
   Calendar,
   Users,
   Dumbbell,
@@ -88,18 +85,14 @@ export default function PerformanceDashboard() {
   const [selectedSession, setSelectedSession] = useState<RecentSession | null>(null);
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'load' | 'fatigue' | 'strength'>('overview');
   const [dateRange, setDateRange] = useState(28);
   const [workoutData, setWorkoutData] = useState<any[]>([]);
-  const [exercisesList, setExercisesList] = useState<any[]>([]);
-  const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
-  const [selectedExerciseName, setSelectedExerciseName] = useState<string>('');
-  const [exerciseLogs, setExerciseLogs] = useState<any[]>([]);
   const [allExercisesLogs, setAllExercisesLogs] = useState<{ exerciseId: string; exerciseName: string; logs: any[] }[]>([]);
   const [strengthTimeFilter, setStrengthTimeFilter] = useState<'1m' | '3m' | '6m' | '1y'>('3m');
   const [selectedStrengthExercise, setSelectedStrengthExercise] = useState<string>('');
   const [strengthExerciseSearch, setStrengthExerciseSearch] = useState<string>('');
   const [showStrengthExerciseDropdown, setShowStrengthExerciseDropdown] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Privacy settings
   const [privacySettings, setPrivacySettings] = useState({
@@ -113,6 +106,7 @@ export default function PerformanceDashboard() {
   const isTrainerOrAdmin = profile?.role === 'trainer' || profile?.role === 'admin';
   const targetAthleteId = selectedAthlete || (profile?.role === 'athlete' ? profile.id : '');
   const showPrivacyControls = profile?.id === targetAthleteId && profile?.role === 'athlete';
+  const isHiddenFromViewer = (isPublic: boolean) => !isPublic && !showPrivacyControls;
 
   useEffect(() => {
     if (isTrainerOrAdmin) {
@@ -124,26 +118,15 @@ export default function PerformanceDashboard() {
     if (targetAthleteId) {
       loadPerformanceData();
       loadWorkoutFrequencyData();
-      loadExercisesList();
       loadPrivacySettings();
     }
   }, [targetAthleteId, dateRange]);
 
   useEffect(() => {
-    if (selectedExercise && targetAthleteId) {
-      loadExerciseLogs();
-    }
-  }, [selectedExercise, targetAthleteId, strengthTimeFilter]);
-
-  useEffect(() => {
-    console.log('🔄 useEffect triggered for strength logs - targetAthleteId:', targetAthleteId);
     if (targetAthleteId) {
-      console.log('✅ Loading all exercises logs...');
       loadAllExercisesLogs();
-    } else {
-      console.log('⚠️ Skipping load - no targetAthleteId');
     }
-  }, [targetAthleteId, strengthTimeFilter]);
+  }, [targetAthleteId, strengthTimeFilter, language]);
 
   const loadAthletes = async () => {
     const { data } = await supabase
@@ -156,7 +139,7 @@ export default function PerformanceDashboard() {
 
   const loadPerformanceData = async () => {
     setLoading(true);
-    console.log('🔄 Starting to load performance data for athlete:', targetAthleteId);
+    setLoadError(null);
     try {
       const [summaryData, insightsData, sessionsData] = await Promise.all([
         loadSummary(),
@@ -164,40 +147,29 @@ export default function PerformanceDashboard() {
         loadRecentSessions()
       ]);
 
-      console.log('📦 All data loaded:', { summaryData, insightsData: insightsData.length, sessionsData: sessionsData.length });
-
       setSummary(summaryData);
       setInsights(insightsData);
       setRecentSessions(sessionsData);
-
-      console.log('✅ State updated. Summary is now:', summaryData ? 'SET' : 'NULL');
     } catch (error) {
-      console.error('❌ Error loading performance data:', error);
+      console.error('Error loading performance data:', error);
+      setLoadError(language === 'es'
+        ? 'No se pudieron cargar las estadísticas. Inténtalo nuevamente.'
+        : 'Stats could not be loaded. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const loadSummary = async (): Promise<PerformanceSummary | null> => {
-    console.log('🔍 Loading summary for athlete:', targetAthleteId, 'days:', dateRange);
-
     const { data, error } = await supabase.rpc('get_performance_summary', {
       p_athlete_id: targetAthleteId,
       p_days: dateRange
     });
 
     if (error) {
-      console.error('❌ Error loading summary:', error);
-      return null;
+      throw error;
     }
-
-    console.log('✅ Summary data received:', data);
-
-    // Always return the first row since function always returns exactly one row
-    const summaryData = data?.[0] || null;
-    console.log('📊 Parsed summary:', summaryData);
-
-    return summaryData;
+    return data?.[0] || null;
   };
 
   const loadInsights = async (): Promise<PerformanceInsight[]> => {
@@ -218,11 +190,16 @@ export default function PerformanceDashboard() {
   };
 
   const loadRecentSessions = async (): Promise<RecentSession[]> => {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - dateRange + 1);
+    const startDateOnly = startDate.toISOString().slice(0, 10);
+
     // Load gym sessions
     const { data: gymSessions, error: gymError } = await supabase
       .from('performance_sessions')
       .select('id, session_date, total_volume, session_rpe, duration_minutes, athlete_workout_id, athlete_workouts!athlete_workout_id(workout_id, feedback_notes, energy_level, pain_level, mood, completed_at, notes, workouts(name))')
       .eq('athlete_id', targetAthleteId)
+      .gte('session_date', startDateOnly)
       .order('session_date', { ascending: false })
       .limit(15);
 
@@ -236,6 +213,7 @@ export default function PerformanceDashboard() {
       .select('id, start_time, name, sport_type, source, duration_seconds, distance_meters, elevation_gain_meters, average_heartrate, average_power, user_rpe')
       .eq('user_id', targetAthleteId)
       .is('deleted_at', null)
+      .gte('start_time', startDate.toISOString())
       .order('start_time', { ascending: false })
       .limit(15);
 
@@ -447,21 +425,15 @@ export default function PerformanceDashboard() {
       .order('start_time', { ascending: false });
 
     if (workoutsError) {
-      console.error('❌ Error loading workouts:', workoutsError);
-    } else {
-      console.log('✅ Workouts loaded:', workouts?.length || 0, 'for athlete:', targetAthleteId);
+      console.error('Error loading workouts:', workoutsError);
     }
 
     if (extraError) {
-      console.error('❌ Error loading extra trainings:', extraError);
-    } else {
-      console.log('✅ Extra trainings loaded:', extraTrainings?.length || 0);
+      console.error('Error loading extra trainings:', extraError);
     }
 
     if (externalError) {
-      console.error('❌ Error loading external activities:', externalError);
-    } else {
-      console.log('✅ External activities loaded:', externalActivities?.length || 0);
+      console.error('Error loading external activities:', externalError);
     }
 
     const formattedWorkouts = workouts ? workouts.map(item => ({
@@ -485,159 +457,7 @@ export default function PerformanceDashboard() {
       };
     }) : [];
 
-    console.log('📊 Total workout data points:', formattedWorkouts.length + formattedExtras.length + formattedExternal.length);
     setWorkoutData([...formattedWorkouts, ...formattedExtras, ...formattedExternal]);
-  };
-
-  const loadExercisesList = async () => {
-    console.log('🏋️ Loading exercises for athlete:', targetAthleteId);
-
-    const { data, error } = await supabase.rpc('get_athlete_exercises_with_counts', {
-      p_athlete_id: targetAthleteId
-    });
-
-    if (error) {
-      console.log('⚠️ RPC function failed, loading all exercises:', error.message);
-    } else if (data && data.length > 0) {
-      console.log('✅ Loaded', data.length, 'exercises with workout history');
-      setExercisesList(data);
-      if (!selectedExercise) {
-        setSelectedExercise(data[0].id);
-        setSelectedExerciseName(data[0].name);
-      }
-      return;
-    }
-
-    // Fallback: load only exercises the user has actually logged
-    console.log('📋 Loading exercises from training logs as fallback...');
-    const { data: userLogs } = await supabase
-      .from('training_logs')
-      .select('workout_exercises(exercise_id)')
-      .eq('athlete_id', targetAthleteId);
-
-    if (!userLogs || userLogs.length === 0) {
-      console.log('⚠️ No training logs found for athlete');
-      setExercisesList([]);
-      return;
-    }
-
-    const exerciseIds = Array.from(new Set(
-      userLogs
-        .map((log: any) => log.workout_exercises?.exercise_id)
-        .filter(Boolean)
-    ));
-
-    if (exerciseIds.length === 0) {
-      console.log('⚠️ No exercise IDs found in logs');
-      setExercisesList([]);
-      return;
-    }
-
-    const { data: loggedExercises, error: exercisesError } = await supabase
-      .from('exercises')
-      .select('id, exercise, exercise_en, exercise_es, category')
-      .in('id', exerciseIds)
-      .order('exercise_en', { ascending: true });
-
-    if (exercisesError) {
-      console.error('❌ Error loading exercises:', exercisesError);
-      setExercisesList([]);
-      return;
-    }
-
-    if (loggedExercises && loggedExercises.length > 0) {
-      console.log('✅ Loaded', loggedExercises.length, 'exercises from user logs');
-      const exercisesWithCount = loggedExercises.map(ex => ({
-        id: ex.id,
-        name: getExerciseName(ex, language),
-        category: ex.category,
-        sessionCount: 1
-      }));
-      setExercisesList(exercisesWithCount);
-      if (!selectedExercise) {
-        setSelectedExercise(exercisesWithCount[0].id);
-        setSelectedExerciseName(exercisesWithCount[0].name);
-      }
-    } else {
-      console.log('⚠️ No exercises found for user logs');
-      setExercisesList([]);
-    }
-  };
-
-  const loadExerciseLogs = async () => {
-    if (!selectedExercise) {
-      setExerciseLogs([]);
-      return;
-    }
-
-    console.log('📊 Loading exercise logs for:', selectedExercise);
-
-    const daysMap = { '1m': 30, '3m': 90, '6m': 180, '1y': 365 };
-    const days = daysMap[strengthTimeFilter];
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    const { data, error } = await supabase
-      .from('training_logs')
-      .select(`
-        logged_at,
-        weight_used,
-        reps_completed,
-        rir,
-        set_number,
-        athlete_id,
-        workout_exercise_id,
-        workout_exercises!inner(
-          exercise_id,
-          exercises!inner(id, exercise)
-        )
-      `)
-      .eq('athlete_id', targetAthleteId)
-      .gte('logged_at', startDate.toISOString())
-      .order('logged_at', { ascending: true });
-
-    if (error) {
-      console.error('Error loading exercise logs:', error);
-      setExerciseLogs([]);
-      return;
-    }
-
-    if (!data || data.length === 0) {
-      console.log('No training logs found for athlete:', targetAthleteId);
-      setExerciseLogs([]);
-      return;
-    }
-
-    const filtered = data.filter((log: any) => {
-      const exerciseId = log.workout_exercises?.exercises?.id || log.workout_exercises?.exercise_id;
-      return exerciseId === selectedExercise;
-    });
-
-    console.log('Filtered logs for exercise:', selectedExercise, filtered.length);
-
-    const groupedBySets = filtered.reduce((acc: any[], log: any) => {
-      const dateKey = log.logged_at.split('T')[0];
-      const existing = acc.find(item => item.date.split('T')[0] === dateKey);
-
-      if (existing) {
-        if ((log.weight_used || 0) > existing.weight) {
-          existing.weight = log.weight_used || 0;
-          existing.reps = log.reps_completed || 0;
-          existing.rir = log.rir;
-        }
-      } else {
-        acc.push({
-          date: log.logged_at,
-          weight: log.weight_used || 0,
-          reps: log.reps_completed || 0,
-          rir: log.rir
-        });
-      }
-      return acc;
-    }, []);
-
-    console.log('Grouped exercise logs:', groupedBySets.length);
-    setExerciseLogs(groupedBySets);
   };
 
   const loadAllExercisesLogs = async () => {
@@ -646,14 +466,11 @@ export default function PerformanceDashboard() {
       return;
     }
 
-    console.log('📊 Loading logs for all exercises with activity');
-
     const daysMap = { '1m': 30, '3m': 90, '6m': 180, '1y': 365 };
     const days = daysMap[strengthTimeFilter];
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    // First, get all training logs with workout_exercise info
     const { data: rawData, error } = await supabase
       .from('training_logs')
       .select(`
@@ -665,15 +482,15 @@ export default function PerformanceDashboard() {
         athlete_id,
         workout_exercise_id,
         athlete_workout_id,
-        workout_exercises(
-          exercise_id
+        workout_exercises!inner(
+          exercise_id,
+          exercises!inner(id, exercise, exercise_en, exercise_es)
         )
       `)
       .eq('athlete_id', targetAthleteId)
       .gte('logged_at', startDate.toISOString())
       .order('logged_at', { ascending: true });
 
-    // Filter out logs without exercise_id in JavaScript
     const data = rawData?.filter((log: any) => log.workout_exercises?.exercise_id) || [];
 
     if (error) {
@@ -683,59 +500,24 @@ export default function PerformanceDashboard() {
     }
 
     if (!data || data.length === 0) {
-      console.log('❌ No training logs found for athlete:', targetAthleteId);
       setAllExercisesLogs([]);
       return;
     }
 
-    console.log('✅ Found', data.length, 'training logs');
-    console.log('Sample log structure:', JSON.stringify(data[0], null, 2));
-
-    // Get unique exercise IDs
-    const exerciseIds = Array.from(new Set(
-      data
-        .map((log: any) => log.workout_exercises?.exercise_id)
-        .filter(Boolean)
-    ));
-
-    console.log('📋 Unique exercise IDs:', exerciseIds);
-
-    // Fetch exercise names
-    const { data: exercises, error: exercisesError } = await supabase
-      .from('exercises')
-      .select('id, exercise, exercise_en, exercise_es')
-      .in('id', exerciseIds);
-
-    if (exercisesError) {
-      console.error('Error loading exercise names:', exercisesError);
-    }
-
-    const exerciseNamesMap = new Map(
-      exercises?.map(ex => [ex.id, getExerciseName(ex, language)]) || []
-    );
-
-    console.log('📋 Exercise names:', Object.fromEntries(exerciseNamesMap));
-
     // Group by exercise, keeping the best set (highest estimated 1RM) per workout session per day
     const exerciseMap = new Map<string, { exerciseName: string; logs: any[] }>();
-    let skippedLogs = 0;
-
     const calcOneRM = (weight: number, reps: number, rir?: number | null) => {
       if (!weight || weight <= 0 || !reps || reps <= 0) return weight || 0;
       const totalReps = reps + (rir !== null && rir !== undefined ? Math.min(Math.max(Math.round(rir), 0), 5) : 0);
       return Math.round(weight * (1 + totalReps / 30) * 10) / 10;
     };
 
-    data.forEach((log: any, index: number) => {
+    data.forEach((log: any) => {
       const exerciseId = log.workout_exercises?.exercise_id;
-      const exerciseName = exerciseNamesMap.get(exerciseId) || 'Unknown Exercise';
-
-      if (index < 3) {
-        console.log(`Log ${index} - exerciseId:`, exerciseId, 'exerciseName:', exerciseName);
-      }
+      const exerciseName = getExerciseName(log.workout_exercises?.exercises, language)
+        || (language === 'es' ? 'Ejercicio desconocido' : 'Unknown exercise');
 
       if (!exerciseId) {
-        skippedLogs++;
         return;
       }
 
@@ -786,14 +568,6 @@ export default function PerformanceDashboard() {
       .filter(ex => ex.logs.length >= 1)
       .sort((a, b) => b.logs.length - a.logs.length); // Sort by number of sessions descending
 
-    console.log('📊 Total logs processed:', data.length);
-    console.log('📊 Skipped logs (no exercise ID):', skippedLogs);
-    console.log('📊 Exercise Map size:', exerciseMap.size);
-    console.log('📊 Exercises after filtering:', exercisesWithLogs.length);
-    if (exercisesWithLogs.length > 0) {
-      console.log('📊 Exercises with logs:', exercisesWithLogs.map(ex => `${ex.exerciseName} (${ex.logs.length} logs)`));
-    }
-    console.log('✅ Loaded logs for', exercisesWithLogs.length, 'exercises with activity');
     setAllExercisesLogs(exercisesWithLogs);
   };
 
@@ -890,13 +664,13 @@ export default function PerformanceDashboard() {
 
   return (
     <div className="space-y-6 pt-2">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
           <Activity className="w-8 h-8 text-[#fdda36]" />
           {language === 'es' ? 'Panel de Rendimiento' : 'Performance Dashboard'}
         </h1>
 
-        <div className="flex items-center gap-3">
+        <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center sm:gap-3">
           {isTrainerOrAdmin && (
             <select
               value={selectedAthlete}
@@ -923,17 +697,15 @@ export default function PerformanceDashboard() {
             <option value={90}>{language === 'es' ? 'Últimos 90 días' : 'Last 90 days'}</option>
           </select>
 
-          <button className="flex items-center gap-2 px-4 py-2 bg-[#514163] text-white rounded-lg hover:bg-[#6d5581] transition-colors text-sm font-medium">
+          <button
+            onClick={handleExportPDF}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-[#514163] text-white rounded-lg hover:bg-[#6d5581] transition-colors text-sm font-medium"
+          >
             <Download className="w-4 h-4" />
             {language === 'es' ? 'Exportar' : 'Export'}
           </button>
         </div>
       </div>
-
-      {(() => {
-        console.log('🎨 Rendering PerformanceDashboard - loading:', loading, 'summary:', summary);
-        return null;
-      })()}
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
@@ -943,6 +715,17 @@ export default function PerformanceDashboard() {
               {language === 'es' ? 'Cargando datos de rendimiento...' : 'Loading performance data...'}
             </p>
           </div>
+        </div>
+      ) : loadError ? (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-red-200 dark:border-red-900 p-8 text-center">
+          <AlertTriangle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+          <p className="text-gray-700 dark:text-gray-200 mb-4">{loadError}</p>
+          <button
+            onClick={loadPerformanceData}
+            className="px-4 py-2 rounded-lg bg-[#514163] text-white font-medium hover:bg-[#6d5581]"
+          >
+            {language === 'es' ? 'Reintentar' : 'Try again'}
+          </button>
         </div>
       ) : summary ? (
         <>
@@ -964,15 +747,15 @@ export default function PerformanceDashboard() {
                 </button>
               )}
             </div>
-            <div className={privacySettings.show_key_metrics ? '' : 'opacity-30 blur-sm pointer-events-none relative'}>
-              {!privacySettings.show_key_metrics && (
+            <div className={isHiddenFromViewer(privacySettings.show_key_metrics) ? 'opacity-30 blur-sm pointer-events-none relative' : ''}>
+              {isHiddenFromViewer(privacySettings.show_key_metrics) && (
                 <div className="absolute inset-0 flex items-center justify-center z-10">
                   <p className="text-gray-500 dark:text-gray-400 text-center bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow-lg">
                     {language === 'es' ? 'Sección oculta para otros usuarios' : 'Section hidden from other users'}
                   </p>
                 </div>
               )}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             {/* ACWR Card */}
             <div className="bg-gray-50 dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-center justify-between mb-2">
@@ -1070,8 +853,8 @@ export default function PerformanceDashboard() {
                 </button>
               )}
             </div>
-            <div className={privacySettings.show_workout_frequency ? '' : 'opacity-30 blur-sm pointer-events-none relative'}>
-              {!privacySettings.show_workout_frequency && (
+            <div className={isHiddenFromViewer(privacySettings.show_workout_frequency) ? 'opacity-30 blur-sm pointer-events-none relative' : ''}>
+              {isHiddenFromViewer(privacySettings.show_workout_frequency) && (
                 <div className="absolute inset-0 flex items-center justify-center z-10">
                   <p className="text-gray-500 dark:text-gray-400 text-center bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow-lg">
                     {language === 'es' ? 'Sección oculta para otros usuarios' : 'Section hidden from other users'}
@@ -1107,8 +890,8 @@ export default function PerformanceDashboard() {
               )}
             </div>
 
-            <div className={privacySettings.show_strength_progression ? '' : 'opacity-30 blur-sm pointer-events-none relative'}>
-              {!privacySettings.show_strength_progression && (
+            <div className={isHiddenFromViewer(privacySettings.show_strength_progression) ? 'opacity-30 blur-sm pointer-events-none relative' : ''}>
+              {isHiddenFromViewer(privacySettings.show_strength_progression) && (
                 <div className="absolute inset-0 flex items-center justify-center z-10">
                   <p className="text-gray-500 dark:text-gray-400 text-center bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow-lg">
                     {language === 'es' ? 'Sección oculta para otros usuarios' : 'Section hidden from other users'}
@@ -1304,8 +1087,8 @@ export default function PerformanceDashboard() {
                   </button>
                 )}
               </div>
-              <div className={privacySettings.show_insights ? '' : 'opacity-30 blur-sm pointer-events-none relative'}>
-                {!privacySettings.show_insights && (
+              <div className={isHiddenFromViewer(privacySettings.show_insights) ? 'opacity-30 blur-sm pointer-events-none relative' : ''}>
+                {isHiddenFromViewer(privacySettings.show_insights) && (
                   <div className="absolute inset-0 flex items-center justify-center z-10">
                     <p className="text-gray-500 dark:text-gray-400 text-center bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow-lg">
                       {language === 'es' ? 'Sección oculta para otros usuarios' : 'Section hidden from other users'}
@@ -1359,8 +1142,8 @@ export default function PerformanceDashboard() {
                   </button>
                 )}
               </div>
-              <div className={privacySettings.show_recent_sessions ? '' : 'opacity-30 blur-sm pointer-events-none relative'}>
-                {!privacySettings.show_recent_sessions && (
+              <div className={isHiddenFromViewer(privacySettings.show_recent_sessions) ? 'opacity-30 blur-sm pointer-events-none relative' : ''}>
+                {isHiddenFromViewer(privacySettings.show_recent_sessions) && (
                   <div className="absolute inset-0 flex items-center justify-center z-10">
                     <p className="text-gray-500 dark:text-gray-400 text-center bg-white dark:bg-gray-800 px-4 py-2 rounded-lg shadow-lg">
                       {language === 'es' ? 'Sección oculta para otros usuarios' : 'Section hidden from other users'}
