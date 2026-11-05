@@ -755,6 +755,19 @@ export default function TrainingCalendar({
                       );
                     }
 
+                    if (workout.type === 'shared_event') {
+                      return (
+                        <div key={workout.id || idx} className={`text-xs p-1.5 rounded border-l-2 ${workout.shared_event_status === 'proposed' ? 'bg-gray-50 dark:bg-gray-700/40 border-gray-400' : 'bg-[#fdda36]/15 dark:bg-[#fdda36]/10 border-[#fdda36]'}`}>
+                          <div className="flex items-center gap-1"><Flag className="w-3 h-3 flex-shrink-0 text-[#514163] dark:text-[#fdda36]" /><span className="font-semibold text-[#514163] dark:text-[#f6f3ef] truncate text-[10px]">{workout.name}</span></div>
+                          <p className="text-[9px] text-gray-600 dark:text-gray-400 mt-0.5 truncate">{workout.description || (language === 'es' ? 'Evento compartido' : 'Shared event')}</p>
+                        </div>
+                      );
+                    }
+
+                    if (workout.type === 'availability_constraint') {
+                      return <div key={workout.id || idx} className={`text-xs p-1.5 rounded border-l-2 ${workout.is_rest_day ? 'bg-teal-50 dark:bg-teal-900/20 border-teal-500' : 'bg-slate-50 dark:bg-slate-700/40 border-slate-400'}`}><div className="flex items-center gap-1"><Clock className="w-3 h-3 flex-shrink-0 text-slate-600 dark:text-slate-300" /><span className="font-semibold text-slate-800 dark:text-slate-200 truncate text-[10px]">{workout.name}</span></div>{workout.description && <p className="text-[9px] text-slate-600 dark:text-slate-400 mt-0.5 truncate">{workout.description}</p>}</div>;
+                    }
+
                     if (workout.type === 'endurance_plan') {
                       return (
                         <div key={workout.id || idx}>
@@ -841,6 +854,10 @@ export default function TrainingCalendar({
           <div className="flex items-center gap-2">
             <Flag className="w-3 h-3 text-yellow-500" />
             <span className="text-gray-600 dark:text-gray-400">{language === 'es' ? 'Plan de Carrera' : 'Race Plan'}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Flag className="w-3 h-3 text-[#514163] dark:text-[#fdda36]" />
+            <span className="text-gray-600 dark:text-gray-400">{language === 'es' ? 'Competencia compartida' : 'Shared competition'}</span>
           </div>
         </div>
       </div>
