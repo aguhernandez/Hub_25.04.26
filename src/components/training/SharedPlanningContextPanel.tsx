@@ -1,0 +1,63 @@
+import { useEffect, useState } from 'react';
+import { CalendarDays, Clock3, Flag, Pencil, Plus } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+
+type SharedEvent = { id: string; title: string; event_kind: string; event_date: string | null; sport: string | null; distance_km: number | null; priority: 'A' | 'B' | 'C' | null; status: string; description: string | null; source_version: number };
+type Availability = { id: string; day_of_week: number | null; available_date: string | null; start_time: string | null; end_time: string | null; max_duration_minutes: number | null; is_rest_day: boolean; allows_double_sessions: boolean; timezone: string; status: string };
+
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const key = () => typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+const localTimezone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+
+export default function SharedPlanningContextPanel({ athleteId, actorId, actorRole, language, onChanged }: { athleteId?: string; actorId?: string; actorRole?: string; language: string; onChanged: () => void }) {
+  const es = language === 'es';
+  const canApprove = ['admin', 'trainer', 'head_coach'].includes(actorRole || '');
+  const [events, setEvents] = useState<SharedEvent[]>([]);
+  const [availability, setAvailability] = useState<Availability[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<SharedEvent | null>(null);
+  const [eventForm, setEventForm] = useState({ title: '', kind: 'competition', date: '', sport: '', distance: '', priority: '', description: '' });
+  const [availabilityForm, setAvailabilityForm] = useState({ day: '1', date: '', start: '', end: '', duration: '', rest: false, double: false, timezone: localTimezone() });
+
+  const load = async () => {
+    if (!athleteId) return;
+    const [eventResult, availabilityResult] = await Promise.all([
+      supabase.from('shared_athlete_events').select('id,title,event_kind,event_date,sport,distance_km,priority,status,description,source_version').eq('athlete_id', athleteId).neq('status', 'cancelled').order('event_date', { ascending: true, nullsFirst: false }),
+      supabase.from('athlete_availability_windows').select('id,day_of_week,available_date,start_time,end_time,max_duration_minutes,is_rest_day,allows_double_sessions,timezone,status').eq('athlete_id', athleteId).neq('status', 'cancelled').order('available_date', { ascending: true, nullsFirst: false }).order('day_of_week'),
+    ]);
+    setEvents((eventResult.data || []) as SharedEvent[]);
+    setAvailability((availabilityResult.data || []) as Availability[]);
+  };
+  useEffect(() => { void load(); }, [athleteId]);
+
+  const clearEvent = () => { setEditing(null); setEventForm({ title: '', kind: 'competition', date: '', sport: '', distance: '', priority: '', description: '' }); };
+  const saveEvent = async (event: React.FormEvent) => {
+    event.preventDefault(); if (!athleteId || !actorId || !eventForm.title || (eventForm.kind !== 'objective' && !eventForm.date)) return;
+    setSaving(true);
+    const payload = { title: eventForm.title, event_kind: eventForm.kind, event_date: eventForm.date || null, sport: eventForm.sport || null, distance_km: eventForm.distance ? Number(eventForm.distance) : null, priority: eventForm.priority || null, description: eventForm.description || null, status: canApprove ? 'approved' : 'proposed', updated_by: actorId };
+    const result = editing
+      ? await supabase.from('shared_athlete_events').update({ ...payload, source_version: editing.source_version + 1 }).eq('id', editing.id).eq('source_version', editing.source_version)
+      : await supabase.from('shared_athlete_events').insert({ ...payload, athlete_id: athleteId, created_by: actorId, source_system: 'hub', external_key: `hub-ui:${key()}` });
+    setSaving(false);
+    if (!result.error) { clearEvent(); await load(); onChanged(); }
+  };
+  const saveAvailability = async (event: React.FormEvent) => {
+    event.preventDefault(); if (!athleteId || !actorId) return;
+    setSaving(true);
+    const result = await supabase.from('athlete_availability_windows').insert({ athlete_id: athleteId, day_of_week: availabilityForm.date ? null : Number(availabilityForm.day), available_date: availabilityForm.date || null, start_time: availabilityForm.start || null, end_time: availabilityForm.end || null, max_duration_minutes: availabilityForm.duration ? Number(availabilityForm.duration) : null, is_rest_day: availabilityForm.rest, allows_double_sessions: availabilityForm.double, timezone: availabilityForm.timezone || 'UTC', status: canApprove ? 'approved' : 'proposed', source_system: 'hub', external_key: `hub-ui:${key()}`, created_by: actorId, updated_by: actorId });
+    setSaving(false);
+    if (!result.error) { setAvailabilityForm({ day: '1', date: '', start: '', end: '', duration: '', rest: false, double: false, timezone: localTimezone() }); await load(); onChanged(); }
+  };
+  const startEdit = (item: SharedEvent) => { setEditing(item); setEventForm({ title: item.title, kind: item.event_kind, date: item.event_date || '', sport: item.sport || '', distance: item.distance_km?.toString() || '', priority: item.priority || '', description: item.description || '' }); };
+
+  return <section className="mb-6 overflow-hidden rounded-xl border border-[#514163]/20 bg-white shadow-sm dark:bg-gray-800">
+    <header className="flex items-center justify-between gap-3 border-b border-[#514163]/15 bg-[#514163] px-5 py-4 text-white"><div><p className="text-[10px] font-semibold tracking-[.14em] text-[#FDDA36]">SHARED PLANNING CONTEXT</p><h2 className="font-semibold">{es ? 'Competencias, objetivos y disponibilidad' : 'Competitions, objectives & availability'}</h2></div><CalendarDays className="text-[#FDDA36]" /></header>
+    <div className="grid gap-6 p-5 xl:grid-cols-2">
+      <div><div className="mb-3 flex items-center gap-2"><Flag size={16} className="text-[#514163] dark:text-[#FDDA36]" /><h3 className="font-semibold">{es ? 'Competencias y objetivos' : 'Competitions & objectives'}</h3></div>
+        <form onSubmit={saveEvent} className="grid gap-2 rounded-lg bg-gray-50 p-3 dark:bg-gray-700/40"><input required value={eventForm.title} onChange={e => setEventForm(v => ({ ...v, title: e.target.value }))} placeholder={es ? 'Nombre' : 'Name'} className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-600" /><div className="grid grid-cols-2 gap-2"><select value={eventForm.kind} onChange={e => setEventForm(v => ({ ...v, kind: e.target.value }))} className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-600"><option value="competition">{es ? 'Competencia' : 'Competition'}</option><option value="objective">{es ? 'Objetivo continuo' : 'Continuous objective'}</option><option value="test">{es ? 'Test' : 'Test'}</option></select><input type="date" required={eventForm.kind !== 'objective'} value={eventForm.date} onChange={e => setEventForm(v => ({ ...v, date: e.target.value }))} className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-600" /></div><div className="grid grid-cols-3 gap-2"><input value={eventForm.sport} onChange={e => setEventForm(v => ({ ...v, sport: e.target.value }))} placeholder={es ? 'Deporte' : 'Sport'} className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-600" /><input type="number" min="0" step="0.1" value={eventForm.distance} onChange={e => setEventForm(v => ({ ...v, distance: e.target.value }))} placeholder="km" className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-600" /><select value={eventForm.priority} onChange={e => setEventForm(v => ({ ...v, priority: e.target.value }))} className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-600"><option value="">{es ? 'Prioridad' : 'Priority'}</option><option>A</option><option>B</option><option>C</option></select></div><input value={eventForm.description} onChange={e => setEventForm(v => ({ ...v, description: e.target.value }))} placeholder={es ? 'Notas opcionales' : 'Optional notes'} className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-600" /><div className="flex gap-2"><button disabled={saving} className="inline-flex items-center gap-1 rounded bg-[#514163] px-3 py-1.5 text-sm font-medium text-white"><Plus size={14} />{editing ? (es ? 'Actualizar' : 'Update') : (es ? 'Registrar' : 'Add')}</button>{editing && <button type="button" onClick={clearEvent} className="text-sm text-gray-500">{es ? 'Cancelar' : 'Cancel'}</button>}</div></form>
+        <div className="mt-3 space-y-1.5">{events.map(item => <div key={item.id} className="flex items-center gap-2 rounded border border-gray-100 px-2 py-1.5 text-sm dark:border-gray-700"><Flag size={13} className="text-[#FDDA36]" /><span className="min-w-0 flex-1 truncate">{item.title}</span><span className="text-xs text-gray-500">{item.event_date || (es ? 'Continuo' : 'Continuous')} · {item.status}</span><button type="button" onClick={() => startEdit(item)} title={es ? 'Editar' : 'Edit'} className="text-[#514163] dark:text-[#FDDA36]"><Pencil size={13} /></button></div>)}</div>
+      </div>
+      <div><div className="mb-3 flex items-center gap-2"><Clock3 size={16} className="text-[#514163] dark:text-[#FDDA36]" /><h3 className="font-semibold">{es ? 'Disponibilidad y restricciones' : 'Availability & restrictions'}</h3></div><form onSubmit={saveAvailability} className="grid gap-2 rounded-lg bg-gray-50 p-3 dark:bg-gray-700/40"><div className="grid grid-cols-2 gap-2"><select value={availabilityForm.day} disabled={!!availabilityForm.date} onChange={e => setAvailabilityForm(v => ({ ...v, day: e.target.value }))} className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-600">{DAYS.map((day, index) => <option key={day} value={index + 1}>{day}</option>)}</select><input type="date" value={availabilityForm.date} onChange={e => setAvailabilityForm(v => ({ ...v, date: e.target.value }))} title={es ? 'Excepción de fecha (opcional)' : 'Date exception (optional)'} className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-600" /></div><div className="grid grid-cols-3 gap-2"><input type="time" value={availabilityForm.start} onChange={e => setAvailabilityForm(v => ({ ...v, start: e.target.value }))} className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-600" /><input type="time" value={availabilityForm.end} onChange={e => setAvailabilityForm(v => ({ ...v, end: e.target.value }))} className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-600" /><input type="number" min="1" value={availabilityForm.duration} onChange={e => setAvailabilityForm(v => ({ ...v, duration: e.target.value }))} placeholder={es ? 'min máx.' : 'max min'} className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-600" /></div><input value={availabilityForm.timezone} onChange={e => setAvailabilityForm(v => ({ ...v, timezone: e.target.value }))} placeholder="Timezone" className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:bg-gray-800 dark:border-gray-600" /><label className="text-sm"><input type="checkbox" checked={availabilityForm.rest} onChange={e => setAvailabilityForm(v => ({ ...v, rest: e.target.checked }))} /> {es ? 'Día de descanso' : 'Rest day'}</label><label className="text-sm"><input type="checkbox" checked={availabilityForm.double} onChange={e => setAvailabilityForm(v => ({ ...v, double: e.target.checked }))} /> {es ? 'Permite doble sesión' : 'Allows double session'}</label><button disabled={saving} className="w-fit rounded bg-[#514163] px-3 py-1.5 text-sm font-medium text-white">{es ? 'Guardar disponibilidad' : 'Save availability'}</button></form><div className="mt-3 space-y-1.5">{availability.map(item => <div key={item.id} className="rounded border border-gray-100 px-2 py-1.5 text-sm dark:border-gray-700">{item.available_date || DAYS[(item.day_of_week || 1) - 1]} · {item.is_rest_day ? (es ? 'Descanso' : 'Rest') : [item.start_time?.slice(0, 5), item.end_time?.slice(0, 5), item.max_duration_minutes ? `${item.max_duration_minutes} min` : ''].filter(Boolean).join('–')} <span className="text-xs text-gray-500">· {item.timezone}</span></div>)}</div></div>
+    </div>
+  </section>;
+}
