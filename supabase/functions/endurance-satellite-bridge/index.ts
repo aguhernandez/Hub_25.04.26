@@ -64,6 +64,95 @@ async function validatePlannerToken(token: string, serviceSupabase: any): Promis
   return null;
 }
 
+type ActorProfile = { id: string; role: string; is_active: boolean; assigned_trainer_id?: string | null };
+
+async function loadActorProfile(serviceSupabase: any, userId: string): Promise<ActorProfile | null> {
+  const { data, error } = await serviceSupabase
+    .from("profiles")
+    .select("id, role, is_active, assigned_trainer_id")
+    .eq("id", userId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+async function canActorAccessAthlete(serviceSupabase: any, actor: ActorProfile | null, athleteId: string): Promise<boolean> {
+  if (!actor) return false;
+  if (actor.role === "admin" || actor.id === athleteId) return true;
+  if (!["coach", "trainer", "head_coach"].includes(actor.role)) return false;
+
+  const { data, error } = await serviceSupabase
+    .from("profiles")
+    .select("id")
+    .eq("id", athleteId)
+    .eq("assigned_trainer_id", actor.id)
+    .eq("role", "athlete")
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) throw error;
+  return !!data;
+}
+
+function enduranceConfig(): { url: string; serviceKey: string } | null {
+  const url = Deno.env.get("ENDURANCE_SUPABASE_URL")?.replace(/\/+$/, "");
+  const serviceKey = Deno.env.get("ENDURANCE_SUPABASE_SERVICE_ROLE_KEY");
+  return url && serviceKey ? { url, serviceKey } : null;
+}
+
+async function enduranceImpulseRequest(path: string, init: RequestInit = {}): Promise<any> {
+  const config = enduranceConfig();
+  if (!config) throw new Error("Endurance Impulse backend is not configured");
+  const headers = new Headers(init.headers);
+  headers.set("apikey", config.serviceKey);
+  headers.set("Authorization", `Bearer ${config.serviceKey}`);
+  headers.set("Content-Type", "application/json");
+  const response = await fetch(`${config.url}/rest/v1/${path}`, { ...init, headers });
+  const text = await response.text();
+  let payload: any = null;
+  try { payload = text ? JSON.parse(text) : null; } catch { payload = { error: text }; }
+  if (!response.ok) {
+    const error = new Error(payload?.message || payload?.error || `Endurance request failed (${response.status})`);
+    (error as any).status = response.status;
+    throw error;
+  }
+  return payload;
+}
+
+// Resolve cross-project identities from Endurance's server-side profile mapping.
+async function enduranceProfileById(localId: string): Promise<{ id: string; hub_user_id: string | null } | null> {
+  const rows = await enduranceImpulseRequest(`profiles?select=id,hub_user_id&id=eq.${encodeURIComponent(localId)}&limit=2`);
+  return Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+}
+async function enduranceProfileByHubId(hubId: string): Promise<{ id: string; hub_user_id: string | null } | null> {
+  const rows = await enduranceImpulseRequest(`profiles?select=id,hub_user_id&hub_user_id=eq.${encodeURIComponent(hubId)}&limit=2`);
+  return Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+}
+
+async function enduranceFunctionRequest(functionName: string, body: Record<string, unknown>): Promise<any> {
+  const config = enduranceConfig();
+  if (!config) throw new Error("Endurance backend is not configured");
+  const response = await fetch(`${config.url}/functions/v1/${functionName}`, {
+    method: "POST",
+    headers: {
+      "apikey": config.serviceKey,
+      "Authorization": `Bearer ${config.serviceKey}`,
+      "Content-Type": "application/json",
+      "X-Endurance-Internal": "hub-bridge",
+    },
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  let payload: any = null;
+  try { payload = text ? JSON.parse(text) : null; } catch { payload = { error: text }; }
+  if (!response.ok) {
+    const error = new Error(payload?.error || payload?.message || `Endurance function failed (${response.status})`);
+    (error as any).status = response.status;
+    throw error;
+  }
+  return payload;
+}
+
 // Build enriched gps_track from activity streams
 function buildGpsTrack(streams: any, activity: any): any[] {
   if (!streams) return [];
@@ -187,8 +276,8 @@ Deno.serve(async (req: Request) => {
       userId = user.id;
     }
 
-    if (!plannerTokenHeader && !authHeader) {
-      return new Response(JSON.stringify({ error: "Missing authentication. Use Authorization header (JWT) or X-Planner-Token header." }), {
+    if (!authHeader || !userId) {
+      return new Response(JSON.stringify({ error: "A valid Hub user Authorization header is required." }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -208,20 +297,20 @@ Deno.serve(async (req: Request) => {
     // Must run before athlete_id resolution since it is coach-scoped.
     // ════════════════════════════════════════════════════════════════
     if (endpoint === "coach-athletes") {
-      const coachId = url.searchParams.get("coach_id") || userId || "";
-      if (!coachId) {
-        return new Response(JSON.stringify({ error: "coach_id is required" }), {
-          status: 400,
+      const actor = await loadActorProfile(serviceSupabase, userId);
+      if (!actor || !["admin", "coach", "trainer", "head_coach"].includes(actor.role)) {
+        return new Response(JSON.stringify({ error: "Coach access denied" }), {
+          status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      const { data: rows, error: caError } = await serviceSupabase
+      let rosterQuery = serviceSupabase
         .from("profiles")
         .select("id, email, full_name, sport, role, is_active")
-        .eq("assigned_trainer_id", coachId)
         .eq("role", "athlete")
-        .eq("is_active", true)
-        .order("full_name", { ascending: true });
+        .eq("is_active", true);
+      if (actor.role !== "admin") rosterQuery = rosterQuery.eq("assigned_trainer_id", userId);
+      const { data: rows, error: caError } = await rosterQuery.order("full_name", { ascending: true });
       if (caError) throw caError;
       const athletes = (rows || []).map((r: any) => ({
         id: r.id,
@@ -250,6 +339,14 @@ Deno.serve(async (req: Request) => {
     if (!athleteId) {
       return new Response(JSON.stringify({ error: "athlete_id or athlete_email is required" }), {
         status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const actor = await loadActorProfile(serviceSupabase, userId);
+    if (!await canActorAccessAthlete(serviceSupabase, actor, athleteId)) {
+      return new Response(JSON.stringify({ error: "Athlete access denied" }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -1220,6 +1317,143 @@ Deno.serve(async (req: Request) => {
       const action = body.action;
       const actionAthleteId = body.athlete_id || athleteId;
       const json = (data: any, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+      if (action === "ai-settings-update") {
+        const actor = await loadActorProfile(serviceSupabase, userId);
+        if (!actor || actor.role !== "admin") return json({ error: "Admin access required" }, 403);
+        const updates = body.updates;
+        if (!updates || typeof updates !== "object" || Array.isArray(updates)) return json({ error: "Invalid settings" }, 400);
+        const allowed = ["ai_enabled", "membership_tier_allowlist", "coaches_can_send", "max_blocks_per_month"];
+        const patch = Object.fromEntries(allowed.filter(key => Object.prototype.hasOwnProperty.call(updates, key)).map(key => [key, updates[key]]));
+        if (!Object.keys(patch).length) return json({ error: "No settings provided" }, 400);
+        patch.updated_at = new Date().toISOString();
+        const saved = await enduranceImpulseRequest("ai_feature_settings?id=eq." + encodeURIComponent(body.settings_id), { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(patch) });
+        return json({ settings: Array.isArray(saved) ? saved[0] : saved });
+      }
+
+      if (["ai-block-list", "ai-block-generate", "ai-block-edit", "ai-block-review", "ai-block-publish"].includes(action)) {
+        const actor = await loadActorProfile(serviceSupabase, userId);
+        const targetAthleteId = body.athlete_id;
+        const localAthlete = typeof targetAthleteId === "string" ? await enduranceProfileById(targetAthleteId) : null;
+        const hubAthleteId = localAthlete?.hub_user_id;
+        if (!actor || !targetAthleteId || !hubAthleteId || !await canActorAccessAthlete(serviceSupabase, actor, hubAthleteId)) {
+          return json({ error: "Athlete access denied" }, 403);
+        }
+
+        const { data: athlete } = await serviceSupabase
+          .from("profiles")
+          .select("id, assigned_trainer_id, role, is_active")
+          .eq("id", hubAthleteId)
+          .eq("role", "athlete")
+          .eq("is_active", true)
+          .maybeSingle();
+        if (!athlete) return json({ error: "Athlete not found" }, 404);
+
+        const { data: memberships } = await serviceSupabase
+          .from("user_memberships")
+          .select("membership:memberships(slug)")
+          .eq("user_id", hubAthleteId)
+          .eq("status", "active");
+        const isPro = (memberships || []).some((row: any) => ["asciende-pro", "pro", "asciende_pro"].includes(row.membership?.slug));
+        const isCoach = ["coach", "trainer", "head_coach", "admin"].includes(actor.role);
+        const supervised = Boolean(athlete.assigned_trainer_id);
+        const selfService = actor.id === hubAthleteId && !supervised && isPro;
+
+        if (action === "ai-block-generate") {
+          if (!isCoach && !selfService && !(actor.id === hubAthleteId && supervised)) return json({ error: "Active Pro membership is required for self-service generation" }, 403);
+          const hubCoachId = isCoach ? actor.id : athlete.assigned_trainer_id;
+          const localCoach = hubCoachId ? await enduranceProfileByHubId(hubCoachId) : null;
+          const payload = { ...body, athlete_id: targetAthleteId, coach_id: localCoach?.id ?? null, requested_by_role: isCoach ? "coach" : "athlete" };
+          delete (payload as any).action;
+          try { return json(await enduranceFunctionRequest("generate-ai-block", payload)); }
+          catch (error) { return json({ error: error instanceof Error ? error.message : "Generation failed" }, Number((error as any)?.status) || 502); }
+        }
+
+        const blockId = body.block_id as string | undefined;
+        if (action !== "ai-block-list" && !blockId) return json({ error: "block_id is required" }, 400);
+
+        if (action === "ai-block-list") {
+          const rows = await enduranceImpulseRequest(`ai_generated_blocks?select=*&athlete_id=eq.${encodeURIComponent(targetAthleteId)}&order=created_at.desc&limit=20`);
+          return json({ blocks: rows || [] });
+        }
+
+        const rows = await enduranceImpulseRequest(`ai_generated_blocks?select=*&id=eq.${encodeURIComponent(blockId!)}&athlete_id=eq.${encodeURIComponent(targetAthleteId)}`);
+        const block = Array.isArray(rows) ? rows[0] : null;
+        if (!block) return json({ error: "AI block not found" }, 404);
+
+        if (action === "ai-block-edit") {
+          if (block.status !== "pending") return json({ error: "Only pending proposals can be edited" }, 409);
+          const update = { weeks: body.weeks, block_name: body.block_name, updated_at: new Date().toISOString() };
+          const saved = await enduranceImpulseRequest(`ai_generated_blocks?id=eq.${encodeURIComponent(blockId!)}`, {
+            method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(update),
+          });
+          return json({ block: Array.isArray(saved) ? saved[0] : saved });
+        }
+
+        if (action === "ai-block-review") {
+          const nextStatus = body.status;
+          if (!["accepted", "rejected"].includes(nextStatus)) return json({ error: "Invalid review status" }, 400);
+          if (block.status !== "pending") return json({ error: "Only pending proposals can be reviewed" }, 409);
+          if (nextStatus === "accepted" && (!isCoach && !selfService)) return json({ error: "Only the authorized coach can approve this proposal" }, 403);
+          const update: Record<string, unknown> = {
+            status: nextStatus,
+            updated_at: new Date().toISOString(),
+            ...(nextStatus === "accepted" ? { approved_at: new Date().toISOString(), approved_by: actor.id } : {}),
+          };
+          if (typeof body.feedback === "string") update.athlete_feedback = body.feedback;
+          const saved = await enduranceImpulseRequest(`ai_generated_blocks?id=eq.${encodeURIComponent(blockId!)}`, {
+            method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify(update),
+          });
+          return json({ block: Array.isArray(saved) ? saved[0] : saved });
+        }
+
+        if (action === "ai-block-publish") {
+          if (!["accepted", "applied"].includes(block.status)) return json({ error: "Only an approved proposal can be published" }, 409);
+          if (!isCoach && !selfService) return json({ error: "Only the authorized coach can publish this proposal" }, 403);
+          try {
+            return json(await enduranceFunctionRequest("generate-ai-block", { action: "publish", block_id: blockId, published_by: actor.id }));
+          } catch (error) { return json({ error: error instanceof Error ? error.message : "Publication failed" }, Number((error as any)?.status) || 502); }
+        }
+      }
+
+      if (action === "get-impulse-calculations" || action === "upsert-impulse-calculation") {
+        const targetAthleteId = body.athlete_id;
+        const localAthlete = typeof targetAthleteId === "string" ? await enduranceProfileById(targetAthleteId) : null;
+        if (!localAthlete?.hub_user_id || !await canActorAccessAthlete(serviceSupabase, await loadActorProfile(serviceSupabase, userId), localAthlete.hub_user_id)) {
+          return json({ error: "Athlete access denied" }, 403);
+        }
+
+        try {
+          if (action === "get-impulse-calculations") {
+            const fromDate = typeof body.from_date === "string" ? body.from_date : null;
+            const filters = [
+              `athlete_id=eq.${encodeURIComponent(targetAthleteId)}`,
+              `algorithm_version=eq.${encodeURIComponent(body.algorithm_version || "impulse-v1")}`,
+              "order=activity_date.desc",
+            ];
+            if (fromDate) filters.push(`activity_date=gte.${encodeURIComponent(fromDate)}`);
+            const rows = await enduranceImpulseRequest(`impulse_calculations?select=*&${filters.join("&")}`);
+            return json({ data: rows || [] });
+          }
+
+          const allowedFields = [
+            "athlete_id", "source_kind", "source_id", "activity_dedupe_key", "activity_date", "sport",
+            "duration_seconds", "impulse", "method", "status", "calculation_context", "algorithm_version",
+            "reason", "input_snapshot",
+          ];
+          const record = Object.fromEntries(allowedFields.filter(field => Object.prototype.hasOwnProperty.call(body, field)).map(field => [field, body[field]]));
+          record.athlete_id = targetAthleteId;
+          const rows = await enduranceImpulseRequest("impulse_calculations?on_conflict=athlete_id,activity_dedupe_key,algorithm_version,calculation_context", {
+            method: "POST",
+            headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+            body: JSON.stringify(record),
+          });
+          return json({ data: Array.isArray(rows) ? rows[0] || null : rows });
+        } catch (error) {
+          const status = Number((error as any)?.status) || 502;
+          return json({ error: error instanceof Error ? error.message : "Endurance Impulse request failed" }, status >= 500 ? 502 : status);
+        }
+      }
 
       const sessionActions = new Set(["get-session-analysis", "get-session-timeseries", "list-review-inbox", "save-review"]);
       let actorProfile: any = null;
